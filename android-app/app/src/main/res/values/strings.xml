@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Fil-o-mat</string>
+    <string name="containers">Container</string>
+    <string name="scan">Scannen</string>
+    <string name="add_container">Container hinzufügen</string>
+    <string name="container_name">Name</string>
+    <string name="description">Beschreibung</string>
+    <string name="rfid_tag">RFID-Tag</string>
+    <string name="scan_tag">Tag scannen</string>
+    <string name="scanning">Scanne…</string>
+    <string name="add">Hinzufügen</string>
+    <string name="cancel">Abbrechen</string>
+    <string name="save">Speichern</string>
+    <string name="edit">Bearbeiten</string>
+    <string name="items">Items</string>
+    <string name="add_item">Item hinzufügen</string>
+    <string name="store_item">Item einlagern</string>
+    <string name="remove_item">Item herausnehmen</string>
+    <string name="nfc_not_available">NFC ist auf diesem Gerät nicht verfügbar.</string>
+    <string name="nfc_scan_instruction">Halten Sie Ihr Gerät nahe an den Tag.</string>
+</resources>
