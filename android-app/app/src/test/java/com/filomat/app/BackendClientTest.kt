@@ -5,7 +5,6 @@ import com.filomat.app.data.sync.BackendException
 import com.filomat.app.data.sync.Snapshot
 import com.filomat.app.data.sync.SnapshotItem
 import com.filomat.app.data.sync.SpoolUpdate
-import com.sun.net.httpserver.HttpServer
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -14,34 +13,61 @@ import org.junit.Assert.assertTrue
 import org.junit.Assert.fail
 import org.junit.Before
 import org.junit.Test
-import java.net.InetSocketAddress
+import java.io.BufferedInputStream
+import java.net.InetAddress
+import java.net.ServerSocket
+import kotlin.concurrent.thread
 
 class BackendClientTest {
-    private lateinit var server: HttpServer
+    // Kleiner HTTP-Server auf einem Socket; com.sun.net.httpserver fehlt im Klassenpfad der Android-Unit-Tests
+    private lateinit var server: ServerSocket
     private val requests = mutableListOf<Triple<String, String, String>>()
     private val keys = mutableListOf<String?>()
     private val responses = mutableMapOf<String, Pair<Int, String>>()
 
     @Before
     fun start() {
-        server = HttpServer.create(InetSocketAddress("127.0.0.1", 0), 0)
-        server.createContext("/") { exchange ->
-            val path = exchange.requestURI.toString()
-            requests += Triple(exchange.requestMethod, path, exchange.requestBody.readBytes().decodeToString())
-            keys += exchange.requestHeaders.getFirst("X-Api-Key")
-            val (status, body) = responses["${exchange.requestMethod} $path"] ?: (404 to "")
-            val bytes = body.toByteArray()
-            exchange.sendResponseHeaders(status, if (bytes.isEmpty()) -1 else bytes.size.toLong())
-            if (bytes.isNotEmpty()) exchange.responseBody.use { it.write(bytes) }
-            exchange.close()
+        server = ServerSocket(0, 50, InetAddress.getLoopbackAddress())
+        thread(isDaemon = true) {
+            while (!server.isClosed) {
+                val socket = try { server.accept() } catch (e: Exception) { break }
+                socket.use { handle(it) }
+            }
         }
-        server.start()
+    }
+
+    private fun handle(socket: java.net.Socket) {
+        val input = BufferedInputStream(socket.getInputStream())
+        fun line(): String {
+            val bytes = StringBuilder()
+            while (true) {
+                val c = input.read()
+                if (c == -1 || c == '\n'.code) break
+                if (c != '\r'.code) bytes.append(c.toChar())
+            }
+            return bytes.toString()
+        }
+        val (method, path) = line().split(" ").let { it[0] to it[1] }
+        val headers = generateSequence { line().takeIf { it.isNotEmpty() } }
+            .associate { it.substringBefore(':').trim().lowercase() to it.substringAfter(':').trim() }
+        val length = headers["content-length"]?.toInt() ?: 0
+        val body = ByteArray(length).also { var read = 0; while (read < length) read += input.read(it, read, length - read) }
+        synchronized(requests) {
+            requests += Triple(method, path, body.decodeToString())
+            keys += headers["x-api-key"]
+        }
+        val (status, text) = responses["$method $path"] ?: (404 to "")
+        val bytes = text.toByteArray()
+        val out = socket.getOutputStream()
+        out.write("HTTP/1.1 $status X\r\nContent-Length: ${bytes.size}\r\nConnection: close\r\n\r\n".toByteArray())
+        out.write(bytes)
+        out.flush()
     }
 
     @After
-    fun stop() = server.stop(0)
+    fun stop() = server.close()
 
-    private fun client(key: String = "geheim") = BackendClient("http://127.0.0.1:${server.address.port}/", key)
+    private fun client(key: String = "geheim") = BackendClient("http://127.0.0.1:${server.localPort}/", key)
 
     @Test
     fun readsSnapshotWithNullsAndSpools() = runBlocking {
