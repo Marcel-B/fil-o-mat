@@ -2,12 +2,21 @@ import SwiftUI
 
 @main
 struct FilomatApp: App {
-    @State private var store = ContainerStore()
+    @State private var store: ContainerStore = {
+        let store = ContainerStore()
+        store.backend = BackendSettings.client()
+        return store
+    }()
+    @Environment(\.scenePhase) private var scenePhase
 
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .task { await store.refresh() }
+                .onChange(of: scenePhase) { _, phase in
+                    if phase == .active { Task { await store.refresh() } }
+                }
         }
     }
 }

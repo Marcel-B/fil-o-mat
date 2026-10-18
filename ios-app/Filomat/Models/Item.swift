@@ -9,6 +9,10 @@ struct Item: Identifiable, Codable, Hashable {
     var createdAt: Date = Date()
     var containerId: String?
     var itemData: ItemJsonData?
+    /// Filamentgewicht einer vollen Spule in Gramm; wird vom Backend gepflegt.
+    var netWeight: Double?
+    /// Verbleibendes Filament in Gramm; das Backend zieht gedruckte Mengen ab.
+    var remainingWeight: Double?
 
     /// Titel im Format "<brand> <type> <variant>", Fallback auf den Namen.
     var displayTitle: String {

@@ -63,6 +63,7 @@ struct ItemsOverviewView: View {
                 }
             }
         }
+        .refreshable { await store.refresh() }
         .searchable(text: $searchQuery, prompt: "Suchen...")
         .navigationTitle("Filamente")
         .toolbar {
@@ -118,6 +119,9 @@ private struct ItemOverviewRow: View {
                     if let type = item.itemData?.type { field("Typ:", type) }
                     if let brand = item.itemData?.brand { field("Marke:", brand) }
                     field("Container:", containerName)
+                    if let grams = item.remainingWeight ?? item.netWeight {
+                        field("Rest:", "\(Int(grams.rounded())) g")
+                    }
                 }
                 .font(.caption)
             }

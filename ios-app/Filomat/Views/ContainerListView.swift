@@ -3,12 +3,20 @@ import SwiftUI
 struct ContainerListView: View {
     @Environment(ContainerStore.self) private var store
     @State private var showingAddContainer = false
+    @State private var showingBackend = false
 
     var body: some View {
         let regular = store.containers.filter { !$0.isStandard }
         let standard = store.containers.filter { $0.isStandard }
 
         List {
+            if let error = store.syncError {
+                Section {
+                    Label(error, systemImage: "exclamationmark.icloud")
+                        .foregroundStyle(.red)
+                        .onTapGesture { showingBackend = true }
+                }
+            }
             if !regular.isEmpty {
                 Section {
                     ForEach(regular) { ContainerRow(container: $0) }
@@ -25,19 +33,32 @@ struct ContainerListView: View {
                 ContentUnavailableView("Keine Container vorhanden", systemImage: "archivebox")
             }
         }
+        .refreshable { await store.refresh() }
         .navigationTitle("Container")
         .navigationDestination(for: Container.ID.self) { id in
             ContainerDetailView(containerId: id)
         }
         .toolbar {
-            Button {
-                showingAddContainer = true
-            } label: {
-                Label("Hinzufügen", systemImage: "plus")
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingBackend = true
+                } label: {
+                    Label("Backend", systemImage: store.backend == nil ? "icloud.slash" : "icloud")
+                }
+            }
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingAddContainer = true
+                } label: {
+                    Label("Hinzufügen", systemImage: "plus")
+                }
             }
         }
         .sheet(isPresented: $showingAddContainer) {
             AddContainerView()
+        }
+        .sheet(isPresented: $showingBackend) {
+            BackendSettingsView()
         }
     }
 }

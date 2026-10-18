@@ -5,11 +5,19 @@ import Observation
 ///
 /// Anders als die Android-App gibt es nur eine Quelle für die Zuordnung: `Item.containerId`.
 /// Dadurch können Container- und Item-Liste nicht auseinanderlaufen.
+///
+/// Ist ein Backend verbunden, wird jede Änderung dorthin übertragen und `refresh()`
+/// übernimmt den Stand des Backends.
 @MainActor
 @Observable
 final class ContainerStore {
     private(set) var containers: [Container] = []
     private(set) var items: [Item] = []
+    private(set) var isSyncing = false
+    private(set) var syncError: String?
+    private(set) var lastSyncedAt: Date?
+
+    @ObservationIgnored var backend: BackendClient?
 
     @ObservationIgnored private let fileURL: URL
     @ObservationIgnored private var standardContainersInitialized = false
@@ -54,12 +62,14 @@ final class ContainerStore {
     func addContainer(_ container: Container) {
         containers.append(container)
         save()
+        push(containers: [container])
     }
 
     func updateContainer(_ container: Container) {
         guard let index = containers.firstIndex(where: { $0.id == container.id }) else { return }
         containers[index] = container
         save()
+        push(containers: [container])
     }
 
     /// Löscht einen Container. Standard-Container bleiben erhalten,
@@ -72,6 +82,7 @@ final class ContainerStore {
         }
         containers.removeAll { $0.id == id }
         save()
+        remote { try await $0.deleteContainer(id: id) }
     }
 
     // MARK: - Items
@@ -82,17 +93,20 @@ final class ContainerStore {
         if !tag.isEmpty, items.contains(where: { $0.rfidTag == item.rfidTag }) { return }
         items.append(item)
         save()
+        push(items: [item])
     }
 
     func updateItem(_ item: Item) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index] = item
         save()
+        push(items: [item])
     }
 
     func removeItem(id: String) {
         items.removeAll { $0.id == id }
         save()
+        remote { try await $0.deleteItem(id: id) }
     }
 
     /// Lagert ein Item in einen Container ein (verschiebt es ggf. aus seinem bisherigen Container).
@@ -103,6 +117,7 @@ final class ContainerStore {
         // Wie in der Android-App erscheint das Item am Ende der Container-Liste.
         items.append(item)
         save()
+        push(items: [item])
     }
 
     /// Nimmt ein Item aus seinem Container heraus; danach ist es keinem Container zugeordnet.
@@ -110,6 +125,82 @@ final class ContainerStore {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
         items[index].containerId = nil
         save()
+        push(items: [items[index]])
+    }
+
+    // MARK: - Backend
+
+    /// Verbindet mit dem Backend: lädt zuerst die lokalen Daten hoch (nichts wird gelöscht)
+    /// und übernimmt danach den gemeinsamen Stand.
+    @discardableResult
+    func connect(_ client: BackendClient) async -> ImportResult? {
+        backend = client
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            let result = try await client.importData(BackendSnapshot(
+                containers: containers.filter { !$0.isStandard },
+                items: items.map(Self.withoutWeights)
+            ))
+            apply(try await client.snapshot())
+            return result
+        } catch {
+            syncError = error.localizedDescription
+            return nil
+        }
+    }
+
+    func disconnect() {
+        backend = nil
+        syncError = nil
+        lastSyncedAt = nil
+    }
+
+    /// Übernimmt den Stand des Backends (z. B. Container, die auf einem anderen Gerät angelegt wurden).
+    func refresh() async {
+        guard let backend, !isSyncing else { return }
+        isSyncing = true
+        defer { isSyncing = false }
+        do {
+            apply(try await backend.snapshot())
+        } catch {
+            syncError = error.localizedDescription
+        }
+    }
+
+    func apply(_ snapshot: BackendSnapshot) {
+        containers = snapshot.containers
+        items = snapshot.items
+        standardContainersInitialized = true
+        syncError = nil
+        lastSyncedAt = Date()
+        save()
+    }
+
+    private func push(containers: [Container] = [], items: [Item] = []) {
+        let snapshot = BackendSnapshot(containers: containers, items: items.map(Self.withoutWeights))
+        remote { _ = try await $0.importData(snapshot) }
+    }
+
+    private func remote(_ operation: @escaping (BackendClient) async throws -> Void) {
+        guard let backend else { return }
+        Task {
+            do {
+                try await operation(backend)
+                syncError = nil
+            } catch {
+                syncError = error.localizedDescription
+            }
+        }
+    }
+
+    /// Die Gewichte pflegt das Backend; die App schickt sie nicht zurück, damit gebuchter Verbrauch
+    /// nicht mit einem älteren Stand überschrieben wird.
+    private static func withoutWeights(_ item: Item) -> Item {
+        var item = item
+        item.netWeight = nil
+        item.remainingWeight = nil
+        return item
     }
 
     // MARK: - Persistenz

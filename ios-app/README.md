@@ -17,6 +17,12 @@ Native iPhone-App (SwiftUI + CoreNFC) mit demselben Funktionsumfang wie die Andr
    Xcode legt die passende App-ID beim ersten Build automatisch an.
 4. iPhone anschließen, als Ziel wählen und starten (⌘R).
 
+## Abgleich mit dem Backend
+
+Über das Wolken-Symbol in der Container-Liste lässt sich das [Backend](../backend/README.md) verbinden (z. B. `http://nas.local:8080`). Beim Verbinden werden die Daten des iPhones hochgeladen, ohne etwas zu löschen, und danach der gemeinsame Stand übernommen. Danach geht jede Änderung sofort ans Backend; beim Öffnen der App und per Herunterziehen der Liste wird neu abgeglichen.
+
+Container und Filamente aus der Android-App kommen so aufs iPhone: in der Android-App über das Wolken-Symbol hochladen, danach auf dem iPhone verbinden.
+
 ## Unterschiede zur Android-App
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.
