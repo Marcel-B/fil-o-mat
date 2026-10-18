@@ -10,6 +10,8 @@ builder.Services.AddDbContext<FilomatDbContext>(options =>
 builder.Services.AddProblemDetails();
 builder.Services.AddHttpClient<MoonrakerAdapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<MoonrakerAdapter>());
+builder.Services.AddHttpClient<SnapmakerU1Adapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<SnapmakerU1Adapter>());
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddHostedService<PrinterSyncService>();
 builder.Services.AddOpenApi();

@@ -53,11 +53,17 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("TagUid")
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Tool")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
 
-                    b.HasIndex("PrinterId", "JobId")
+                    b.HasIndex("PrinterId", "JobId", "Tool")
                         .IsUnique();
 
                     b.ToTable("Consumptions");
@@ -168,6 +174,9 @@ namespace Filomat.Api.Data.Migrations
 
                     b.Property<string>("Name")
                         .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ToolStateJson")
                         .HasColumnType("TEXT");
 
                     b.Property<string>("Type")

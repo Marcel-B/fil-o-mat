@@ -23,7 +23,10 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Filomat:PrinterSyncInterval", "00:00:00");
         if (PrinterHandler is { } handler)
             builder.ConfigureTestServices(services =>
-                services.AddHttpClient<MoonrakerAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler));
+            {
+                services.AddHttpClient<MoonrakerAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
+                services.AddHttpClient<SnapmakerU1Adapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
+            });
     }
 
     protected override void Dispose(bool disposing)

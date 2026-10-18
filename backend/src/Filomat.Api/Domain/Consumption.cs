@@ -6,7 +6,7 @@ public class Consumption
     public required string Id { get; set; }
     public required string PrinterId { get; set; }
 
-    /// <summary>ID des Drucks beim Drucker; zusammen mit <see cref="PrinterId"/> eindeutig.</summary>
+    /// <summary>ID des Drucks beim Drucker; zusammen mit <see cref="PrinterId"/> und <see cref="Tool"/> eindeutig.</summary>
     public required string JobId { get; set; }
 
     public string JobName { get; set; } = "";
@@ -18,6 +18,12 @@ public class Consumption
 
     /// <summary>Verbrauch in Gramm (vom Drucker oder aus Länge, Durchmesser und Dichte berechnet).</summary>
     public double Grams { get; set; }
+
+    /// <summary>Werkzeugkopf bei Druckern mit mehreren Köpfen, sonst 0.</summary>
+    public int Tool { get; set; }
+
+    /// <summary>UID des Tags, das der Drucker in diesem Kopf erkannt hat, falls bekannt.</summary>
+    public string? TagUid { get; set; }
 
     /// <summary>Spule, von der abgebucht wurde; <c>null</c>, wenn sie nicht eindeutig war.</summary>
     public string? ItemId { get; set; }

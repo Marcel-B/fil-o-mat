@@ -14,7 +14,20 @@ public record PrintJob(
     double LengthMm,
     double? SlicedLengthMm = null,
     double? SlicedGrams = null,
-    string? FilamentType = null);
+    string? FilamentType = null,
+    IReadOnlyList<double>? SlicedGramsPerFilament = null,
+    IReadOnlyList<double>? SlicedLengthPerFilament = null);
+
+/// <summary>Welche Spule (Tag-UID) in welchem Werkzeugkopf steckt und welcher Slicer-Filament-Slot auf welchen Kopf geht.</summary>
+/// <param name="TagUids">Pro Werkzeugkopf die UID des erkannten Tags (Hex, Großbuchstaben) oder <c>null</c>.</param>
+/// <param name="ExtruderMap">Slicer-Filament-Index → Werkzeugkopf.</param>
+public record ToolState(IReadOnlyList<string?> TagUids, IReadOnlyList<int> ExtruderMap)
+{
+    public int ExtruderFor(int filamentIndex) =>
+        filamentIndex < ExtruderMap.Count ? ExtruderMap[filamentIndex] : filamentIndex;
+
+    public string? TagFor(int extruder) => extruder >= 0 && extruder < TagUids.Count ? TagUids[extruder] : null;
+}
 
 /// <summary>Anbindung an einen Druckertyp.</summary>
 public interface IPrinterAdapter
@@ -23,4 +36,8 @@ public interface IPrinterAdapter
 
     /// <summary>Beendete Drucke, die nach <paramref name="since"/> gestartet wurden, ältester zuerst.</summary>
     Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken);
+
+    /// <summary>Spulen pro Werkzeugkopf, falls der Drucker sie selbst erkennt; sonst <c>null</c>.</summary>
+    Task<ToolState?> GetToolStateAsync(Printer printer, CancellationToken cancellationToken) =>
+        Task.FromResult<ToolState?>(null);
 }

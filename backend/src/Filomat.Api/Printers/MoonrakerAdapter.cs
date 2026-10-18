@@ -7,20 +7,27 @@ namespace Filomat.Api.Printers;
 /// <summary>Liest die Druckhistorie von Moonraker (<c>/server/history/list</c>).</summary>
 public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter
 {
-    public PrinterType Type => PrinterType.Moonraker;
+    public virtual PrinterType Type => PrinterType.Moonraker;
 
-    public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(
-        Printer printer, DateTime since, CancellationToken cancellationToken)
+    public virtual Task<ToolState?> GetToolStateAsync(Printer printer, CancellationToken cancellationToken) =>
+        Task.FromResult<ToolState?>(null);
+
+    protected async Task<JsonDocument> GetJsonAsync(Printer printer, string path, CancellationToken cancellationToken)
     {
-        var unixSince = new DateTimeOffset(since).ToUnixTimeSeconds();
-        var url = $"{printer.BaseUrl.TrimEnd('/')}/server/history/list?order=asc&limit=100&since={unixSince}";
-        using var request = new HttpRequestMessage(HttpMethod.Get, url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{printer.BaseUrl.TrimEnd('/')}/{path}");
         if (!string.IsNullOrEmpty(printer.ApiKey)) request.Headers.Add("X-Api-Key", printer.ApiKey);
 
         using var response = await http.SendAsync(request, cancellationToken);
         response.EnsureSuccessStatusCode();
         await using var stream = await response.Content.ReadAsStreamAsync(cancellationToken);
-        using var json = await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+        return await JsonDocument.ParseAsync(stream, cancellationToken: cancellationToken);
+    }
+
+    public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(
+        Printer printer, DateTime since, CancellationToken cancellationToken)
+    {
+        var unixSince = new DateTimeOffset(since).ToUnixTimeSeconds();
+        using var json = await GetJsonAsync(printer, $"server/history/list?order=asc&limit=100&since={unixSince}", cancellationToken);
 
         var jobs = new List<PrintJob>();
         if (!json.RootElement.TryGetProperty("result", out var result)
@@ -43,7 +50,10 @@ public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter
                 LengthMm: job.GetDoubleOrNull("filament_used") ?? 0,
                 SlicedLengthMm: metadata.GetDoubleOrNull("filament_total"),
                 SlicedGrams: metadata.GetDoubleOrNull("filament_weight_total"),
-                FilamentType: metadata.GetStringOrNull("filament_type")));
+                FilamentType: metadata.GetStringOrNull("filament_type"),
+                // Orca/Prusa-Slicer: Werte pro Filament-Slot (Mehrfarbdruck, Werkzeugwechsler)
+                SlicedGramsPerFilament: metadata.GetDoubleListOrNull("filament_weight"),
+                SlicedLengthPerFilament: metadata.GetDoubleListOrNull("filament_used_mm")));
         }
         return jobs;
     }
@@ -60,6 +70,14 @@ internal static class JsonElementExtensions
                 _ => null,
             }
             : null;
+
+    public static IReadOnlyList<double>? GetDoubleListOrNull(this JsonElement element, string name)
+    {
+        if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(name, out var value)
+            || value.ValueKind != JsonValueKind.Array)
+            return null;
+        return value.EnumerateArray().Select(v => v.ValueKind == JsonValueKind.Number ? v.GetDouble() : 0).ToList();
+    }
 
     public static double? GetDoubleOrNull(this JsonElement element, string name)
     {

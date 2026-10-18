@@ -68,7 +68,10 @@ Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (
 
 | Typ | Drucker | Adresse |
 |---|---|---|
-| `Moonraker` | Klipper, z. B. Voron, Snapmaker U1 mit paxx12-Mod | `http://<drucker>:7125` (oder über Fluidd/Mainsail-Port); `apiKey` nur bei aktivierter Moonraker-Authentifizierung |
+| `Moonraker` | Klipper, z. B. Voron | `http://<drucker>:7125` (oder über Fluidd/Mainsail-Port); `apiKey` nur bei aktivierter Moonraker-Authentifizierung |
+| `SnapmakerU1` | Snapmaker U1 mit paxx12-Firmware | `http://<drucker>` |
+
+Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das Backend bucht daher jeden Kopf einzeln auf die Spule mit diesem Tag, verschiebt erkannte Spulen automatisch in den Drucker-Container und verwendet die Spulen, die beim vorigen Abgleich eingelegt waren (also während des Drucks). Grundlage sind die Slicer-Angaben pro Filament (`filament_weight`, z. B. OrcaSlicer), bei abgebrochenen Drucken anteilig.
 
 Weitere Typen (Bambu LAN, PrusaLink, Anycubic) folgen.
 

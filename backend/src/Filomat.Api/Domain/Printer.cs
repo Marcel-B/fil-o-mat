@@ -3,8 +3,11 @@ namespace Filomat.Api.Domain;
 [System.Text.Json.Serialization.JsonConverter(typeof(System.Text.Json.Serialization.JsonStringEnumConverter<PrinterType>))]
 public enum PrinterType
 {
-    /// <summary>Klipper mit Moonraker (Voron, Snapmaker U1 mit Mod, …).</summary>
+    /// <summary>Klipper mit Moonraker (Voron, …).</summary>
     Moonraker,
+
+    /// <summary>Snapmaker U1 (Moonraker); erkennt die Spulen pro Werkzeugkopf über deren NFC-Tags.</summary>
+    SnapmakerU1,
 }
 
 /// <summary>Konfigurierter Drucker. Jeder Drucker hat einen eigenen Container für die eingelegten Spulen.</summary>
@@ -29,6 +32,9 @@ public class Printer
 
     /// <summary>Ende des zuletzt übernommenen Drucks; ältere Drucke werden nicht erneut abgefragt.</summary>
     public DateTime? LastJobEndedAt { get; set; }
+
+    /// <summary>Zuletzt gemeldete Spulen pro Werkzeugkopf (JSON), damit ein Druck den Spulen während des Drucks zugeordnet wird.</summary>
+    public string? ToolStateJson { get; set; }
 
     public DateTime? LastSyncAt { get; set; }
     public string? LastSyncError { get; set; }

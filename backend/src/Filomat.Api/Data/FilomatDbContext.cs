@@ -50,7 +50,7 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
         modelBuilder.Entity<Consumption>(consumption =>
         {
             consumption.HasKey(c => c.Id);
-            consumption.HasIndex(c => new { c.PrinterId, c.JobId }).IsUnique();
+            consumption.HasIndex(c => new { c.PrinterId, c.JobId, c.Tool }).IsUnique();
             consumption.HasIndex(c => c.ItemId);
             consumption.HasOne<Printer>()
                 .WithMany()
