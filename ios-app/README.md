@@ -19,7 +19,7 @@ Native iPhone-App (SwiftUI + CoreNFC) mit demselben Funktionsumfang wie die Andr
 
 ## Abgleich mit dem Backend
 
-Über das Wolken-Symbol in der Container-Liste lässt sich das [Backend](../backend/README.md) verbinden (z. B. `http://nas.local:8080`). Beim Verbinden werden die Daten des iPhones hochgeladen, ohne etwas zu löschen, und danach der gemeinsame Stand übernommen. Danach geht jede Änderung sofort ans Backend; beim Öffnen der App und per Herunterziehen der Liste wird neu abgeglichen.
+Über das Wolken-Symbol in der Container-Liste lässt sich das [Backend](../backend/README.md) verbinden (z. B. `http://nas.local:8080`). Beim Verbinden werden die Daten des iPhones hochgeladen, ohne etwas zu löschen, und danach der gemeinsame Stand übernommen. Danach geht jede Änderung sofort ans Backend; beim Öffnen der App, alle 2 Minuten im Vordergrund und per Herunterziehen der Liste wird neu abgeglichen.
 
 Container und Filamente aus der Android-App kommen so aufs iPhone: in der Android-App über das Wolken-Symbol hochladen, danach auf dem iPhone verbinden.
 
