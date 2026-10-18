@@ -21,6 +21,12 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         try
         {
             var currentTools = await adapter.GetToolStateAsync(printer, cancellationToken);
+            if (currentTools is not null)
+            {
+                // Zuerst die erkannten Spulen übernehmen, damit neue Drucke schon auf sie gebucht werden
+                await MoveLoadedSpoolsAsync(printer, currentTools, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+            }
             // Drucke den Spulen zuordnen, die beim letzten Abgleich (also während des Drucks) eingelegt waren
             var toolsDuringPrint = ReadToolState(printer) ?? currentTools;
             var jobs = await adapter.GetFinishedJobsAsync(printer, since, cancellationToken);
@@ -39,11 +45,7 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 if (printer.LastJobEndedAt is null || job.EndedAt > printer.LastJobEndedAt)
                     printer.LastJobEndedAt = job.EndedAt;
             }
-            if (currentTools is not null)
-            {
-                printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
-                await MoveLoadedSpoolsAsync(printer, currentTools, cancellationToken);
-            }
+            if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
@@ -124,14 +126,54 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         }
     }
 
-    /// <summary>Spulen, die der Drucker erkennt, liegen ab jetzt im Container des Druckers.</summary>
+    /// <summary>
+    /// Spulen, die der Drucker erkennt, liegen ab jetzt im Container des Druckers. Unbekannte Tags werden
+    /// mit den Daten angelegt, die der Drucker vom Tag gelesen hat, und offene Buchungen dieses Tags zugeordnet.
+    /// </summary>
     private async Task MoveLoadedSpoolsAsync(Printer printer, ToolState tools, CancellationToken cancellationToken)
     {
-        var tags = tools.TagUids.OfType<string>().ToList();
-        if (tags.Count == 0) return;
-        var items = await db.Items.Where(i => tags.Contains(i.RfidTag) && i.ContainerId != printer.ContainerId)
-            .ToListAsync(cancellationToken);
-        foreach (var item in items) item.ContainerId = printer.ContainerId;
+        for (var tool = 0; tool < tools.TagUids.Count; tool++)
+        {
+            if (tools.TagUids[tool] is not { } tag) continue;
+            var item = await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            if (item is null)
+            {
+                // Tags von Containern gehören nicht in einen Drucker
+                if (await db.Containers.AnyAsync(c => c.RfidTag == tag, cancellationToken)) continue;
+                var filament = tools.Filaments is { } list && tool < list.Count ? list[tool] : null;
+                item = NewItemFromTag(tag, filament, tool);
+                db.Items.Add(item);
+                var open = await db.Consumptions.Where(c => c.TagUid == tag && c.ItemId == null).ToListAsync(cancellationToken);
+                foreach (var entry in open) entry.ItemId = item.Id;
+            }
+            item.ContainerId = printer.ContainerId;
+        }
+    }
+
+    private static Item NewItemFromTag(string tag, DetectedFilament? filament, int tool)
+    {
+        var name = string.Join(" ", new[] { filament?.Vendor, filament?.Type, filament?.SubType }.Where(s => s is not null));
+        return new Item
+        {
+            Id = Guid.NewGuid().ToString(),
+            RfidTag = tag,
+            Name = name.Length > 0 ? name : $"Spule aus Kopf {tool + 1}",
+            Description = "Vom Drucker erkannt",
+            CreatedAt = DateTime.UtcNow,
+            ItemData = filament?.Type is null ? null : new FilamentData
+            {
+                Protocol = "openspool",
+                Version = "1.0",
+                Type = filament.Type,
+                Brand = filament.Vendor,
+                Variant = filament.SubType,
+                ColorHex = filament.ColorHex,
+                MinTemp = filament.MinTemp?.ToString(),
+                MaxTemp = filament.MaxTemp?.ToString(),
+                BedMinTemp = filament.BedTemp?.ToString(),
+                BedMaxTemp = filament.BedTemp?.ToString(),
+            },
+        };
     }
 
     private static ToolState? ReadToolState(Printer printer)

@@ -20,11 +20,15 @@ public class SnapmakerU1Adapter(HttpClient http) : MoonrakerAdapter(http)
             return null;
 
         var tags = new List<string?>();
+        var filaments = new List<DetectedFilament?>();
         if (status.TryGetProperty("filament_detect", out var detect)
             && detect.TryGetProperty("info", out var info) && info.ValueKind == JsonValueKind.Array)
         {
             foreach (var channel in info.EnumerateArray())
+            {
                 tags.Add(channel.TryGetProperty("CARD_UID", out var uid) ? ToHex(uid) : null);
+                filaments.Add(ReadFilament(channel));
+            }
         }
 
         var map = new List<int>();
@@ -35,7 +39,21 @@ public class SnapmakerU1Adapter(HttpClient http) : MoonrakerAdapter(http)
                 map.Add(entry.TryGetInt32(out var extruder) ? extruder : 0);
         }
 
-        return new ToolState(tags, map);
+        return new ToolState(tags, map, filaments);
+    }
+
+    /// <summary>Tag-Daten eines Kopfes; die Firmware setzt unbekannte Werte auf "NONE" bzw. 0.</summary>
+    internal static DetectedFilament? ReadFilament(JsonElement channel)
+    {
+        if (channel.ValueKind != JsonValueKind.Object) return null;
+        string? Text(string name) => channel.GetStringOrNull(name) is { } value
+            && !string.IsNullOrWhiteSpace(value) && value != "NONE" ? value.Trim() : null;
+        int? Number(string name) => channel.GetDoubleOrNull(name) is { } value && value > 0 ? (int)value : null;
+
+        var type = Text("MAIN_TYPE");
+        var color = type is null ? null : Number("RGB_1") is { } rgb ? rgb.ToString("X6") : channel.GetDoubleOrNull("RGB_1") == 0 ? "000000" : null;
+        return new DetectedFilament(Text("VENDOR"), type, Text("SUB_TYPE"), color,
+            Number("HOTEND_MIN_TEMP"), Number("HOTEND_MAX_TEMP"), Number("BED_TEMP"));
     }
 
     /// <summary>UID als Byte-Liste → Hex in Großbuchstaben, wie sie auch die Apps speichern.</summary>

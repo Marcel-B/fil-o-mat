@@ -89,7 +89,7 @@ public static class PrinterEndpoints
     }
 
     private static async Task<Results<Created<PrinterResponse>, ValidationProblem, Conflict<string>>> CreateAsync(
-        PrinterRequest request, FilomatDbContext db)
+        PrinterRequest request, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken)
     {
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
@@ -126,6 +126,8 @@ public static class PrinterEndpoints
         db.Containers.Add(container);
         db.Printers.Add(printer);
         await db.SaveChangesAsync();
+        // Gleich abgleichen, damit eingelegte Spulen sofort im Container stehen; Fehler stehen danach am Drucker
+        await sync.SyncAsync(printer, cancellationToken);
         return TypedResults.Created($"/api/printers/{printer.Id}", PrinterResponse.From(printer));
     }
 
