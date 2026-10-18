@@ -375,7 +375,7 @@ private struct SpoolEditView: View {
                     Text("Lager").tag(Location(printerId: nil, tool: nil))
                     ForEach(store.printers) { printer in
                         ForEach(0..<printer.toolCount, id: \.self) { tool in
-                            Text(printer.toolCount > 1 ? "\(printer.name) Kopf \(tool + 1)" : printer.name)
+                            Text(printer.placeName(tool: tool))
                                 .tag(Location(printerId: printer.id, tool: tool))
                         }
                     }

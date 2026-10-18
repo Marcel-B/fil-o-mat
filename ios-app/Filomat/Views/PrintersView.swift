@@ -169,9 +169,7 @@ private struct AddPrinterView: View {
                         .autocorrectionDisabled()
                     SecureField("API-Schlüssel (optional)", text: $apiKey)
                 } footer: {
-                    Text(type == .snapmakerU1
-                         ? "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
-                         : "Der Verbrauch wird von der Spule abgezogen, die im Container dieses Druckers liegt.")
+                    Text(type.setupHint)
                 }
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red) }

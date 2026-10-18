@@ -154,6 +154,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("AdapterStateJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("ApiKey")
                         .HasColumnType("TEXT");
 
@@ -183,6 +186,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
+
+                    b.Property<int?>("ToolCount")
+                        .HasColumnType("INTEGER");
 
                     b.Property<string>("ToolStateJson")
                         .HasColumnType("TEXT");

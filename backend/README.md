@@ -74,10 +74,13 @@ Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (
 |---|---|---|
 | `Moonraker` | Klipper, z. B. Voron | `http://<drucker>:7125` (oder über Fluidd/Mainsail-Port); `apiKey` nur bei aktivierter Moonraker-Authentifizierung |
 | `SnapmakerU1` | Snapmaker U1 mit paxx12-Firmware | `http://<drucker>` |
+| `PrusaLink` | Prusa MK4, Core One, Mini, XL | `http://<drucker>`; `apiKey` aus Einstellungen > Netzwerk > PrusaLink am Drucker |
 
 Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das Backend bucht daher jeden Kopf einzeln auf die Spule mit diesem Tag, verschiebt erkannte Spulen automatisch in den Drucker-Container und verwendet die Spulen, die beim vorigen Abgleich eingelegt waren (also während des Drucks). Grundlage sind die Slicer-Angaben pro Filament (`filament_weight`, z. B. OrcaSlicer), bei abgebrochenen Drucken anteilig.
 
-Weitere Typen (Bambu LAN, PrusaLink, Anycubic) folgen.
+PrusaLink hat keine Druckhistorie. Das Backend merkt sich deshalb bei jedem Abgleich den laufenden Druck und bucht ihn, sobald er beendet ist oder der Drucker keinen Druck mehr meldet (abgebrochene Drucke anteilig nach Fortschritt). Der Abgleich läuft alle zwei Minuten, das Ergebnis eines Drucks muss also so lange am Drucker stehen bleiben oder der nächste Druck folgen. Mit MMU3 kommen die Slicer-Werte pro Slot; gebucht wird jeweils auf die Spule, die in der App an diesem Slot eingelegt ist.
+
+Weitere Typen (Bambu LAN, Anycubic) folgen.
 
 ### Tags auf Musterplättchen
 

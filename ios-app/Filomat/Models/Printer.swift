@@ -16,11 +16,18 @@ struct Printer: Identifiable, Codable, Hashable {
 
     var lastSyncDate: Date? { lastSyncAt.flatMap(BackendDate.parse) }
     var toolCount: Int { max(tools ?? 1, 1) }
+
+    /// "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf.
+    func placeName(tool: Int?) -> String {
+        guard toolCount > 1, let tool else { return name }
+        return "\(name) \(type == .prusaLink ? "Slot" : "Kopf") \(tool + 1)"
+    }
 }
 
 enum PrinterType: String, Codable, CaseIterable, Identifiable {
     case moonraker = "Moonraker"
     case snapmakerU1 = "SnapmakerU1"
+    case prusaLink = "PrusaLink"
 
     var id: String { rawValue }
 
@@ -28,6 +35,7 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .moonraker: "Klipper / Moonraker"
         case .snapmakerU1: "Snapmaker U1 (paxx12)"
+        case .prusaLink: "Prusa (PrusaLink)"
         }
     }
 
@@ -35,6 +43,19 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .moonraker: "http://voron.local:7125"
         case .snapmakerU1: "http://192.168.2.155"
+        case .prusaLink: "http://prusa-core-one.local"
+        }
+    }
+
+    /// Erklärung unter dem Formular beim Anlegen.
+    var setupHint: String {
+        switch self {
+        case .moonraker:
+            "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist."
+        case .snapmakerU1:
+            "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
+        case .prusaLink:
+            "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
         }
     }
 }

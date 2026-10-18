@@ -37,7 +37,8 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
                 if (await db.Consumptions.AnyAsync(c => c.PrinterId == printer.Id && c.JobId == job.JobId, cancellationToken))
                     continue;
 
-                if (toolsDuringPrint is not null && job.SlicedGramsPerFilament is { Count: > 0 })
+                // Pro Kopf buchen, wenn der Drucker die Spulen erkennt oder mehrere Slots meldet (z. B. MMU3)
+                if (job.SlicedGramsPerFilament is { Count: > 0 } perFilament && (toolsDuringPrint is not null || perFilament.Count > 1))
                     await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
                 else
                     await RecordAsync(printer, job, cancellationToken);
@@ -61,9 +62,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
 
     private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
     {
-        // Abgebucht wird nur, wenn genau eine Spule im Drucker liegt
-        var loaded = await db.Items.Where(i => i.ContainerId == printer.ContainerId).ToListAsync(cancellationToken);
-        var item = loaded.Count == 1 ? loaded[0] : null;
+        var item = await ItemAtToolAsync(printer, 0, fallbackToContainer: true, cancellationToken);
         var grams = Math.Round(FilamentMath.GramsForJob(job, item?.ItemData?.Type), 2);
 
         var spool = item is null ? null : await BookAsync(item, printer.Id, 0, grams, cancellationToken);
@@ -91,8 +90,27 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
         return spool;
     }
 
-    /// <summary>Bucht jeden Werkzeugkopf einzeln auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat.</summary>
-    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState tools, CancellationToken cancellationToken)
+    /// <summary>
+    /// Sorte der Spule, die an diesem Kopf des Druckers steckt. Sonst, falls erlaubt, die einzige Sorte im
+    /// Drucker-Container; bei keiner oder mehreren bleibt die Buchung offen.
+    /// </summary>
+    private async Task<Item?> ItemAtToolAsync(Printer printer, int tool, bool fallbackToContainer, CancellationToken cancellationToken)
+    {
+        var placed = await db.Spools
+            .Where(s => s.PrinterId == printer.Id && s.EmptiedAt == null && (s.Tool ?? 0) == tool)
+            .Select(s => s.ItemId)
+            .ToListAsync(cancellationToken);
+        if (placed.Count == 1) return await db.Items.FindAsync([placed[0]], cancellationToken);
+        if (!fallbackToContainer) return null;
+        var loaded = await db.Items.Where(i => i.ContainerId == printer.ContainerId).ToListAsync(cancellationToken);
+        return loaded.Count == 1 ? loaded[0] : null;
+    }
+
+    /// <summary>
+    /// Bucht jeden Werkzeugkopf einzeln: auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat, oder
+    /// (ohne Tag-Erkennung, z. B. MMU3) auf die Spule, die in der App an diesem Kopf eingelegt ist.
+    /// </summary>
+    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
     {
         // Abgebrochene Drucke: anteilig nach tatsächlich verbrauchter Länge
         var ratio = job.SlicedLengthMm is > 0 && job.LengthMm > 0
@@ -105,7 +123,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
             var grams = job.SlicedGramsPerFilament[i];
             if (grams <= 0) continue;
             var length = job.SlicedLengthPerFilament is { } lengths && i < lengths.Count ? lengths[i] : 0;
-            var extruder = tools.ExtruderFor(i);
+            var extruder = tools?.ExtruderFor(i) ?? i;
             perExtruder[extruder] = perExtruder.TryGetValue(extruder, out var sum)
                 ? (sum.Grams + grams, sum.Length + length)
                 : (grams, length);
@@ -113,8 +131,10 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
 
         foreach (var (extruder, usage) in perExtruder)
         {
-            var tag = tools.TagFor(extruder);
-            var item = tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            var tag = tools?.TagFor(extruder);
+            var item = tools is null
+                ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: perExtruder.Count == 1, cancellationToken)
+                : tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
             var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption

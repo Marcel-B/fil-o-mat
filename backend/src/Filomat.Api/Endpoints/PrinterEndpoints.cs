@@ -28,7 +28,7 @@ public record PrinterResponse(
 {
     public static PrinterResponse From(Printer p) => new(
         p.Id, p.Name, p.Type, p.BaseUrl, !string.IsNullOrEmpty(p.ApiKey), p.Enabled, p.ContainerId,
-        p.Type == PrinterType.SnapmakerU1 ? 4 : 1,
+        p.ToolCount ?? (p.Type == PrinterType.SnapmakerU1 ? 4 : 1),
         p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError);
 }
 

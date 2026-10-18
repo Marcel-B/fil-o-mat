@@ -15,15 +15,17 @@ public class FakeMoonraker : HttpMessageHandler
     public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
     public List<HttpRequestMessage> Requests { get; } = [];
 
-    /// <summary>Antworten pro Pfad; andere Pfade bekommen <see cref="Body"/>.</summary>
+    /// <summary>Antworten pro Pfad; andere Pfade bekommen <see cref="Body"/>. Ein leerer Text antwortet mit 204.</summary>
     public Dictionary<string, string> Routes { get; } = [];
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
+        var body = Routes.GetValueOrDefault(request.RequestUri!.AbsolutePath, Body);
+        if (body.Length == 0) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         return Task.FromResult(new HttpResponseMessage(Status)
         {
-            Content = new StringContent(Routes.GetValueOrDefault(request.RequestUri!.AbsolutePath, Body), Encoding.UTF8, "application/json"),
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
         });
     }
 

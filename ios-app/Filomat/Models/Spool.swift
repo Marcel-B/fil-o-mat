@@ -16,8 +16,7 @@ struct Spool: Identifiable, Codable, Hashable {
     func locationText(printers: [Printer]) -> String {
         guard let printerId else { return "Lager" }
         guard let printer = printers.first(where: { $0.id == printerId }) else { return "Drucker" }
-        guard printer.toolCount > 1, let tool else { return printer.name }
-        return "\(printer.name) Kopf \(tool + 1)"
+        return printer.placeName(tool: tool)
     }
 }
 
