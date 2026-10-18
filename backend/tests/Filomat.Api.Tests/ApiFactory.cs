@@ -1,4 +1,7 @@
+using Filomat.Api.Printers;
 using Microsoft.AspNetCore.Mvc.Testing;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Filomat.Api.Tests;
 
@@ -9,10 +12,18 @@ public class ApiFactory : WebApplicationFactory<Program>
 
     public string? ApiKey { get; init; }
 
+    /// <summary>Ersetzt die HTTP-Verbindung zu den Druckern.</summary>
+    public HttpMessageHandler? PrinterHandler { get; init; }
+
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Filomat", $"Data Source={_dbPath}");
         builder.UseSetting("Filomat:ApiKey", ApiKey ?? "");
+        // Kein automatischer Abgleich in Tests
+        builder.UseSetting("Filomat:PrinterSyncInterval", "00:00:00");
+        if (PrinterHandler is { } handler)
+            builder.ConfigureTestServices(services =>
+                services.AddHttpClient<MoonrakerAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler));
     }
 
     protected override void Dispose(bool disposing)

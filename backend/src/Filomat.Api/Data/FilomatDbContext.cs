@@ -8,6 +8,8 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
 {
     public DbSet<Container> Containers => Set<Container>();
     public DbSet<Item> Items => Set<Item>();
+    public DbSet<Printer> Printers => Set<Printer>();
+    public DbSet<Consumption> Consumptions => Set<Consumption>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -33,6 +35,31 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
                 .OnDelete(DeleteBehavior.SetNull);
             // Tag-Daten als JSON-Spalte: das OpenSpool-Format kann so ohne Migration wachsen.
             item.OwnsOne(i => i.ItemData, data => data.ToJson());
+        });
+
+        modelBuilder.Entity<Printer>(printer =>
+        {
+            printer.HasKey(p => p.Id);
+            printer.Property(p => p.Type).HasConversion<string>();
+            printer.HasOne<Container>()
+                .WithMany()
+                .HasForeignKey(p => p.ContainerId)
+                .OnDelete(DeleteBehavior.Restrict);
+        });
+
+        modelBuilder.Entity<Consumption>(consumption =>
+        {
+            consumption.HasKey(c => c.Id);
+            consumption.HasIndex(c => new { c.PrinterId, c.JobId }).IsUnique();
+            consumption.HasIndex(c => c.ItemId);
+            consumption.HasOne<Printer>()
+                .WithMany()
+                .HasForeignKey(c => c.PrinterId)
+                .OnDelete(DeleteBehavior.Cascade);
+            consumption.HasOne<Item>()
+                .WithMany()
+                .HasForeignKey(c => c.ItemId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }

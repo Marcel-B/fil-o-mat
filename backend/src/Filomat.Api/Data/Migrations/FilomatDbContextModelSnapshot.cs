@@ -17,6 +17,52 @@ namespace Filomat.Api.Data.Migrations
 #pragma warning disable 612, 618
             modelBuilder.HasAnnotation("ProductVersion", "10.0.13");
 
+            modelBuilder.Entity("Filomat.Api.Domain.Consumption", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("EndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("Grams")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("ItemId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JobId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("JobName")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<double>("LengthMm")
+                        .HasColumnType("REAL");
+
+                    b.Property<string>("PrinterId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("RecordedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Status")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId");
+
+                    b.HasIndex("PrinterId", "JobId")
+                        .IsUnique();
+
+                    b.ToTable("Consumptions");
+                });
+
             modelBuilder.Entity("Filomat.Api.Domain.Container", b =>
                 {
                     b.Property<string>("Id")
@@ -70,6 +116,12 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<double?>("NetWeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<double?>("RemainingWeight")
+                        .HasColumnType("REAL");
+
                     b.Property<string>("RfidTag")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -81,6 +133,66 @@ namespace Filomat.Api.Data.Migrations
                     b.HasIndex("RfidTag");
 
                     b.ToTable("Items");
+                });
+
+            modelBuilder.Entity("Filomat.Api.Domain.Printer", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ApiKey")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("BaseUrl")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ContainerId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime>("CreatedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<bool>("Enabled")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("LastJobEndedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("LastSyncAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("LastSyncError")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Name")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Type")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ContainerId");
+
+                    b.ToTable("Printers");
+                });
+
+            modelBuilder.Entity("Filomat.Api.Domain.Consumption", b =>
+                {
+                    b.HasOne("Filomat.Api.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
+                    b.HasOne("Filomat.Api.Domain.Printer", null)
+                        .WithMany()
+                        .HasForeignKey("PrinterId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
                 });
 
             modelBuilder.Entity("Filomat.Api.Domain.Item", b =>
@@ -140,6 +252,15 @@ namespace Filomat.Api.Data.Migrations
                         });
 
                     b.Navigation("ItemData");
+                });
+
+            modelBuilder.Entity("Filomat.Api.Domain.Printer", b =>
+                {
+                    b.HasOne("Filomat.Api.Domain.Container", null)
+                        .WithMany()
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.Restrict)
+                        .IsRequired();
                 });
 #pragma warning restore 612, 618
         }

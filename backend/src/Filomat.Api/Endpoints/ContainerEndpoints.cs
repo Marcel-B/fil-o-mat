@@ -94,6 +94,8 @@ public static class ContainerEndpoints
     {
         if (await db.Containers.FindAsync(id) is not { } container) return TypedResults.NotFound();
         if (container.IsStandard) return TypedResults.BadRequest("Standard-Container können nicht gelöscht werden.");
+        if (await db.Printers.FirstOrDefaultAsync(p => p.ContainerId == id) is { } printer)
+            return TypedResults.BadRequest($"Der Container gehört zum Drucker '{printer.Name}'. Bitte den Drucker entfernen.");
 
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == id)

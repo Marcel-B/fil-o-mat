@@ -12,6 +12,12 @@ public class Item
     public DateTime CreatedAt { get; set; }
     public string? ContainerId { get; set; }
     public FilamentData? ItemData { get; set; }
+
+    /// <summary>Filamentgewicht einer vollen Spule in Gramm (ohne Spule), z. B. 1000.</summary>
+    public double? NetWeight { get; set; }
+
+    /// <summary>Verbleibendes Filament in Gramm; sinkt mit jedem gebuchten Druck.</summary>
+    public double? RemainingWeight { get; set; }
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>

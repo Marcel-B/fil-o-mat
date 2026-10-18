@@ -1,5 +1,6 @@
 using Filomat.Api.Data;
 using Filomat.Api.Endpoints;
+using Filomat.Api.Printers;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -7,6 +8,10 @@ var builder = WebApplication.CreateBuilder(args);
 builder.Services.AddDbContext<FilomatDbContext>(options =>
     options.UseSqlite(builder.Configuration.GetConnectionString("Filomat") ?? "Data Source=filomat.db"));
 builder.Services.AddProblemDetails();
+builder.Services.AddHttpClient<MoonrakerAdapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<MoonrakerAdapter>());
+builder.Services.AddScoped<ConsumptionSync>();
+builder.Services.AddHostedService<PrinterSyncService>();
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -29,6 +34,7 @@ if (!string.IsNullOrEmpty(apiKey))
 
 api.MapContainerEndpoints();
 api.MapItemEndpoints();
+api.MapPrinterEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
 
 app.Run();
