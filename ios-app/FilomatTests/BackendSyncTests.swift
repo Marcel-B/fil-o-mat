@@ -89,6 +89,27 @@ final class BackendSyncTests: XCTestCase {
         XCTAssertTrue(json.contains("\"createdAt\":1700000000123"), json)
     }
 
+    func testReadsUpdateStatusAndIgnoresOlderBackend() async {
+        let store = ContainerStore(fileURL: fileURL)
+        store.backend = client
+
+        // Älteres Backend ohne /api/update: kein Hinweis, kein Sync-Fehler
+        await store.refreshUpdateStatus()
+        XCTAssertNil(store.updateStatus)
+        XCTAssertNil(store.syncError)
+
+        StubURLProtocol.responses["/api/update"] = (200, """
+        {"supported":true,"branch":"main","currentVersion":"aaa111","currentDate":1700000000000,"latestVersion":"bbb222",
+         "updateAvailable":true,"commits":[{"sha":"bbb222","subject":"Neue Funktion","date":1700000100000}],
+         "checkedAt":1700000200000,"state":"idle","message":null}
+        """)
+        await store.refreshUpdateStatus()
+        XCTAssertEqual(store.updateStatus?.updateAvailable, true)
+        XCTAssertEqual(store.updateStatus?.commits.first?.subject, "Neue Funktion")
+        XCTAssertEqual(store.updateStatus?.checkedAt, Date(timeIntervalSince1970: 1_700_000_200))
+        XCTAssertEqual(store.updateStatus?.isUpdating, false)
+    }
+
     func testSettingsRequireHttpAddress() {
         XCTAssertNil(BackendSettings.client(serverURL: "nas.local", apiKey: ""))
         XCTAssertNotNil(BackendSettings.client(serverURL: "http://192.168.1.10:8080", apiKey: ""))

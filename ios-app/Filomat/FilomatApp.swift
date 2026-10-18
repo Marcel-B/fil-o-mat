@@ -13,9 +13,17 @@ struct FilomatApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
-                .task { await store.refresh() }
+                .task {
+                    await store.refresh()
+                    await store.refreshUpdateStatus()
+                }
                 .onChange(of: scenePhase) { _, phase in
-                    if phase == .active { Task { await store.refresh() } }
+                    if phase == .active {
+                        Task {
+                            await store.refresh()
+                            await store.refreshUpdateStatus()
+                        }
+                    }
                 }
         }
     }

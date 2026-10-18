@@ -16,6 +16,8 @@ final class ContainerStore {
     private(set) var isSyncing = false
     private(set) var syncError: String?
     private(set) var lastSyncedAt: Date?
+    /// Stand der Backend-Version; `nil`, solange unbekannt oder ohne Updater auf dem Server.
+    private(set) var updateStatus: BackendUpdateStatus?
 
     @ObservationIgnored var backend: BackendClient?
 
@@ -155,6 +157,29 @@ final class ContainerStore {
         backend = nil
         syncError = nil
         lastSyncedAt = nil
+        updateStatus = nil
+    }
+
+    /// Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein älteres Backend ohne `/api/update`) zählen nicht als Sync-Fehler.
+    func refreshUpdateStatus() async {
+        guard let backend else { return }
+        guard let status = try? await backend.updateStatus() else {
+            // Während des Neustarts antwortet das Backend kurz nicht; den Stand dann behalten
+            if updateStatus?.isUpdating != true { updateStatus = nil }
+            return
+        }
+        updateStatus = status.supported ? status : nil
+    }
+
+    func checkForUpdate() async throws {
+        guard let backend else { return }
+        try await backend.checkForUpdate()
+    }
+
+    func installUpdate() async throws {
+        guard let backend else { return }
+        try await backend.installUpdate()
+        await refreshUpdateStatus()
     }
 
     /// Übernimmt den Stand des Backends (z. B. Container, die auf einem anderen Gerät angelegt wurden).
