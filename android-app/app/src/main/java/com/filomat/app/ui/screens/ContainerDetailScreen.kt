@@ -32,7 +32,7 @@ fun ContainerDetailScreen(
     viewModel: ContainerDetailViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val containerStore = remember { ContainerStore(context) }
+    val containerStore = remember { ContainerStore.get(context) }
     val container by viewModel.container.collectAsState()
     var showingEditContainer by remember { mutableStateOf(false) }
     var showingAddItem by remember { mutableStateOf(false) }
@@ -300,7 +300,11 @@ fun InfoRow(label: String, value: String) {
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier
+                .padding(start = 16.dp)
+                .weight(1f, fill = false)
         )
     }
 }

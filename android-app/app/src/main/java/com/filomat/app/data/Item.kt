@@ -10,7 +10,13 @@ data class Item(
     var description: String = "",
     val createdAt: Long = System.currentTimeMillis(),
     var containerId: String? = null,
-    var itemData: ItemJsonData? = null
+    var itemData: ItemJsonData? = null,
+    /** Filamentgewicht einer vollen Spule in Gramm; wird vom Backend gepflegt. */
+    val netWeight: Double? = null,
+    /** Gewicht der leeren Spule in Gramm, um eine gewogene Spule umzurechnen. */
+    val spoolWeight: Double? = null,
+    /** Volle Spulen dieser Sorte im Vorrat; `null`, wenn kein Vorrat geführt wird. */
+    val spoolsInStock: Int? = null
 ) {
     fun getDisplayTitle(): String {
         val parts = listOfNotNull(
@@ -23,6 +29,13 @@ data class Item(
         } else {
             name
         }
+    }
+
+    /** Anzeigename der Farbe: Klartext, sonst der Hex-Wert mit "#". */
+    fun colorLabel(): String? {
+        itemData?.color?.trim()?.takeIf { it.isNotEmpty() }?.let { return it }
+        val hex = itemData?.color_hex?.trim()?.takeIf { it.isNotEmpty() } ?: return null
+        return if (hex.startsWith("#")) hex else "#$hex"
     }
 }
 
