@@ -12,6 +12,31 @@ struct ImportResult: Codable {
     var skipped: [String]
 }
 
+/// Stand der Backend-Version (`/api/update`). Neue Commits prüft ein Updater auf dem Server.
+struct BackendUpdateStatus: Codable, Equatable {
+    struct Commit: Codable, Equatable, Identifiable {
+        var sha: String
+        var subject: String
+        var date: Date
+        var id: String { sha }
+    }
+
+    /// `false`, wenn auf dem Server kein Updater eingerichtet ist.
+    var supported: Bool
+    var branch: String?
+    var currentVersion: String?
+    var currentDate: Date?
+    var latestVersion: String?
+    var updateAvailable: Bool
+    var commits: [Commit]
+    var checkedAt: Date?
+    /// `idle`, `requested`, `running` oder `failed`
+    var state: String
+    var message: String?
+
+    var isUpdating: Bool { state == "requested" || state == "running" }
+}
+
 enum BackendError: LocalizedError {
     case unauthorized
     case status(Int)
@@ -85,6 +110,22 @@ struct BackendClient {
         var request = request("api/consumption", method: "GET")
         request.url = components.url
         return try Self.decoder.decode([ConsumptionEntry].self, from: try await send(request))
+    }
+
+    // MARK: - Aktualisierung
+
+    func updateStatus() async throws -> BackendUpdateStatus {
+        try Self.decoder.decode(BackendUpdateStatus.self, from: try await send(request("api/update", method: "GET")))
+    }
+
+    /// Lässt den Server sofort nach neuen Commits suchen; das Ergebnis liefert später `updateStatus()`.
+    func checkForUpdate() async throws {
+        try await send(request("api/update/check", method: "POST"))
+    }
+
+    /// Spielt die neue Version ein; das Backend startet dabei neu.
+    func installUpdate() async throws {
+        try await send(request("api/update", method: "POST"))
     }
 
     private func request(_ path: String, method: String) -> URLRequest {

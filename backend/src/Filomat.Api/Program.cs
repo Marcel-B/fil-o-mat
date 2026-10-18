@@ -44,6 +44,7 @@ api.MapContainerEndpoints();
 api.MapItemEndpoints();
 api.MapPrinterEndpoints();
 api.MapSyncEndpoints();
+api.MapUpdateEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
