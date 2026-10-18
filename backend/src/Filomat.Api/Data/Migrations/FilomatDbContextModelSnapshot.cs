@@ -135,6 +135,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<double?>("SpoolWeight")
                         .HasColumnType("REAL");
 
+                    b.Property<int?>("SpoolsInStock")
+                        .HasColumnType("INTEGER");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContainerId");

@@ -15,6 +15,8 @@ struct Item: Identifiable, Codable, Hashable {
     var remainingWeight: Double?
     /// Gewicht der leeren Spule in Gramm, um eine gewogene Spule umzurechnen.
     var spoolWeight: Double?
+    /// Volle Spulen dieser Sorte im Vorrat (bei Tags auf Musterplättchen); `nil`, wenn kein Vorrat geführt wird.
+    var spoolsInStock: Int?
 
     /// Titel im Format "<brand> <type> <variant>", Fallback auf den Namen.
     var displayTitle: String {

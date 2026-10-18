@@ -211,3 +211,46 @@ public class FilamentMathTests
         Assert.Equal(0, item.RemainingWeight);
     }
 }
+
+public class SpoolStockTests : IDisposable
+{
+    private readonly ApiFactory _factory = new();
+    private readonly HttpClient _client;
+
+    public SpoolStockTests() => _client = _factory.CreateClient();
+
+    public void Dispose() => _factory.Dispose();
+
+    [Fact]
+    public void RunningOutOpensSpoolFromStock()
+    {
+        var item = new Item { Id = "1", RfidTag = "t", Name = "n", NetWeight = 1000, RemainingWeight = 30, SpoolsInStock = 2 };
+        ConsumptionSync.Deduct(item, 50);
+        Assert.Equal(980, item.RemainingWeight);
+        Assert.Equal(1, item.SpoolsInStock);
+    }
+
+    [Fact]
+    public void WithoutStockRemainingStopsAtZero()
+    {
+        var item = new Item { Id = "1", RfidTag = "t", Name = "n", NetWeight = 1000, RemainingWeight = 30, SpoolsInStock = 0 };
+        ConsumptionSync.Deduct(item, 50);
+        Assert.Equal(0, item.RemainingWeight);
+        Assert.Equal(0, item.SpoolsInStock);
+    }
+
+    [Fact]
+    public async Task OpenSpoolEndpointRefillsFromStock()
+    {
+        var created = await (await _client.PostAsJsonAsync("/api/items",
+            new ItemRequest(null, "T1", "PLA", null, null, null, 1000, 12, null, 3))).Content.ReadFromJsonAsync<Item>();
+
+        var opened = await (await _client.PostAsync($"/api/items/{created!.Id}/open-spool", null)).Content.ReadFromJsonAsync<Item>();
+        Assert.Equal(1000, opened!.RemainingWeight);
+        Assert.Equal(2, opened.SpoolsInStock);
+
+        var noWeight = await (await _client.PostAsJsonAsync("/api/items",
+            new ItemRequest(null, "T2", "PLA", null, null, null))).Content.ReadFromJsonAsync<Item>();
+        Assert.Equal(HttpStatusCode.BadRequest, (await _client.PostAsync($"/api/items/{noWeight!.Id}/open-spool", null)).StatusCode);
+    }
+}

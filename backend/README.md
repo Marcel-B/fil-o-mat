@@ -75,6 +75,10 @@ Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das 
 
 Weitere Typen (Bambu LAN, PrusaLink, Anycubic) folgen.
 
+### Tags auf Musterplättchen
+
+Klebt das Tag nicht auf der Spule, sondern z. B. auf einem Musterplättchen, steht es für eine Filamentsorte. Dann führt `spoolsInStock` den Vorrat an vollen Spulen. Reicht die angebrochene Spule für einen Druck nicht, wird automatisch eine Spule aus dem Vorrat angebrochen; `POST /api/items/{id}/open-spool` macht das von Hand.
+
 ## Datenbank-Migrationen
 
 ```bash

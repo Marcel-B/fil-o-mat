@@ -26,6 +26,7 @@ struct FilamentFormView: View {
     @State private var remainingWeight: String
     @State private var spoolWeight: String
     @State private var weighed = ""
+    @State private var spoolsInStock: Int
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -41,6 +42,7 @@ struct FilamentFormView: View {
         _netWeight = State(initialValue: Self.gramText(item?.netWeight))
         _remainingWeight = State(initialValue: Self.gramText(item?.remainingWeight))
         _spoolWeight = State(initialValue: Self.gramText(item?.spoolWeight))
+        _spoolsInStock = State(initialValue: item?.spoolsInStock ?? 0)
         _type = State(initialValue: data?.type ?? "")
         _brand = State(initialValue: data?.brand ?? "")
         _variant = State(initialValue: data?.variant ?? "")
@@ -98,6 +100,19 @@ struct FilamentFormView: View {
                         Text("Gewicht")
                     } footer: {
                         Text("Gedruckter Verbrauch wird automatisch vom Restgewicht abgezogen. Ohne Restgewicht wird vom Füllgewicht ausgegangen.")
+                    }
+
+                    Section {
+                        Stepper("Volle Spulen im Vorrat: \(spoolsInStock)", value: $spoolsInStock, in: 0...99)
+                        Button("Neue Spule anbrechen") {
+                            remainingWeight = netWeight
+                            if spoolsInStock > 0 { spoolsInStock -= 1 }
+                        }
+                        .disabled(Self.grams(netWeight) == nil)
+                    } header: {
+                        Text("Vorrat")
+                    } footer: {
+                        Text("Reicht die angebrochene Spule für einen Druck nicht, wird automatisch eine Spule aus dem Vorrat angebrochen.")
                     }
 
                     Section {
@@ -183,6 +198,7 @@ struct FilamentFormView: View {
         item.netWeight = Self.grams(netWeight)
         item.remainingWeight = Self.grams(remainingWeight)
         item.spoolWeight = Self.grams(spoolWeight)
+        item.spoolsInStock = spoolsInStock
     }
 
     private func updateRemainingFromScale() {

@@ -202,6 +202,7 @@ final class ContainerStore {
         item.netWeight = nil
         item.remainingWeight = nil
         item.spoolWeight = nil
+        item.spoolsInStock = nil
         return item
     }
 

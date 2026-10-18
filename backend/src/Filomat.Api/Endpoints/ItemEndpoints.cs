@@ -14,7 +14,8 @@ public record ItemRequest(
     FilamentData? ItemData,
     double? NetWeight = null,
     double? RemainingWeight = null,
-    double? SpoolWeight = null);
+    double? SpoolWeight = null,
+    int? SpoolsInStock = null);
 
 public record ItemUpdateRequest(
     string Name,
@@ -22,7 +23,8 @@ public record ItemUpdateRequest(
     FilamentData? ItemData,
     double? NetWeight = null,
     double? RemainingWeight = null,
-    double? SpoolWeight = null);
+    double? SpoolWeight = null,
+    int? SpoolsInStock = null);
 
 public record MoveItemRequest(string? ContainerId);
 
@@ -50,6 +52,13 @@ public static class ItemEndpoints
         group.MapPost("/", CreateAsync);
         group.MapPut("/{id}", UpdateAsync);
         group.MapPost("/{id}/move", MoveAsync);
+        group.MapPost("/{id}/open-spool", async Task<Results<Ok<Item>, NotFound, BadRequest<string>>> (string id, FilomatDbContext db) =>
+        {
+            if (await db.Items.FindAsync(id) is not { } item) return TypedResults.NotFound();
+            if (!item.OpenNewSpool()) return TypedResults.BadRequest("Bitte zuerst das Füllgewicht einer Spule eintragen.");
+            await db.SaveChangesAsync();
+            return TypedResults.Ok(item);
+        }).WithSummary("Neue Spule anbrechen (Restgewicht = Füllgewicht, Vorrat minus eins)");
         group.MapDelete("/{id}", async Task<Results<NoContent, NotFound>> (string id, FilomatDbContext db) =>
         {
             if (await db.Items.FindAsync(id) is not { } item) return TypedResults.NotFound();
@@ -94,6 +103,7 @@ public static class ItemEndpoints
             NetWeight = request.NetWeight,
             RemainingWeight = request.RemainingWeight,
             SpoolWeight = request.SpoolWeight,
+            SpoolsInStock = request.SpoolsInStock,
             CreatedAt = DateTime.UtcNow,
         };
         db.Items.Add(item);
@@ -115,6 +125,7 @@ public static class ItemEndpoints
         item.NetWeight = request.NetWeight;
         item.RemainingWeight = request.RemainingWeight;
         item.SpoolWeight = request.SpoolWeight;
+        item.SpoolsInStock = request.SpoolsInStock;
         await db.SaveChangesAsync();
         return TypedResults.Ok(item);
     }

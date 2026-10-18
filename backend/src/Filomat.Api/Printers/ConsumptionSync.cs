@@ -190,10 +190,20 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
     }
 
     /// <summary>Zieht Gramm vom Restgewicht ab; ohne Restgewicht wird von der vollen Spule ausgegangen.</summary>
+    /// <remarks>
+    /// Reicht die angebrochene Spule nicht und liegt Vorrat bereit, wurde offenbar eine neue Spule eingelegt
+    /// (das Tag bleibt dasselbe, z. B. auf einem Musterplättchen): der Rest wird von der neuen Spule abgezogen.
+    /// </remarks>
     public static void Deduct(Item item, double grams)
     {
         var current = item.RemainingWeight ?? item.NetWeight;
         if (current is null) return;
-        item.RemainingWeight = Math.Max(0, Math.Round(current.Value - grams, 2));
+        var remaining = current.Value - grams;
+        while (remaining < 0 && item.SpoolsInStock is > 0 && item.NetWeight is > 0)
+        {
+            item.SpoolsInStock--;
+            remaining += item.NetWeight.Value;
+        }
+        item.RemainingWeight = Math.Max(0, Math.Round(remaining, 2));
     }
 }

@@ -122,6 +122,9 @@ private struct ItemOverviewRow: View {
                     if let grams = item.remainingWeight ?? item.netWeight {
                         field("Rest:", "\(Int(grams.rounded())) g")
                     }
+                    if let stock = item.spoolsInStock, stock > 0 {
+                        field("Vorrat:", stock == 1 ? "1 Spule" : "\(stock) Spulen")
+                    }
                 }
                 .font(.caption)
             }
