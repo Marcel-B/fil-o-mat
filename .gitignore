@@ -44,3 +44,6 @@ backend/**/obj/
 backend/**/*.db
 backend/**/*.db-shm
 backend/**/*.db-wal
+
+# Lokale Einstellungen für docker compose
+backend/.env

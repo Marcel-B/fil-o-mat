@@ -2,12 +2,12 @@ services:
   filomat:
     build: .
     ports:
-      - "8080:8080"
+      - "${FILOMAT_PORT:-8080}:8080"
     volumes:
       - filomat-data:/data
     environment:
-      # Optional: API-Schlüssel, den die Apps im Header X-Api-Key mitschicken
-      Filomat__ApiKey: ""
+      # Optional (z. B. in backend/.env): API-Schlüssel, den die Apps im Header X-Api-Key mitschicken
+      Filomat__ApiKey: "${FILOMAT_API_KEY:-}"
     restart: unless-stopped
 
 volumes:
