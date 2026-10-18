@@ -25,7 +25,6 @@
 		F1A000000000000000000009 /* Exceptions for "Filomat" folder in "Filomat" target */ = {
 			isa = PBXFileSystemSynchronizedBuildFileExceptionSet;
 			membershipExceptions = (
-				Filomat.entitlements,
 				Info.plist,
 			);
 			target = F1A000000000000000000020 /* Filomat */;
@@ -275,7 +274,7 @@
 				CODE_SIGN_ENTITLEMENTS = Filomat/Filomat.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = "";
+				DEVELOPMENT_TEAM = 6GGU8ET2C4;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_FILE = Filomat/Info.plist;
