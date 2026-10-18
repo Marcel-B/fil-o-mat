@@ -16,6 +16,14 @@ struct Item: Identifiable, Codable, Hashable {
     var spoolWeight: Double?
     /// Volle Spulen dieser Sorte im Vorrat (bei Tags auf Musterplättchen); `nil`, wenn kein Vorrat geführt wird.
     var spoolsInStock: Int?
+    /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, z. B. mit einem TD-1 gemessen.
+    /// Steht nur in Fil-o-mat, nicht auf dem Tag.
+    var transmissionDistance: Double?
+
+    /// "3,5 mm", falls die Lichtdurchlässigkeit gemessen ist.
+    var transmissionText: String? {
+        transmissionDistance.map { "\($0.formatted(.number.precision(.fractionLength(0...2)))) mm" }
+    }
 
     /// Titel im Format "<brand> <type> <variant>", Fallback auf den Namen.
     var displayTitle: String {

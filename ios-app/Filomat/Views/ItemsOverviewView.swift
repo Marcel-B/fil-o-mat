@@ -128,6 +128,7 @@ private struct ItemOverviewRow: View {
                     if let stock = item.spoolsInStock, stock > 0 {
                         field("Vorrat:", stock == 1 ? "1 Spule" : "\(stock) Spulen")
                     }
+                    if let td = item.transmissionText { field("TD:", td) }
                 }
                 .font(.caption)
             }

@@ -31,7 +31,13 @@ Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 e
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.
 - **Container anlegen**: Beschreiben und Auslesen der UID passieren in einem Scan statt in zwei.
-- **Tag lesen** (oben rechts im Scannen-Tab): listet alles auf, was auf einem Tag steht (UID, Chip-Typ, Speicher, alle NDEF-Records, jedes Feld des OpenSpool-JSON, auch unbekannte wie `subtype` vom U1) und was Fil-o-mat zu der Sorte bzw. dem Container weiß.
+- **Scannen-Tab**: eine Liste von Abläufen statt der Umschaltung Einlagern/Herausnehmen:
+  - *Filament-Tag lesen* und *Container ansehen* (was in einem Container bzw. Drucker liegt),
+  - *Einlagern*: Musterplättchen scannen, wählen, ob die Sorte mit ihren vollen Spulen oder eine angebrochene Spule eingelagert wird, dann den Container scannen oder aus der Liste wählen,
+  - *In Drucker einlegen*: Musterplättchen scannen, angebrochene Spule wählen oder eine neue anbrechen, dann Drucker und Kopf wählen (braucht das Backend),
+  - *Vorrat*: volle und angebrochene Spulen je Sorte mit Gesamtgewicht und einer Liste zum Nachkaufen,
+  - *Lichtdurchlässigkeit erfassen*: Musterplättchen scannen und den TD-Wert (z. B. vom TD-1) eintragen. Er steht nur in Fil-o-mat, nicht auf dem Tag.
+- **Filament-Tag lesen**: listet alles auf, was auf einem Tag steht (UID, Chip-Typ, Speicher, alle NDEF-Records, jedes Feld des OpenSpool-JSON, auch unbekannte wie `subtype` vom U1) und was Fil-o-mat zu der Sorte bzw. dem Container weiß.
 - **Unformatierte Tags**: iOS kann Tags nicht NDEF-formatieren. NTAG213/215/216 sind ab Werk formatiert und funktionieren direkt.
 - **Schutz vor Verwechslungen**: Ein Tag, das schon zu einem Container oder Filament gehört, wird nicht versehentlich überschrieben.
 - **Filament-Übersicht** zeigt alle Filamente, auch herausgenommene ohne Container.

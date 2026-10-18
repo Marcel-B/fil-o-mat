@@ -45,6 +45,16 @@ struct ContainerDetailView: View {
                     }
                 }
             }
+
+            let spools = store.spools(inContainer: container.id)
+            if !spools.isEmpty {
+                Section("Angebrochene Spulen (\(spools.count))") {
+                    ForEach(spools) { spool in
+                        LabeledContent("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)",
+                                       value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                    }
+                }
+            }
         }
         .navigationTitle(container.name)
         .toolbar {

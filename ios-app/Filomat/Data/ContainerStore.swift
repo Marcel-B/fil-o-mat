@@ -69,6 +69,30 @@ final class ContainerStore {
         spools.filter { $0.itemId == itemId }.sorted { $0.number < $1.number }
     }
 
+    func item(id: String) -> Item? {
+        items.first { $0.id == id }
+    }
+
+    /// Angebrochene Spulen, die im Lager in diesem Container liegen.
+    func spools(inContainer containerId: String) -> [Spool] {
+        spools.filter { $0.printerId == nil && $0.containerId == containerId }
+    }
+
+    /// Die Spule, die in diesem Kopf steckt.
+    func spool(inPrinter printerId: String, tool: Int) -> Spool? {
+        spools.first { $0.printerId == printerId && ($0.tool ?? 0) == tool }
+    }
+
+    /// Container, in die man Filament einlagern kann: alle außer denen der Drucker.
+    var storageContainers: [Container] {
+        containers.filter { $0.id != Container.printerId && printer(owningContainer: $0.id) == nil }
+    }
+
+    /// Der Drucker, dem dieser Container gehört (jeder Drucker im Backend hat einen).
+    func printer(owningContainer containerId: String) -> Printer? {
+        printers.first { $0.containerId == containerId }
+    }
+
     // MARK: - Container
 
     func addContainer(_ container: Container) {
@@ -209,16 +233,32 @@ final class ContainerStore {
     // MARK: - Spulen
 
     /// Bricht eine neue Spule der Sorte an (aus dem Vorrat) und lädt danach den Stand neu.
-    func openSpool(itemId: String, remainingWeight: Double? = nil, printerId: String? = nil, tool: Int? = nil) async throws {
-        guard let backend else { return }
-        try await backend.openSpool(itemId: itemId, remainingWeight: remainingWeight, printerId: printerId, tool: tool)
+    @discardableResult
+    func openSpool(itemId: String, remainingWeight: Double? = nil, place: SpoolPlace = .storage) async throws -> Spool? {
+        guard let backend else { return nil }
+        let spool = try await backend.openSpool(
+            itemId: itemId, remainingWeight: remainingWeight,
+            printerId: place.printerId, tool: place.tool, containerId: place.containerId
+        )
         await refresh()
+        return spool
     }
 
     func updateSpool(_ spool: Spool) async throws {
         guard let backend else { return }
-        try await backend.updateSpool(id: spool.id, SpoolUpdate(remainingWeight: spool.remainingWeight, printerId: spool.printerId, tool: spool.tool))
+        try await backend.updateSpool(id: spool.id, SpoolUpdate(
+            remainingWeight: spool.remainingWeight, printerId: spool.printerId, tool: spool.tool, containerId: spool.containerId
+        ))
         await refresh()
+    }
+
+    /// Legt eine angebrochene Spule an einen anderen Platz; was dort im Drucker steckte, wandert ins Lager.
+    func placeSpool(_ spool: Spool, at place: SpoolPlace) async throws {
+        var moved = spool
+        moved.printerId = place.printerId
+        moved.tool = place.tool
+        moved.containerId = place.containerId
+        try await updateSpool(moved)
     }
 
     func markSpoolEmpty(id: String) async throws {

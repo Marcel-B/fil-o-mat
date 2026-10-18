@@ -55,8 +55,8 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
 | POST | `/api/consumption/{id}/assign` | Offene Buchung zuordnen (`{"itemId": "…", "spoolId": "…"}`, Spule optional) und abziehen |
 | GET | `/api/spools?itemId=&printerId=&includeEmpty=true` | Angebrochene Spulen |
-| POST | `/api/items/{id}/spools` | Neue Spule anbrechen (`{"remainingWeight", "printerId", "tool"}`, alles optional), Vorrat minus eins |
-| PUT | `/api/spools/{id}` | Restgewicht und Platz setzen (`printerId: null` = Lager) |
+| POST | `/api/items/{id}/spools` | Neue Spule anbrechen (`{"remainingWeight", "printerId", "tool", "containerId"}`, alles optional), Vorrat minus eins |
+| PUT | `/api/spools/{id}` | Restgewicht und Platz setzen (`printerId: null` = Lager, dazu optional `containerId`) |
 | POST | `/api/spools/{id}/empty` | Spule ist leer |
 | GET | `/health` | Lebenszeichen (ohne API-Schlüssel) |
 
