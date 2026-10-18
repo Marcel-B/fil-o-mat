@@ -18,10 +18,14 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
     public HttpMessageHandler? NextcloudHandler { get; init; }
 
+    /// <summary>Ordner, den sich API und Updater teilen (status.json, request).</summary>
+    public string? UpdateDirectory { get; init; }
+
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Filomat", $"Data Source={_dbPath}");
         builder.UseSetting("Filomat:ApiKey", ApiKey ?? "");
+        builder.UseSetting("Filomat:UpdateDirectory", UpdateDirectory ?? "");
         // Kein automatischer Abgleich in Tests
         builder.UseSetting("Filomat:PrinterSyncInterval", "00:00:00");
         // Kein Zugriff aufs Internet in Tests
