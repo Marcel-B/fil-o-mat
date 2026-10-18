@@ -15,6 +15,8 @@ builder.Services.AddHttpClient<SnapmakerU1Adapter>(client => client.Timeout = Ti
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<SnapmakerU1Adapter>());
 builder.Services.AddHttpClient<PrusaLinkAdapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<PrusaLinkAdapter>());
+builder.Services.AddHttpClient<IAnycubicLan, AnycubicLan>(client => client.Timeout = TimeSpan.FromSeconds(10));
+builder.Services.AddTransient<IPrinterAdapter, AnycubicAdapter>();
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddScoped<SpoolStock>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
