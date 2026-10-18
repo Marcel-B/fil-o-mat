@@ -35,6 +35,7 @@ if (!string.IsNullOrEmpty(apiKey))
 api.MapContainerEndpoints();
 api.MapItemEndpoints();
 api.MapPrinterEndpoints();
+api.MapSyncEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
 
 app.Run();

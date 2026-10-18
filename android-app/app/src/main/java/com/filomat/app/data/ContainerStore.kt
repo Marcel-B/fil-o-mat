@@ -364,6 +364,32 @@ class ContainerStore(private val context: Context) {
         }
     }
     
+    /** Alle Container und Filamente im Austauschformat des Backends. */
+    suspend fun snapshot(): Snapshot {
+        val preferences = context.dataStore.data.first()
+        val containerData = try {
+            Json.decodeFromString<List<ContainerData>>(preferences[containersKey] ?: "[]")
+        } catch (e: Exception) {
+            emptyList()
+        }
+        val itemData = try {
+            Json.decodeFromString<List<ItemData>>(preferences[itemsKey] ?: "[]")
+        } catch (e: Exception) {
+            emptyList()
+        }
+        return Snapshot(
+            containers = containerData.map {
+                SnapshotContainer(it.id, it.rfidTag, it.name, it.description, it.capacity, it.createdAt, it.isStandard)
+            },
+            items = itemData.map { item ->
+                // Ältere Daten kennen die Zuordnung nur über die Item-Liste des Containers
+                val containerId = item.containerId
+                    ?: containerData.firstOrNull { c -> c.items.any { it.id == item.id } }?.id
+                SnapshotItem(item.id, item.rfidTag, item.name, item.description, item.createdAt, containerId, item.itemData)
+            }
+        )
+    }
+
     private fun getContainersSync(json: String?, itemsJson: String? = null): List<Container> {
         if (json.isNullOrEmpty()) return emptyList()
         return try {

@@ -6,6 +6,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.CloudUpload
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
@@ -29,6 +30,7 @@ fun ContainerListScreen(
     val containerStore = remember { ContainerStore(context) }
     val containers by viewModel.containers.collectAsState(initial = emptyList())
     var showingAddContainer by remember { mutableStateOf(false) }
+    var showingBackend by remember { mutableStateOf(false) }
     
     LaunchedEffect(Unit) {
         containerStore.containers.collect { containerList ->
@@ -38,7 +40,14 @@ fun ContainerListScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Container") })
+            TopAppBar(
+                title = { Text("Container") },
+                actions = {
+                    IconButton(onClick = { showingBackend = true }) {
+                        Icon(Icons.Default.CloudUpload, contentDescription = "Ins Backend hochladen")
+                    }
+                }
+            )
         },
         bottomBar = {
             NavigationBar {
@@ -128,6 +137,10 @@ fun ContainerListScreen(
             }
         }
         
+        if (showingBackend) {
+            BackendUploadDialog(store = containerStore, onDismiss = { showingBackend = false })
+        }
+
         if (showingAddContainer) {
             AddContainerDialog(
                 onDismiss = { showingAddContainer = false },
