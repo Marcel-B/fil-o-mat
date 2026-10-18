@@ -53,7 +53,7 @@ struct PrintersView: View {
             }
             .disabled(store.backend == nil)
         }
-        .refreshable { await load() }
+        .refreshable { await syncAll() }
         .task { await load() }
         .sheet(isPresented: $showingAdd) {
             AddPrinterView { await load() }
@@ -96,7 +96,20 @@ struct PrintersView: View {
         }
     }
 
-    private func delete(_ printer: Printer) async {
+    /// Gleicht alle aktiven Drucker ab (Ziehen zum Aktualisieren) und lädt danach Drucker und Spulen neu.
+    private func syncAll() async {
+        guard let backend = store.backend else { return }
+        await load()
+        for printer in printers where printer.enabled {
+            syncingId = printer.id
+            _ = try? await backend.syncPrinter(id: printer.id)
+        }
+        syncingId = nil
+        await load()
+        await store.refresh()
+    }
+
+        private func delete(_ printer: Printer) async {
         guard let backend = store.backend else { return }
         do {
             try await backend.deletePrinter(id: printer.id)
