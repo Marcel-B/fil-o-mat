@@ -5,12 +5,12 @@ using Microsoft.Extensions.Options;
 
 namespace Filomat.Api.Backup;
 
-/// <summary>Wie die letzte Sicherung lief.</summary>
+/// <summary>Wie die letzte Sicherung lief; Zeiten in Millisekunden seit 1970 wie im übrigen API.</summary>
 /// <param name="Archives">Die hochgeladenen ZIPs, z. B. <c>filomat-mon.zip</c> und <c>filomat-2026-10.zip</c>.</param>
-public record BackupRun(DateTimeOffset StartedAt, DateTimeOffset FinishedAt, bool Success, List<string> Archives, long Bytes, string? Error, bool Scheduled);
+public record BackupRun(long StartedAt, long FinishedAt, bool Success, List<string> Archives, long Bytes, string? Error, bool Scheduled);
 
 /// <param name="NextRun">Die nächste nächtliche Sicherung, <c>null</c> bei nur manuellen Sicherungen.</param>
-public record BackupStatus(bool Configured, bool Running, BackupRun? Last, DateTimeOffset? NextRun);
+public record BackupStatus(bool Configured, bool Running, BackupRun? Last, long? NextRun);
 
 /// <summary>
 /// Sichert die Datenbank jede Nacht und auf Anfrage über WebDAV in eine Nextcloud, nach dem Vorbild von YuE UI und
@@ -52,7 +52,7 @@ public sealed class CloudBackup(
             {
                 var state = LoadState();
                 return new BackupStatus(settings.Configured, _running is { IsCompleted: false }, state.Last,
-                    settings.Configured ? NextRun(state) : null);
+                    settings.Configured ? NextRun(state)?.ToUnixTimeMilliseconds() : null);
             }
         }
     }
@@ -164,7 +164,7 @@ public sealed class CloudBackup(
         lock (_gate)
         {
             var state = LoadState();
-            state.Last = new BackupRun(started, time.GetUtcNow(), error is null, archives, bytes, error, scheduled);
+            state.Last = new BackupRun(started.ToUnixTimeMilliseconds(), time.GetUtcNow().ToUnixTimeMilliseconds(), error is null, archives, bytes, error, scheduled);
             if (scheduled && error is null) state.LastDaily = DateOnly.FromDateTime(local.DateTime);
             _failedAt = error is null ? null : time.GetUtcNow();
             SaveState(state);
