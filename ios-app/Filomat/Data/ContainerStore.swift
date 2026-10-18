@@ -26,7 +26,7 @@ final class ContainerStore {
         initializeStandardContainers()
     }
 
-    static var defaultFileURL: URL {
+    nonisolated static var defaultFileURL: URL {
         let dir = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask)[0]
         return dir.appendingPathComponent("container_store.json")
     }
