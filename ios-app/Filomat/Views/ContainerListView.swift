@@ -17,6 +17,22 @@ struct ContainerListView: View {
                         .onTapGesture { showingBackend = true }
                 }
             }
+            if let update = store.updateStatus, update.updateAvailable || update.state == "failed" {
+                Section {
+                    Button {
+                        showingBackend = true
+                    } label: {
+                        if update.state == "failed" {
+                            Label("Backend-Update fehlgeschlagen", systemImage: "exclamationmark.triangle")
+                                .foregroundStyle(.red)
+                        } else if update.isUpdating {
+                            Label("Backend wird aktualisiert …", systemImage: "arrow.triangle.2.circlepath")
+                        } else {
+                            Label("Neue Backend-Version verfügbar", systemImage: "arrow.down.circle")
+                        }
+                    }
+                }
+            }
             if !regular.isEmpty {
                 Section {
                     ForEach(regular) { ContainerRow(container: $0) }

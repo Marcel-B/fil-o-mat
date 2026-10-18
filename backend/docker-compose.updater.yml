@@ -1,0 +1,6 @@
+# Wird von deploy/updater/install.sh über COMPOSE_FILE in backend/.env eingebunden.
+# Der Ordner gehört dem Benutzer der App im Container (UID 1654), damit die API Aufträge ablegen kann.
+services:
+  filomat:
+    volumes:
+      - /var/lib/filomat-update:/update

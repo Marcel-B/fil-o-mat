@@ -88,6 +88,9 @@ FILOMAT_PORT=$PORT
 ENV
     chmod 600 /opt/fil-o-mat/backend/.env
 
+    # Neue Versionen erkennen und per App einspielen
+    bash /opt/fil-o-mat/deploy/updater/install.sh
+
     cd /opt/fil-o-mat/backend
     docker compose up -d --build
 
@@ -106,4 +109,5 @@ echo "  Backend:    http://${CT_IP}:${PORT}"
 [[ -n "$FILOMAT_API_KEY" ]] && echo "  API-Schlüssel ist gesetzt."
 echo
 echo "  Diese Adresse in der Android- und iOS-App eintragen."
-echo "  Aktualisieren: pct exec $CTID -- bash -c 'cd /opt/fil-o-mat && git pull && cd backend && docker compose up -d --build'"
+echo "  Neue Versionen zeigt die iOS-App unter Backend an und spielt sie auf Wunsch ein."
+echo "  Von Hand: pct exec $CTID -- /opt/fil-o-mat/deploy/updater/filomat-update.sh apply"
