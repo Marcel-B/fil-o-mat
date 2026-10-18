@@ -22,13 +22,21 @@ struct FilamentFormView: View {
     @State private var maxTemp: String
     @State private var bedMinTemp: String
     @State private var bedMaxTemp: String
+    @State private var netWeight: String
+    @State private var remainingWeight: String
     @State private var isWriting = false
     @State private var errorMessage: String?
 
     init(mode: Mode) {
         self.mode = mode
         var data: ItemJsonData?
-        if case .edit(let item) = mode { data = item.itemData }
+        var item: Item?
+        if case .edit(let edited) = mode {
+            item = edited
+            data = edited.itemData
+        }
+        _netWeight = State(initialValue: Self.gramText(item?.netWeight))
+        _remainingWeight = State(initialValue: Self.gramText(item?.remainingWeight))
         _type = State(initialValue: data?.type ?? "")
         _brand = State(initialValue: data?.brand ?? "")
         _variant = State(initialValue: data?.variant ?? "")
@@ -78,6 +86,17 @@ struct FilamentFormView: View {
                     TemperatureField(title: "Max. Bett-Temperatur (°C)", text: $bedMaxTemp)
                 }
 
+                if editedItem != nil {
+                    Section {
+                        GramField(title: "Füllgewicht neue Spule (g)", text: $netWeight)
+                        GramField(title: "Restgewicht (g)", text: $remainingWeight)
+                    } header: {
+                        Text("Gewicht")
+                    } footer: {
+                        Text("Gedruckter Verbrauch wird automatisch vom Restgewicht abgezogen. Ohne Restgewicht wird vom Füllgewicht ausgegangen.")
+                    }
+                }
+
                 Section {
                     if editedItem != nil {
                         Button("Speichern") { save() }
@@ -117,6 +136,20 @@ struct FilamentFormView: View {
         }
     }
 
+    private func applyWeights(to item: inout Item) {
+        item.netWeight = Self.grams(netWeight)
+        item.remainingWeight = Self.grams(remainingWeight)
+    }
+
+    private static func grams(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    private static func gramText(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value.rounded() == value ? String(Int(value)) : String(value)
+    }
+
     /// Temperaturen aus den Presets übernehmen. Beim Bearbeiten werden nur leere Felder gefüllt.
     private func loadTemperatures() {
         guard !type.isEmpty,
@@ -151,7 +184,8 @@ struct FilamentFormView: View {
     private func save() {
         guard var item = editedItem else { return }
         item.itemData = filamentData
-        store.updateItem(item)
+        applyWeights(to: &item)
+        store.updateItem(item, sendWeights: true)
         dismiss()
     }
 
@@ -185,7 +219,8 @@ struct FilamentFormView: View {
             }
             if var item = editedItem {
                 item.itemData = data
-                store.updateItem(item)
+                applyWeights(to: &item)
+                store.updateItem(item, sendWeights: true)
             }
             dismiss()
         } catch NFCError.cancelled {
@@ -239,6 +274,20 @@ private struct TemperatureField: View {
                     let digits = newValue.filter { $0.isASCII && $0.isNumber }
                     if digits != newValue { text = digits }
                 }
+        }
+    }
+}
+
+/// Eingabefeld für Gramm.
+private struct GramField: View {
+    var title: String
+    @Binding var text: String
+
+    var body: some View {
+        LabeledContent(title) {
+            TextField("z. B. 1000", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

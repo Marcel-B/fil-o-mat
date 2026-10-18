@@ -96,11 +96,12 @@ final class ContainerStore {
         push(items: [item])
     }
 
-    func updateItem(_ item: Item) {
+    /// - Parameter sendWeights: Gewichte mit ans Backend schicken (nur wenn sie bewusst geändert wurden).
+    func updateItem(_ item: Item, sendWeights: Bool = false) {
         guard let index = items.firstIndex(where: { $0.id == item.id }) else { return }
         items[index] = item
         save()
-        push(items: [item])
+        push(items: [item], sendWeights: sendWeights)
     }
 
     func removeItem(id: String) {
@@ -177,8 +178,8 @@ final class ContainerStore {
         save()
     }
 
-    private func push(containers: [Container] = [], items: [Item] = []) {
-        let snapshot = BackendSnapshot(containers: containers, items: items.map(Self.withoutWeights))
+    private func push(containers: [Container] = [], items: [Item] = [], sendWeights: Bool = false) {
+        let snapshot = BackendSnapshot(containers: containers, items: sendWeights ? items : items.map(Self.withoutWeights))
         remote { _ = try await $0.importData(snapshot) }
     }
 
