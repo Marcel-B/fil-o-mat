@@ -45,7 +45,7 @@ public class SpoolWeightTests : IDisposable
     public async Task StoresSpoolWeight()
     {
         var created = await (await _client.PostAsJsonAsync("/api/items",
-            new ItemRequest(null, "T1", "PLA", null, null, null, 1000, 640, 160))).Content.ReadFromJsonAsync<Item>();
+            new ItemRequest(null, "T1", "PLA", null, null, null, 1000, 160))).Content.ReadFromJsonAsync<Item>();
         Assert.Equal(160, created!.SpoolWeight);
 
         var snapshot = await _client.GetFromJsonAsync<Snapshot>("/api/snapshot");

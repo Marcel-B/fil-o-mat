@@ -4,6 +4,8 @@ import Foundation
 struct BackendSnapshot: Codable {
     var containers: [Container]
     var items: [Item]
+    /// Angebrochene Spulen; nur in der Antwort des Backends, beim Import ignoriert.
+    var spools: [Spool]? = nil
 }
 
 struct ImportResult: Codable {
@@ -80,6 +82,30 @@ struct BackendClient {
     /// Leergewichte von Spulen pro Hersteller (aus der SpoolmanDB, über das Backend).
     func spoolWeights() async throws -> [String: Double] {
         try Self.decoder.decode([String: Double].self, from: try await send(request("api/spool-weights", method: "GET")))
+    }
+
+    // MARK: - Spulen
+
+    /// Neue Spule der Sorte anbrechen; ohne Restgewicht ist sie voll, der Vorrat sinkt um eins.
+    @discardableResult
+    func openSpool(itemId: String, remainingWeight: Double? = nil, printerId: String? = nil, tool: Int? = nil) async throws -> Spool {
+        var request = request("api/items/\(itemId)/spools", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(SpoolUpdate(remainingWeight: remainingWeight, printerId: printerId, tool: tool))
+        return try Self.decoder.decode(Spool.self, from: try await send(request))
+    }
+
+    /// Restgewicht und Platz setzen; was am Zielplatz steckt, wandert ins Lager.
+    @discardableResult
+    func updateSpool(id: String, _ update: SpoolUpdate) async throws -> Spool {
+        var request = request("api/spools/\(id)", method: "PUT")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(update)
+        return try Self.decoder.decode(Spool.self, from: try await send(request))
+    }
+
+    func markSpoolEmpty(id: String) async throws {
+        try await send(request("api/spools/\(id)/empty", method: "POST"))
     }
 
     // MARK: - Drucker

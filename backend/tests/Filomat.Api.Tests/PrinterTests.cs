@@ -1,3 +1,4 @@
+using Microsoft.Extensions.DependencyInjection;
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
@@ -14,15 +15,17 @@ public class FakeMoonraker : HttpMessageHandler
     public HttpStatusCode Status { get; set; } = HttpStatusCode.OK;
     public List<HttpRequestMessage> Requests { get; } = [];
 
-    /// <summary>Antworten pro Pfad; andere Pfade bekommen <see cref="Body"/>.</summary>
+    /// <summary>Antworten pro Pfad; andere Pfade bekommen <see cref="Body"/>. Ein leerer Text antwortet mit 204.</summary>
     public Dictionary<string, string> Routes { get; } = [];
 
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
+        var body = Routes.GetValueOrDefault(request.RequestUri!.AbsolutePath, Body);
+        if (body.Length == 0) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         return Task.FromResult(new HttpResponseMessage(Status)
         {
-            Content = new StringContent(Routes.GetValueOrDefault(request.RequestUri!.AbsolutePath, Body), Encoding.UTF8, "application/json"),
+            Content = new StringContent(body, Encoding.UTF8, "application/json"),
         });
     }
 
@@ -73,10 +76,16 @@ public class PrinterTests : IDisposable
     private async Task<Item> CreateSpoolAsync(string tag, string containerId, double? net = 1000, double? remaining = null)
     {
         var response = await _client.PostAsJsonAsync("/api/items", new ItemRequest(null, tag, "PLA Schwarz", null, containerId,
-            new FilamentData { Type = "PLA" }, net, remaining));
+            new FilamentData { Type = "PLA" }, net));
         Assert.Equal(HttpStatusCode.Created, response.StatusCode);
-        return (await response.Content.ReadFromJsonAsync<Item>())!;
+        var item = (await response.Content.ReadFromJsonAsync<Item>())!;
+        if (remaining is not null)
+            await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools", new OpenSpoolRequest(remaining));
+        return item;
     }
+
+    private async Task<List<Spool>> SpoolsOfAsync(string itemId) =>
+        (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={itemId}"))!;
 
     [Fact]
     public async Task CreatingPrinterCreatesItsContainer()
@@ -122,8 +131,9 @@ public class PrinterTests : IDisposable
             .Content.ReadFromJsonAsync<SyncResponse>();
         Assert.Equal(0, second!.Recorded);
 
-        var item = await _client.GetFromJsonAsync<Item>($"/api/items/{spool.Id}");
-        Assert.Equal(985, item!.RemainingWeight);
+        var opened = Assert.Single(await SpoolsOfAsync(spool.Id));
+        Assert.Equal(985, opened.RemainingWeight);
+        Assert.Equal(printer.Id, opened.PrinterId);
 
         var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?itemId={spool.Id}");
         Assert.Equal(15, Assert.Single(entries!).Grams);
@@ -156,7 +166,7 @@ public class PrinterTests : IDisposable
 
         var assign = await _client.PostAsJsonAsync($"/api/consumption/{entry.Id}/assign", new AssignConsumptionRequest(a.Id));
         Assert.Equal(HttpStatusCode.OK, assign.StatusCode);
-        Assert.Equal(485, (await _client.GetFromJsonAsync<Item>($"/api/items/{a.Id}"))!.RemainingWeight);
+        Assert.Equal(485, Assert.Single(await SpoolsOfAsync(a.Id)).RemainingWeight);
 
         var again = await _client.PostAsJsonAsync($"/api/consumption/{entry.Id}/assign", new AssignConsumptionRequest(a.Id));
         Assert.Equal(HttpStatusCode.Conflict, again.StatusCode);
@@ -203,11 +213,83 @@ public class FilamentMathTests
         Assert.True(FilamentMath.GramsFromLength(1000, "ABS") < FilamentMath.GramsFromLength(1000, "PLA"));
     }
 
-    [Fact]
-    public void DeductNeverGoesBelowZero()
+}
+
+public class SpoolStockTests : IDisposable
+{
+    private readonly ApiFactory _factory = new();
+    private readonly HttpClient _client;
+
+    public SpoolStockTests() => _client = _factory.CreateClient();
+
+    public void Dispose() => _factory.Dispose();
+
+    private async Task<Item> CreateItemAsync(string tag, double? net, int? stock) =>
+        (await (await _client.PostAsJsonAsync("/api/items",
+            new ItemRequest(null, tag, "PLA Weiß", null, null, null, net, null, stock))).Content.ReadFromJsonAsync<Item>())!;
+
+    private async Task<(Spool Spool, int? Stock)> DeductAsync(string itemId, string spoolId, double grams)
     {
-        var item = new Item { Id = "1", RfidTag = "t", Name = "n", NetWeight = 10 };
-        ConsumptionSync.Deduct(item, 25);
-        Assert.Equal(0, item.RemainingWeight);
+        using var scope = _factory.Services.CreateScope();
+        var db = scope.ServiceProvider.GetRequiredService<Filomat.Api.Data.FilomatDbContext>();
+        var stock = scope.ServiceProvider.GetRequiredService<SpoolStock>();
+        var item = (await db.Items.FindAsync(itemId))!;
+        var spool = await stock.DeductAsync((await db.Spools.FindAsync(spoolId))!, item, grams);
+        return (spool, item.SpoolsInStock);
+    }
+
+    [Fact]
+    public async Task RunningOutOpensSpoolFromStock()
+    {
+        var item = await CreateItemAsync("W", 1000, 2);
+        var first = await (await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools", new OpenSpoolRequest(30))).Content.ReadFromJsonAsync<Spool>();
+
+        var (next, stock) = await DeductAsync(item.Id, first!.Id, 50);
+
+        Assert.Equal(2, next.Number);
+        Assert.Equal(980, next.RemainingWeight);
+        Assert.Equal(0, stock);   // eine fürs Anbrechen von #1, eine für #2
+        var all = await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}&includeEmpty=true");
+        Assert.NotNull(all!.Single(s => s.Number == 1).EmptiedAt);
+    }
+
+    [Fact]
+    public async Task WithoutStockRemainingStopsAtZero()
+    {
+        var item = await CreateItemAsync("W", 1000, 0);
+        var first = await (await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools", new OpenSpoolRequest(30))).Content.ReadFromJsonAsync<Spool>();
+
+        var (spool, _) = await DeductAsync(item.Id, first!.Id, 50);
+
+        Assert.Equal(first.Id, spool.Id);
+        Assert.Equal(0, spool.RemainingWeight);
+    }
+
+    [Fact]
+    public async Task OpensNumberedSpoolsAndMovesThem()
+    {
+        var item = await CreateItemAsync("W", 1000, 10);
+        var printer = await (await _client.PostAsJsonAsync("/api/printers",
+            new PrinterRequest("U1", PrinterType.SnapmakerU1, "http://u1.local", null, null))).Content.ReadFromJsonAsync<PrinterResponse>();
+        Assert.Equal(4, printer!.Tools);
+
+        var a = await (await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools", new OpenSpoolRequest(null, printer.Id, 0))).Content.ReadFromJsonAsync<Spool>();
+        var b = await (await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools", new OpenSpoolRequest(640, printer.Id, 2))).Content.ReadFromJsonAsync<Spool>();
+        Assert.Equal((1, 1000d), (a!.Number, a.RemainingWeight!.Value));
+        Assert.Equal((2, 640d), (b!.Number, b.RemainingWeight!.Value));
+        Assert.Equal(8, (await _client.GetFromJsonAsync<Item>($"/api/items/{item.Id}"))!.SpoolsInStock);
+
+        // #2 an Kopf 1 legen: #1 wandert ins Lager
+        var moved = await _client.PutAsJsonAsync($"/api/spools/{b.Id}", new SpoolUpdateRequest(600, printer.Id, 0));
+        Assert.Equal(HttpStatusCode.OK, moved.StatusCode);
+        var spools = await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}");
+        Assert.Null(spools!.Single(s => s.Id == a.Id).PrinterId);
+        Assert.Equal((0, 600d), (spools.Single(s => s.Id == b.Id).Tool!.Value, spools.Single(s => s.Id == b.Id).RemainingWeight!.Value));
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await _client.PutAsJsonAsync($"/api/spools/{a.Id}", new SpoolUpdateRequest(10, printer.Id, 7))).StatusCode);
+
+        await _client.PostAsync($"/api/spools/{b.Id}/empty", null);
+        Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}"))!);
     }
 }

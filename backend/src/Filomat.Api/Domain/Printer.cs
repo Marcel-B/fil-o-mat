@@ -8,6 +8,9 @@ public enum PrinterType
 
     /// <summary>Snapmaker U1 (Moonraker); erkennt die Spulen pro Werkzeugkopf über deren NFC-Tags.</summary>
     SnapmakerU1,
+
+    /// <summary>Prusa MK4, Core One, Mini, XL über PrusaLink; mit MMU3 pro Slot.</summary>
+    PrusaLink,
 }
 
 /// <summary>Konfigurierter Drucker. Jeder Drucker hat einen eigenen Container für die eingelegten Spulen.</summary>
@@ -35,6 +38,12 @@ public class Printer
 
     /// <summary>Zuletzt gemeldete Spulen pro Werkzeugkopf (JSON), damit ein Druck den Spulen während des Drucks zugeordnet wird.</summary>
     public string? ToolStateJson { get; set; }
+
+    /// <summary>Anzahl Köpfe bzw. Slots, falls der Adapter sie vom Drucker ermittelt (z. B. MMU3); sonst nach Typ.</summary>
+    public int? ToolCount { get; set; }
+
+    /// <summary>Zustand des Adapters zwischen zwei Abgleichen (JSON), z. B. der laufende Druck bei PrusaLink.</summary>
+    public string? AdapterStateJson { get; set; }
 
     public DateTime? LastSyncAt { get; set; }
     public string? LastSyncError { get; set; }

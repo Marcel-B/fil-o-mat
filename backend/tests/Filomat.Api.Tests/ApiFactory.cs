@@ -32,6 +32,7 @@ public class ApiFactory : WebApplicationFactory<Program>
             {
                 services.AddHttpClient<MoonrakerAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient<SnapmakerU1Adapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
+                services.AddHttpClient<PrusaLinkAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
             });
     }
 

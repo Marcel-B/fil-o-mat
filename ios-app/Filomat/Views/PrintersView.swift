@@ -119,7 +119,9 @@ private struct PrinterRow: View {
                 Spacer()
                 if isSyncing { ProgressView() }
             }
-            Text("\(printer.type.title) · \(printer.baseUrl)")
+            Text(printer.toolCount > 1
+                 ? "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)"
+                 : "\(printer.type.title) · \(printer.baseUrl)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let error = printer.lastSyncError {
@@ -167,9 +169,7 @@ private struct AddPrinterView: View {
                         .autocorrectionDisabled()
                     SecureField("API-Schlüssel (optional)", text: $apiKey)
                 } footer: {
-                    Text(type == .snapmakerU1
-                         ? "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
-                         : "Der Verbrauch wird von der Spule abgezogen, die im Container dieses Druckers liegt.")
+                    Text(type.setupHint)
                 }
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red) }

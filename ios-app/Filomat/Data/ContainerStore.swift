@@ -13,6 +13,10 @@ import Observation
 final class ContainerStore {
     private(set) var containers: [Container] = []
     private(set) var items: [Item] = []
+    /// Angebrochene Spulen, wie sie das Backend führt.
+    private(set) var spools: [Spool] = []
+    /// Drucker aus dem Backend, für die Platzangabe der Spulen.
+    private(set) var printers: [Printer] = []
     private(set) var isSyncing = false
     private(set) var syncError: String?
     private(set) var lastSyncedAt: Date?
@@ -27,6 +31,8 @@ final class ContainerStore {
     private struct Snapshot: Codable {
         var containers: [Container]
         var items: [Item]
+        var spools: [Spool]?
+        var printers: [Printer]?
         var standardContainersInitialized: Bool
     }
 
@@ -57,6 +63,10 @@ final class ContainerStore {
 
     func findItem(byTag rfidTag: String) -> Item? {
         items.first { $0.rfidTag == rfidTag }
+    }
+
+    func spools(of itemId: String) -> [Spool] {
+        spools.filter { $0.itemId == itemId }.sorted { $0.number < $1.number }
     }
 
     // MARK: - Container
@@ -146,6 +156,7 @@ final class ContainerStore {
                 items: items.map(Self.withoutWeights)
             ))
             apply(try await client.snapshot())
+            await loadPrinters(client)
             return result
         } catch {
             syncError = error.localizedDescription
@@ -189,14 +200,43 @@ final class ContainerStore {
         defer { isSyncing = false }
         do {
             apply(try await backend.snapshot())
+            await loadPrinters(backend)
         } catch {
             syncError = error.localizedDescription
         }
     }
 
+    // MARK: - Spulen
+
+    /// Bricht eine neue Spule der Sorte an (aus dem Vorrat) und lädt danach den Stand neu.
+    func openSpool(itemId: String, remainingWeight: Double? = nil, printerId: String? = nil, tool: Int? = nil) async throws {
+        guard let backend else { return }
+        try await backend.openSpool(itemId: itemId, remainingWeight: remainingWeight, printerId: printerId, tool: tool)
+        await refresh()
+    }
+
+    func updateSpool(_ spool: Spool) async throws {
+        guard let backend else { return }
+        try await backend.updateSpool(id: spool.id, SpoolUpdate(remainingWeight: spool.remainingWeight, printerId: spool.printerId, tool: spool.tool))
+        await refresh()
+    }
+
+    func markSpoolEmpty(id: String) async throws {
+        guard let backend else { return }
+        try await backend.markSpoolEmpty(id: id)
+        await refresh()
+    }
+
+    private func loadPrinters(_ client: BackendClient) async {
+        guard let loaded = try? await client.printers() else { return }
+        printers = loaded
+        save()
+    }
+
     func apply(_ snapshot: BackendSnapshot) {
         containers = snapshot.containers
         items = snapshot.items
+        spools = snapshot.spools ?? []
         standardContainersInitialized = true
         syncError = nil
         lastSyncedAt = Date()
@@ -225,8 +265,8 @@ final class ContainerStore {
     private static func withoutWeights(_ item: Item) -> Item {
         var item = item
         item.netWeight = nil
-        item.remainingWeight = nil
         item.spoolWeight = nil
+        item.spoolsInStock = nil
         return item
     }
 
@@ -247,6 +287,8 @@ final class ContainerStore {
             let snapshot = try Self.decoder.decode(Snapshot.self, from: data)
             containers = snapshot.containers
             items = snapshot.items
+            spools = snapshot.spools ?? []
+            printers = snapshot.printers ?? []
             standardContainersInitialized = snapshot.standardContainersInitialized
         } catch {
             print("ContainerStore: Laden fehlgeschlagen: \(error)")
@@ -257,6 +299,8 @@ final class ContainerStore {
         let snapshot = Snapshot(
             containers: containers,
             items: items,
+            spools: spools,
+            printers: printers,
             standardContainersInitialized: standardContainersInitialized
         )
         do {

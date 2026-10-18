@@ -25,7 +25,10 @@ public class Consumption
     /// <summary>UID des Tags, das der Drucker in diesem Kopf erkannt hat, falls bekannt.</summary>
     public string? TagUid { get; set; }
 
-    /// <summary>Spule, von der abgebucht wurde; <c>null</c>, wenn sie nicht eindeutig war.</summary>
+    /// <summary>Angebrochene Spule, von der abgebucht wurde.</summary>
+    public string? SpoolId { get; set; }
+
+    /// <summary>Sorte, von der abgebucht wurde; <c>null</c>, wenn sie nicht eindeutig war.</summary>
     public string? ItemId { get; set; }
 
     public DateTime RecordedAt { get; set; }

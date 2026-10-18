@@ -13,7 +13,10 @@ builder.Services.AddHttpClient<MoonrakerAdapter>(client => client.Timeout = Time
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<MoonrakerAdapter>());
 builder.Services.AddHttpClient<SnapmakerU1Adapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<SnapmakerU1Adapter>());
+builder.Services.AddHttpClient<PrusaLinkAdapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
+builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<PrusaLinkAdapter>());
 builder.Services.AddScoped<ConsumptionSync>();
+builder.Services.AddScoped<SpoolStock>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpoolWeightCatalog)),
@@ -44,6 +47,7 @@ api.MapContainerEndpoints();
 api.MapItemEndpoints();
 api.MapPrinterEndpoints();
 api.MapSyncEndpoints();
+api.MapSpoolEndpoints();
 api.MapUpdateEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")
