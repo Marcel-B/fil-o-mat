@@ -466,6 +466,7 @@ fun ItemOverviewCard(
                         item.spoolsInStock?.takeIf { it > 0 }?.let { stock ->
                             OverviewField("Vorrat:", if (stock == 1) "1 Spule" else "$stock Spulen")
                         }
+                        item.transmissionText()?.let { OverviewField("TD:", it) }
                     }
                     
                     // Rechte Spalte: Icons

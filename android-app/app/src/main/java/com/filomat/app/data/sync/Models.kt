@@ -1,5 +1,6 @@
 package com.filomat.app.data.sync
 
+import com.filomat.app.data.Container
 import com.filomat.app.data.ItemJsonData
 import kotlinx.serialization.Serializable
 import java.text.ParseException
@@ -32,7 +33,9 @@ data class SnapshotItem(
     val itemData: ItemJsonData? = null,
     val netWeight: Double? = null,
     val spoolWeight: Double? = null,
-    val spoolsInStock: Int? = null
+    val spoolsInStock: Int? = null,
+    /** Lichtdurchlässigkeit (TD) in mm; ältere Backends kennen sie nicht. */
+    val transmissionDistance: Double? = null
 )
 
 /** Alle Container und Filamente; `spools` liefert nur das Backend, beim Import wird es ignoriert. */
@@ -56,13 +59,39 @@ data class Spool(
     /** Drucker, in dem die Spule steckt; `null` heißt Lager. */
     val printerId: String? = null,
     /** Kopf bzw. Slot am Drucker (0-basiert). */
-    val tool: Int? = null
+    val tool: Int? = null,
+    /** Container, in dem die Spule im Lager liegt; ältere Backends liefern den Wert nicht. */
+    val containerId: String? = null
 ) {
-    /** "U1 Kopf 2", "Prusa" oder "Lager". */
-    fun locationText(printers: List<Printer>): String {
-        val printerId = printerId ?: return "Lager"
-        val printer = printers.firstOrNull { it.id == printerId } ?: return "Drucker"
-        return printer.placeName(tool)
+    val place: SpoolPlace
+        get() = SpoolPlace(
+            printerId = printerId,
+            tool = if (printerId == null) null else tool ?: 0,
+            containerId = if (printerId == null) containerId else null
+        )
+
+    /** "U1 Kopf 2", "Prusa", "Regal oben" oder "Lager". */
+    fun locationText(printers: List<Printer>, containers: List<Container> = emptyList()): String =
+        place.text(printers, containers)
+
+    fun movedTo(place: SpoolPlace): Spool = copy(printerId = place.printerId, tool = place.tool, containerId = place.containerId)
+}
+
+/** Platz einer angebrochenen Spule: ein Kopf eines Druckers oder das Lager, dort optional ein Container. */
+data class SpoolPlace(val printerId: String? = null, val tool: Int? = null, val containerId: String? = null) {
+    fun text(printers: List<Printer>, containers: List<Container> = emptyList()): String {
+        if (printerId != null) {
+            val printer = printers.firstOrNull { it.id == printerId } ?: return "Drucker"
+            return printer.placeName(tool)
+        }
+        containerId?.let { id -> containers.firstOrNull { it.id == id }?.let { return it.name } }
+        return "Lager"
+    }
+
+    companion object {
+        val STORAGE = SpoolPlace()
+        fun printer(id: String, tool: Int) = SpoolPlace(printerId = id, tool = tool)
+        fun container(id: String) = SpoolPlace(containerId = id)
     }
 }
 
@@ -71,7 +100,8 @@ data class Spool(
 data class SpoolUpdate(
     val remainingWeight: Double? = null,
     val printerId: String? = null,
-    val tool: Int? = null
+    val tool: Int? = null,
+    val containerId: String? = null
 )
 
 enum class PrinterType(val raw: String, val title: String, val addressHint: String, val setupHint: String) {

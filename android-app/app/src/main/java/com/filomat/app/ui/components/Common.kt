@@ -3,12 +3,42 @@ package com.filomat.app.ui.components
 import android.graphics.Color as AndroidColor
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import android.app.Activity
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ColumnScope
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material3.Button
+import androidx.compose.material3.Card
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenuItem
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.ExposedDropdownMenuBox
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.text.input.KeyboardType
+import com.filomat.app.data.Item
+import com.filomat.app.data.sync.SpoolPlace
+import com.filomat.app.data.sync.StoreState
+import com.filomat.app.nfc.NFCReader
+import com.filomat.app.nfc.ScannedTag
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Archive
-import androidx.compose.material.icons.filled.Nfc
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
 import androidx.compose.material.icons.filled.Search
@@ -28,11 +58,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
 
-/** Hauptbereiche der App, wie die Tabs der iOS-App plus "Tag lesen". */
+/** Hauptbereiche der App, wie die Tabs der iOS-App. "Tag lesen" steht wie dort im Scannen-Tab. */
 enum class MainTab(val route: String, val label: String, val icon: ImageVector) {
     CONTAINERS("containers", "Container", Icons.Default.Archive),
     SCAN("scan", "Scannen", Icons.Default.QrCodeScanner),
-    READ("read", "Lesen", Icons.Default.Nfc),
     ITEMS("items", "Filamente", Icons.Default.Search),
     PRINTERS("printers", "Drucker", Icons.Default.Print)
 }
@@ -106,4 +135,118 @@ object GramText {
 
     /** "432 g" */
     fun label(value: Double): String = "${Math.round(value)} g"
+}
+
+/** Kopfzeile einer Sorte: Farbe, Titel und eine Zeile darunter. */
+@Composable
+fun ItemHeader(item: Item, detail: String? = null, modifier: Modifier = Modifier) {
+    Row(modifier, verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        ColorDot(item.itemData?.color_hex, 36.dp)
+        Column(Modifier.weight(1f)) {
+            Text(item.getDisplayTitle(), style = MaterialTheme.typography.titleMedium)
+            detail?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+        }
+    }
+}
+
+/** Knopf, der einen Tag scannt und das Ergebnis weiterreicht; während des Scans lässt er sich abbrechen. */
+@Composable
+fun ScanButton(reader: NFCReader, title: String, modifier: Modifier = Modifier, onTag: (ScannedTag) -> Unit) {
+    val isScanning by reader.isScanning.collectAsState()
+    val error by reader.errorMessage.collectAsState()
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        if (!reader.isAvailable) {
+            Text("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.", color = MaterialTheme.colorScheme.error)
+        } else {
+            Button(onClick = { reader.scanTag(onTag) }, enabled = !isScanning, modifier = Modifier.fillMaxWidth()) {
+                if (isScanning) {
+                    CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Tag an das Handy halten …")
+                } else {
+                    Text(title)
+                }
+            }
+        }
+        if (isScanning) {
+            TextButton(onClick = { reader.stopScanning() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
+                Text("Abbrechen")
+            }
+        }
+        error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
+    }
+}
+
+/** NFC-Leser für einen Bildschirm; der Scan endet, wenn der Bildschirm verlassen wird. */
+@Composable
+fun rememberNfcReader(): NFCReader {
+    val context = LocalContext.current
+    val reader = remember { NFCReader(context as Activity) }
+    DisposableEffect(reader) { onDispose { reader.stopScanning() } }
+    return reader
+}
+
+/** Eingabefeld für eine Dezimalzahl (Komma oder Punkt). */
+@Composable
+fun DecimalField(label: String, value: String, placeholder: String = "z. B. 1000", onChange: (String) -> Unit) {
+    OutlinedTextField(
+        value = value,
+        onValueChange = { text -> if (text.all { it.isDigit() || it == ',' || it == '.' }) onChange(text) },
+        label = { Text(label) },
+        placeholder = { Text(placeholder) },
+        singleLine = true,
+        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
+        modifier = Modifier.fillMaxWidth()
+    )
+}
+
+/** Eingabefeld für die Lichtdurchlässigkeit (TD in mm). */
+@Composable
+fun TransmissionField(value: String, onChange: (String) -> Unit) =
+    DecimalField("Lichtdurchlässigkeit (TD, mm)", value, placeholder = "z. B. 3,5", onChange = onChange)
+
+/** Auswahl eines Spulenplatzes: Lager, ein Container im Lager oder ein Kopf eines Druckers. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SpoolPlacePicker(label: String, state: StoreState, selection: SpoolPlace, onSelect: (SpoolPlace) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    val options = remember(state.containers, state.printers) {
+        listOf(SpoolPlace.STORAGE to "Lager") +
+            state.storageContainers().map { SpoolPlace.container(it.id) to it.name } +
+            state.printers.flatMap { printer ->
+                (0 until printer.toolCount).map { tool -> SpoolPlace.printer(printer.id, tool) to printer.placeName(tool) }
+            }
+    }
+    ExposedDropdownMenuBox(expanded = expanded, onExpandedChange = { expanded = it }) {
+        OutlinedTextField(
+            value = selection.text(state.printers, state.containers),
+            onValueChange = {},
+            readOnly = true,
+            label = { Text(label) },
+            trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
+            modifier = Modifier
+                .fillMaxWidth()
+                .menuAnchor()
+        )
+        ExposedDropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            options.forEach { (option, name) ->
+                DropdownMenuItem(text = { Text(name) }, onClick = {
+                    onSelect(option)
+                    expanded = false
+                })
+            }
+        }
+    }
+}
+
+/** Abschnitt mit Überschrift als Karte. */
+@Composable
+fun SectionCard(title: String? = null, footer: String? = null, content: @Composable ColumnScope.() -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+        title?.let { Text(it, style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.primary) }
+        Card(Modifier.fillMaxWidth()) {
+            Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp), content = content)
+        }
+        footer?.let { Text(it, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant) }
+    }
 }

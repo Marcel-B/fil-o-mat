@@ -71,6 +71,20 @@ class StoreStateTest {
     }
 
     @Test
+    fun transmissionDistanceAndSpoolContainerSurviveSyncAndStorage() {
+        val snapshot = Json { ignoreUnknownKeys = true }.decodeFromString<Snapshot>(
+            """{"containers":[],"items":[{"id":"1","rfidTag":"T","name":"PLA","createdAt":2,"transmissionDistance":3.5}],
+               "spools":[{"id":"s","itemId":"1","number":1,"containerId":"box","openedAt":5}]}"""
+        )
+        val state = StoreState.fromSnapshot(snapshot, emptyList())
+        assertEquals("box", state.spoolsIn("box").single().containerId)
+        // Der TD-Wert gehört nicht zu den Gewichten und geht immer mit
+        assertEquals(3.5, state.items.single().toSnapshot(sendWeights = false).transmissionDistance)
+        val stored = StoreState.fromStored(state.storedContainers(), state.storedItems())
+        assertEquals(3.5, stored.items.single().transmissionDistance)
+    }
+
+    @Test
     fun snapshotIsTakenOver() {
         val snapshot = Snapshot(
             containers = listOf(SnapshotContainer("box", "B", "Box", createdAt = 1)),

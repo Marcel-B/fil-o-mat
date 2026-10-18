@@ -4,6 +4,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.text.selection.SelectionContainer
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,8 +20,6 @@ import com.filomat.app.nfc.NFCReader
 import com.filomat.app.nfc.TagReading
 import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
-import com.filomat.app.ui.components.MainNavigationBar
-import com.filomat.app.ui.components.MainTab
 
 /** Einen Tag einfach auslesen und alles anzeigen, was darauf steht; in der App ändert sich nichts. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -36,8 +36,16 @@ fun TagReadScreen(navController: NavController) {
     DisposableEffect(Unit) { onDispose { nfcReader.stopScanning() } }
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Tag lesen") }) },
-        bottomBar = { MainNavigationBar(navController, MainTab.READ) }
+        topBar = {
+            TopAppBar(
+                title = { Text("Filament-Tag lesen") },
+                navigationIcon = {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                    }
+                }
+            )
+        }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -87,8 +95,8 @@ fun TagReadScreen(navController: NavController) {
 @Composable
 private fun TagReadingContent(reading: TagReading, state: StoreState) {
     val contents = reading.contents
-    val item = state.items.firstOrNull { it.rfidTag == reading.uid }
-    val container = state.containers.firstOrNull { it.rfidTag == reading.uid }
+    val item = reading.ids.firstNotNullOfOrNull { state.findItemByTag(it) }
+    val container = reading.ids.firstNotNullOfOrNull { state.findContainerByTag(it) }
 
     reading.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
@@ -115,11 +123,17 @@ private fun TagReadingContent(reading: TagReading, state: StoreState) {
                 InfoRow("Filament", item.getDisplayTitle())
                 InfoRow("Container", state.container(item.containerId)?.name ?: "Lose")
                 item.spoolsInStock?.takeIf { it > 0 }?.let { InfoRow("Vorrat", if (it == 1) "1 Spule" else "$it Spulen") }
+                item.transmissionText()?.let { InfoRow("Lichtdurchlässigkeit (TD)", it) }
                 state.spoolsOf(item.id).forEach { spool ->
-                    InfoRow("Spule #${spool.number}", listOfNotNull(spool.locationText(state.printers), spool.remainingWeight?.let(GramText::label)).joinToString(" · "))
+                    InfoRow("Spule #${spool.number}", listOfNotNull(spool.locationText(state.printers, state.containers), spool.remainingWeight?.let(GramText::label)).joinToString(" · "))
                 }
             }
-            container != null -> InfoRow("Container", container.name)
+            container != null -> {
+                InfoRow("Container", container.name)
+                InfoRow("Filamente darin", "${state.itemsIn(container.id).size}")
+                val spools = state.spoolsIn(container.id)
+                if (spools.isNotEmpty()) InfoRow("Angebrochene Spulen darin", "${spools.size}")
+            }
             else -> Text("Dieser Tag ist in der App noch nicht bekannt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
