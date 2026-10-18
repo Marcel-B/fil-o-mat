@@ -10,6 +10,8 @@ WORKDIR /app
 COPY --from=build /app .
 ENV ASPNETCORE_HTTP_PORTS=8080 \
     ConnectionStrings__Filomat="Data Source=/data/filomat.db"
+# Das Volume übernimmt beim ersten Anlegen den Besitzer des Ordners; ohne das kann die App (kein root) die Datenbank nicht schreiben
+RUN mkdir -p /data && chown $APP_UID /data
 VOLUME /data
 EXPOSE 8080
 USER $APP_UID
