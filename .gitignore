@@ -32,3 +32,18 @@ google-services.json
 
 # Android Profiling
 *.hprof
+# Xcode
+xcuserdata/
+DerivedData/
+*.xcuserstate
+.DS_Store
+
+# .NET
+backend/**/bin/
+backend/**/obj/
+backend/**/*.db
+backend/**/*.db-shm
+backend/**/*.db-wal
+
+# Lokale Einstellungen für docker compose
+backend/.env

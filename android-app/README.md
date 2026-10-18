@@ -11,6 +11,7 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 - **Herausnehmen**: Item scannen, dann Container scannen, um Items aus Containern zu entfernen
 - **Tag-Beschreibung**: Tags mit Namen und Beschreibungen versehen
 - **Persistenz**: Daten werden lokal mit DataStore gespeichert
+- **Backend-Upload**: Über das Wolken-Symbol lassen sich alle Container und Filamente ins [Backend](../backend/README.md) hochladen, z. B. um sie in der iOS-App zu nutzen
 
 ## Technologie
 

@@ -1,0 +1,43 @@
+name: iOS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios.yml"
+  pull_request:
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios.yml"
+
+jobs:
+  build-and-test:
+    runs-on: macos-15
+    defaults:
+      run:
+        working-directory: ios-app
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Xcode-Version
+        run: xcodebuild -version
+
+      - name: Für Gerät bauen (ohne Signierung, inkl. CoreNFC)
+        run: |
+          xcodebuild build \
+            -project Filomat.xcodeproj \
+            -scheme Filomat \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Unit-Tests im Simulator
+        run: |
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['name'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          echo "Simulator: $DEVICE"
+          xcodebuild test \
+            -project Filomat.xcodeproj \
+            -scheme Filomat \
+            -destination "platform=iOS Simulator,name=$DEVICE" \
+            CODE_SIGNING_ALLOWED=NO

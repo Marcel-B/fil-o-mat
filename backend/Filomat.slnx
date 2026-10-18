@@ -1,0 +1,8 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Filomat.Api/Filomat.Api.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Filomat.Api.Tests/Filomat.Api.Tests.csproj" />
+  </Folder>
+</Solution>
