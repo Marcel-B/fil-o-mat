@@ -13,15 +13,9 @@ import android.nfc.tech.NdefFormatable
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.serialization.json.Json
-import kotlinx.serialization.decodeFromString
 import com.filomat.app.data.ItemJsonData
 
 class NFCReader(private val activity: Activity) {
-    // JSON-Instanz mit ignoreUnknownKeys = true für Item-Daten
-    private val json = Json {
-        ignoreUnknownKeys = true
-    }
     private val nfcAdapter: NfcAdapter? = NfcAdapter.getDefaultAdapter(activity)
     
     private val _isScanning = MutableStateFlow(false)
@@ -93,16 +87,14 @@ class NFCReader(private val activity: Activity) {
                     if (tnf == NdefRecord.TNF_MIME_MEDIA && typeString == "application/json") {
                         // JSON-Daten parsen
                         val jsonString = String(payload, Charsets.UTF_8)
-                        try {
-                            val itemData = json.decodeFromString<ItemJsonData>(jsonString)
-                            _lastScannedItemData.value = itemData
-                            // Rufe Callback mit Tag-ID und Item-Daten auf
-                            onTagScanned?.invoke(tagId)
-                        } catch (e: Exception) {
-                            _errorMessage.value = "Fehler beim Parsen der JSON-Daten: ${e.message}"
-                            // Rufe Callback ohne Item-Daten auf
-                            onTagScanned?.invoke(tagId)
+                        // Nachsichtig lesen: andere OpenSpool-Writer speichern Temperaturen als Zahl
+                        val contents = TagContents.parse(jsonString)
+                        if (contents.error == null) {
+                            _lastScannedItemData.value = contents.itemData
+                        } else {
+                            _errorMessage.value = "Fehler beim Parsen der JSON-Daten: ${contents.error}"
                         }
+                        onTagScanned?.invoke(tagId)
                     } else {
                         // Normale Text-Daten
                         val tagString = String(payload, Charsets.UTF_8)
@@ -147,6 +139,87 @@ class NFCReader(private val activity: Activity) {
         enableReaderMode()
     }
     
+    /**
+     * Liest einen einzelnen Tag vollständig aus (UID, Chip, alle NDEF-Records, Filamentdaten), ohne etwas
+     * in der App zu ändern. Der Callback läuft auf dem Main-Thread.
+     */
+    fun readTag(callback: (TagReading) -> Unit) {
+        if (!isAvailable) {
+            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            return
+        }
+        _isScanning.value = true
+        _errorMessage.value = null
+        nfcAdapter?.enableReaderMode(
+            activity,
+            { tag ->
+                val reading = describeTag(tag)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    disableReaderMode()
+                    _isScanning.value = false
+                    callback(reading)
+                }
+            },
+            NfcAdapter.FLAG_READER_NFC_A or
+                    NfcAdapter.FLAG_READER_NFC_B or
+                    NfcAdapter.FLAG_READER_NFC_F or
+                    NfcAdapter.FLAG_READER_NFC_V,
+            null
+        )
+    }
+
+    private fun describeTag(tag: Tag): TagReading {
+        val base = TagReading(
+            uid = bytesToHex(tag.id),
+            technologies = tag.techList.map { it.substringAfterLast('.') }
+        )
+        val ndef = Ndef.get(tag) ?: return base.copy(
+            error = if (NdefFormatable.get(tag) != null) "Der Tag ist leer (noch nicht für NDEF formatiert)." else null
+        )
+        return try {
+            ndef.connect()
+            val message = ndef.ndefMessage
+            val records = message?.records?.map(::describeRecord) ?: emptyList()
+            val json = records.firstOrNull { it.type == "application/json" }?.text
+            base.copy(
+                ndefType = ndef.type,
+                ndefCapacity = ndef.maxSize,
+                ndefUsed = message?.byteArrayLength,
+                isWritable = ndef.isWritable,
+                records = records,
+                contents = json?.let(TagContents::parse)
+            )
+        } catch (e: Exception) {
+            base.copy(error = "Fehler beim Lesen des Tags: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            try { ndef.close() } catch (_: Exception) {}
+        }
+    }
+
+    private fun describeRecord(record: NdefRecord): TagRecord {
+        val type = String(record.type, Charsets.UTF_8)
+        val payload = record.payload ?: ByteArray(0)
+        val format = when (record.tnf) {
+            NdefRecord.TNF_MIME_MEDIA -> "MIME"
+            NdefRecord.TNF_WELL_KNOWN -> "Well-known"
+            NdefRecord.TNF_ABSOLUTE_URI -> "URI"
+            NdefRecord.TNF_EXTERNAL_TYPE -> "Extern"
+            NdefRecord.TNF_EMPTY -> "Leer"
+            else -> "Unbekannt"
+        }
+        val text = when {
+            record.tnf == NdefRecord.TNF_WELL_KNOWN && type == "T" && payload.isNotEmpty() -> {
+                // Text-Record: Statusbyte, Sprachcode, dann der Text
+                val languageLength = payload[0].toInt() and 0x3F
+                val utf16 = payload[0].toInt() and 0x80 != 0
+                String(payload, 1 + languageLength, payload.size - 1 - languageLength, if (utf16) Charsets.UTF_16 else Charsets.UTF_8)
+            }
+            record.tnf == NdefRecord.TNF_WELL_KNOWN && type == "U" -> record.toUri()?.toString()
+            else -> String(payload, Charsets.UTF_8).takeIf { text -> text.all { !it.isISOControl() || it == '\n' || it == '\r' || it == '\t' } }
+        }
+        return TagRecord(format, type, payload.size, text)
+    }
+
     fun writeTag(message: String, tag: Tag): Boolean {
         return try {
             val ndef = Ndef.get(tag)

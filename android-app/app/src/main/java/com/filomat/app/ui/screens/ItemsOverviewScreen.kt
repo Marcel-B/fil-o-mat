@@ -26,7 +26,11 @@ import androidx.compose.ui.unit.dp
 import android.graphics.Color as AndroidColor
 import com.filomat.app.data.Container
 import com.filomat.app.data.ContainerStore
+import com.filomat.app.ui.components.MainNavigationBar
+import com.filomat.app.ui.components.MainTab
 import com.filomat.app.data.Item
+import com.filomat.app.data.sync.Spool
+import com.filomat.app.ui.components.GramText
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -34,7 +38,7 @@ fun ItemsOverviewScreen(
     navController: androidx.navigation.NavController
 ) {
     val context = LocalContext.current
-    val containerStore = remember { ContainerStore(context) }
+    val containerStore = remember { ContainerStore.get(context) }
     var allItems by remember { mutableStateOf<List<Item>>(emptyList()) }
     var allContainers by remember { mutableStateOf<List<Container>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
@@ -44,12 +48,13 @@ fun ItemsOverviewScreen(
     var showingEditDialog by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
     
+    var allSpools by remember { mutableStateOf<List<Spool>>(emptyList()) }
+
     LaunchedEffect(Unit) {
-        containerStore.containers.collect { containers ->
-            allContainers = containers
-            // Sammle alle Items aus allen Containern
-            val items = containers.flatMap { it.items }
-            allItems = items
+        containerStore.state.collect { state ->
+            allContainers = state.containers
+            allItems = state.items
+            allSpools = state.spools
         }
     }
     
@@ -84,28 +89,7 @@ fun ItemsOverviewScreen(
                 Icon(Icons.Default.Add, contentDescription = "Filament erstellen")
             }
         },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate("containers") },
-                    icon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                    label = { Text("Container") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate("scan") },
-                    icon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) },
-                    label = { Text("Scannen") }
-                )
-                NavigationBarItem(
-                    selected = true,
-                    onClick = { },
-                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    label = { Text("Filamente") }
-                )
-            }
-        }
+        bottomBar = { MainNavigationBar(navController, MainTab.ITEMS) }
     ) { padding ->
         Column(
             modifier = Modifier
@@ -159,6 +143,8 @@ fun ItemsOverviewScreen(
                             ItemOverviewCard(
                                 item = item,
                                 containers = allContainers,
+                                spools = allSpools.filter { it.itemId == item.id }.sortedBy { it.number },
+                                onOpen = { navController.navigate("item/${item.id}") },
                                 onDelete = {
                                     itemToDelete = item
                                     showingDeleteDialog = true
@@ -233,9 +219,20 @@ fun ItemsOverviewScreen(
 }
 
 @Composable
+private fun OverviewField(label: String, value: String) {
+    Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
+        Text(label, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(value, style = MaterialTheme.typography.bodySmall)
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
 fun ItemOverviewCard(
     item: Item,
     containers: List<Container>,
+    spools: List<Spool> = emptyList(),
+    onOpen: () -> Unit = {},
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
@@ -246,6 +243,7 @@ fun ItemOverviewCard(
         } ?: "Lose"
     }
     Card(
+        onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp)
     ) {
@@ -458,6 +456,15 @@ fun ItemOverviewCard(
                                 text = containerName,
                                 style = MaterialTheme.typography.bodySmall
                             )
+                        }
+
+                        if (spools.isNotEmpty()) {
+                            OverviewField("Angebrochen:", spools.joinToString(", ") { spool ->
+                                spool.remainingWeight?.let { "#${spool.number} ${GramText.label(it)}" } ?: "#${spool.number}"
+                            })
+                        }
+                        item.spoolsInStock?.takeIf { it > 0 }?.let { stock ->
+                            OverviewField("Vorrat:", if (stock == 1) "1 Spule" else "$stock Spulen")
                         }
                     }
                     
