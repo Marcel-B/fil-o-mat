@@ -140,6 +140,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<int?>("SpoolsInStock")
                         .HasColumnType("INTEGER");
 
+                    b.Property<double?>("TransmissionDistance")
+                        .HasColumnType("REAL");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContainerId");
@@ -209,6 +212,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("ContainerId")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("EmptiedAt")
                         .HasColumnType("TEXT");
 
@@ -232,6 +238,8 @@ namespace Filomat.Api.Data.Migrations
                         .HasColumnType("INTEGER");
 
                     b.HasKey("Id");
+
+                    b.HasIndex("ContainerId");
 
                     b.HasIndex("ItemId", "Number")
                         .IsUnique();
@@ -330,6 +338,11 @@ namespace Filomat.Api.Data.Migrations
 
             modelBuilder.Entity("Filomat.Api.Domain.Spool", b =>
                 {
+                    b.HasOne("Filomat.Api.Domain.Container", null)
+                        .WithMany()
+                        .HasForeignKey("ContainerId")
+                        .OnDelete(DeleteBehavior.SetNull);
+
                     b.HasOne("Filomat.Api.Domain.Item", null)
                         .WithMany()
                         .HasForeignKey("ItemId")

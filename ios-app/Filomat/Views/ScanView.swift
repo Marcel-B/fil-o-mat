@@ -1,98 +1,81 @@
 import SwiftUI
 
+/// Scannen-Tab: eine Liste der Dinge, die man mit einem Tag tun kann. Jede führt in einen eigenen Ablauf.
 struct ScanView: View {
     @Environment(ContainerStore.self) private var store
-    @State private var model = ScanViewModel()
-    @State private var isScanning = false
 
     var body: some View {
-        @Bindable var model = model
-
-        ScrollView {
-            VStack(alignment: .leading, spacing: 16) {
-                Picker("Modus", selection: Binding(get: { model.scanMode }, set: { model.setScanMode($0) })) {
-                    ForEach(ScanMode.allCases) { mode in
-                        Text(mode.title).tag(mode)
-                    }
-                }
-                .pickerStyle(.segmented)
-
-                VStack(alignment: .leading, spacing: 8) {
-                    Text(model.stepTitle).font(.headline)
-                    Text(model.stepDescription).foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding()
-                .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
-
-                if NFCService.isAvailable {
-                    Button {
-                        Task {
-                            isScanning = true
-                            await model.scan(using: .shared, store: store)
-                            isScanning = false
-                        }
-                    } label: {
-                        HStack {
-                            if isScanning { ProgressView() }
-                            Text(isScanning ? "Scanne..." : "Tag scannen")
-                        }
-                        .frame(maxWidth: .infinity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.large)
-                    .disabled(isScanning)
-                } else {
-                    Text("NFC ist auf diesem Gerät nicht verfügbar.").foregroundStyle(.red)
-                }
-
-                if let container = model.scannedContainer {
-                    ContainerStatusCard(container: container)
-                }
-                if let item = model.scannedItem {
-                    ItemStatusCard(item: item)
-                }
-                if let warning = model.warningMessage {
-                    Text(warning)
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .padding()
-                        .background(Color.red.opacity(0.15), in: RoundedRectangle(cornerRadius: 12))
-                }
-                if let error = model.errorMessage {
-                    Text(error).foregroundStyle(.red)
-                }
-            }
-            .padding()
-        }
-        .safeAreaInset(edge: .bottom) {
-            if model.canPerformAction {
-                Button {
-                    model.performAction(store: store)
-                } label: {
-                    Text(model.actionTitle).frame(maxWidth: .infinity)
-                }
-                .buttonStyle(.borderedProminent)
-                .controlSize(.large)
-                .padding()
-                .background(.bar)
-            }
-        }
-        .navigationTitle("Scannen")
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
+        List {
+            Section("Nachsehen") {
                 NavigationLink {
                     TagInfoView()
                 } label: {
-                    Label("Tag lesen", systemImage: "info.circle")
-                        .labelStyle(.titleAndIcon)
+                    ScanActionRow(title: "Filament-Tag lesen", detail: "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß",
+                                  systemImage: "info.circle")
+                }
+                NavigationLink {
+                    ContainerScanView()
+                } label: {
+                    ScanActionRow(title: "Container ansehen", detail: "Container scannen und sehen, was darin liegt",
+                                  systemImage: "archivebox")
+                }
+            }
+
+            Section {
+                NavigationLink {
+                    PlaceFlowView(target: .container)
+                } label: {
+                    ScanActionRow(title: "Einlagern", detail: "Filament scannen, dann den Container",
+                                  systemImage: "tray.and.arrow.down")
+                }
+                NavigationLink {
+                    PlaceFlowView(target: .printer)
+                } label: {
+                    ScanActionRow(title: "In Drucker einlegen", detail: "Filament scannen, dann Drucker und Kopf wählen",
+                                  systemImage: "printer")
+                }
+                .disabled(store.backend == nil)
+            } header: {
+                Text("Filament bewegen")
+            } footer: {
+                if store.backend == nil {
+                    Text("Spulen in Druckern verwaltet das Backend. Verbinde es über das Wolken-Symbol in der Container-Liste.")
+                }
+            }
+
+            Section("Vorrat") {
+                NavigationLink {
+                    StockView()
+                } label: {
+                    ScanActionRow(title: "Vorrat", detail: "Volle und angebrochene Spulen je Sorte, was nachgekauft werden sollte",
+                                  systemImage: "shippingbox")
+                }
+                NavigationLink {
+                    TransmissionScanView()
+                } label: {
+                    ScanActionRow(title: "Lichtdurchlässigkeit erfassen", detail: "Musterplättchen scannen und den TD-Wert eintragen",
+                                  systemImage: "sun.max")
                 }
             }
         }
-        .alert("Filament umlagern?", isPresented: $model.showConfirmMove) {
-            Button("Ja, umlagern") { model.confirmMove() }
-            Button("Abbrechen", role: .cancel) { model.cancelMove() }
-        } message: {
-            Text("Dieses Filament ist bereits in einem anderen Container. Möchten Sie es in den neuen Container umlagern?")
+        .navigationTitle("Scannen")
+    }
+}
+
+private struct ScanActionRow: View {
+    var title: String
+    var detail: String
+    var systemImage: String
+
+    var body: some View {
+        Label {
+            VStack(alignment: .leading, spacing: 2) {
+                Text(title)
+                Text(detail).font(.caption).foregroundStyle(.secondary)
+            }
+        } icon: {
+            Image(systemName: systemImage).foregroundStyle(.tint)
         }
+        .padding(.vertical, 2)
     }
 }

@@ -26,6 +26,12 @@ public class Item
     /// <summary>Volle, noch nicht angebrochene Spulen dieser Sorte; <c>null</c>, wenn kein Vorrat geführt wird.</summary>
     public int? SpoolsInStock { get; set; }
 
+    /// <summary>
+    /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, gemessen z. B. mit einem TD-1;
+    /// je höher, desto mehr Licht lässt das Filament durch. <c>null</c>, wenn nicht gemessen.
+    /// </summary>
+    public double? TransmissionDistance { get; set; }
+
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>
