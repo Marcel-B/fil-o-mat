@@ -78,6 +78,16 @@ struct ScanView: View {
             }
         }
         .navigationTitle("Scannen")
+        .toolbar {
+            ToolbarItem(placement: .topBarTrailing) {
+                NavigationLink {
+                    TagInfoView()
+                } label: {
+                    Label("Tag lesen", systemImage: "info.circle")
+                        .labelStyle(.titleAndIcon)
+                }
+            }
+        }
         .alert("Filament umlagern?", isPresented: $model.showConfirmMove) {
             Button("Ja, umlagern") { model.confirmMove() }
             Button("Abbrechen", role: .cancel) { model.cancelMove() }
