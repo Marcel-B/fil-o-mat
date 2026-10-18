@@ -292,4 +292,32 @@ public class SpoolStockTests : IDisposable
         await _client.PostAsync($"/api/spools/{b.Id}/empty", null);
         Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}"))!);
     }
+
+    [Fact]
+    public async Task StoresSpoolInContainerUntilItGoesIntoAPrinter()
+    {
+        var item = await CreateItemAsync("W", 1000, 3);
+        await _client.PostAsJsonAsync("/api/containers", new ContainerRequest("box", "BOX", "Box", null, null));
+        var printer = await (await _client.PostAsJsonAsync("/api/printers",
+            new PrinterRequest("Voron", PrinterType.Moonraker, "http://voron.local", null, null))).Content.ReadFromJsonAsync<PrinterResponse>();
+
+        var spool = await (await _client.PostAsJsonAsync($"/api/items/{item.Id}/spools",
+            new OpenSpoolRequest(null, null, null, "box"))).Content.ReadFromJsonAsync<Spool>();
+        Assert.Equal("box", spool!.ContainerId);
+        var snapshot = await _client.GetFromJsonAsync<Snapshot>("/api/snapshot");
+        Assert.Equal("box", snapshot!.Spools!.Single().ContainerId);
+
+        // In den Drucker: der Container gilt nicht mehr
+        await _client.PutAsJsonAsync($"/api/spools/{spool.Id}", new SpoolUpdateRequest(900, printer!.Id, 0, "box"));
+        var inPrinter = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}"))!.Single();
+        Assert.Equal((printer.Id, (string?)null), (inPrinter.PrinterId, inPrinter.ContainerId));
+
+        Assert.Equal(HttpStatusCode.BadRequest,
+            (await _client.PutAsJsonAsync($"/api/spools/{spool.Id}", new SpoolUpdateRequest(900, null, null, "gibt-es-nicht"))).StatusCode);
+
+        // Container gelöscht: die Spule bleibt im Lager ohne Container
+        await _client.PutAsJsonAsync($"/api/spools/{spool.Id}", new SpoolUpdateRequest(900, null, null, "box"));
+        await _client.DeleteAsync("/api/containers/box");
+        Assert.Null((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={item.Id}"))!.Single().ContainerId);
+    }
 }

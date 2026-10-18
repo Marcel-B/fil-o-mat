@@ -14,7 +14,8 @@ public record ItemRequest(
     FilamentData? ItemData,
     double? NetWeight = null,
     double? SpoolWeight = null,
-    int? SpoolsInStock = null);
+    int? SpoolsInStock = null,
+    double? TransmissionDistance = null);
 
 public record ItemUpdateRequest(
     string Name,
@@ -22,7 +23,8 @@ public record ItemUpdateRequest(
     FilamentData? ItemData,
     double? NetWeight = null,
     double? SpoolWeight = null,
-    int? SpoolsInStock = null);
+    int? SpoolsInStock = null,
+    double? TransmissionDistance = null);
 
 public record MoveItemRequest(string? ContainerId);
 
@@ -70,6 +72,7 @@ public static class ItemEndpoints
         if (name.Length == 0) errors["name"] = ["Name fehlt."];
         if (request.ContainerId is not null && !await db.Containers.AnyAsync(c => c.Id == request.ContainerId))
             errors["containerId"] = ["Container nicht gefunden."];
+        if (request.TransmissionDistance is < 0) errors["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString() : request.Id;
@@ -94,6 +97,7 @@ public static class ItemEndpoints
             NetWeight = request.NetWeight,
             SpoolWeight = request.SpoolWeight,
             SpoolsInStock = request.SpoolsInStock,
+            TransmissionDistance = request.TransmissionDistance,
             CreatedAt = DateTime.UtcNow,
         };
         db.Items.Add(item);
@@ -107,6 +111,11 @@ public static class ItemEndpoints
         var name = request.Name?.Trim() ?? "";
         if (name.Length == 0)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Name fehlt."] });
+        if (request.TransmissionDistance is < 0)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."],
+            });
         if (await db.Items.FindAsync(id) is not { } item) return TypedResults.NotFound();
 
         item.Name = name;
@@ -115,6 +124,7 @@ public static class ItemEndpoints
         item.NetWeight = request.NetWeight;
         item.SpoolWeight = request.SpoolWeight;
         item.SpoolsInStock = request.SpoolsInStock;
+        item.TransmissionDistance = request.TransmissionDistance;
         await db.SaveChangesAsync();
         return TypedResults.Ok(item);
     }
