@@ -12,6 +12,8 @@ struct ScannedTag: Equatable {
     var itemData: ItemJsonData?
     /// Gesetzt, wenn ein JSON-Record vorhanden, aber nicht lesbar war.
     var parseError: String?
+    /// UID, Tag-Typ und alle NDEF-Records, für die Anzeige "Tag lesen".
+    var details: TagDetails?
 }
 
 enum NFCError: LocalizedError, Equatable {
@@ -165,19 +167,29 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
 
         let ndefTag: NFCNDEFTag
         let identifier: Data
+        let technology: String
         switch tag {
         case .miFare(let t):
             ndefTag = t
             identifier = t.identifier
+            switch t.mifareFamily {
+            case .ultralight: technology = "MIFARE Ultralight / NTAG"
+            case .plus: technology = "MIFARE Plus"
+            case .desfire: technology = "MIFARE DESFire"
+            default: technology = "MIFARE / ISO 14443"
+            }
         case .iso15693(let t):
             ndefTag = t
             identifier = t.identifier
+            technology = "ISO 15693 (NFC-V)"
         case .iso7816(let t):
             ndefTag = t
             identifier = t.identifier
+            technology = "ISO 7816"
         case .feliCa(let t):
             ndefTag = t
             identifier = t.currentIDm
+            technology = "FeliCa"
         @unknown default:
             fail(session, "Dieser Tag-Typ wird nicht unterstützt.")
             return
@@ -199,7 +211,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
             }
             switch self.operation {
             case .read:
-                self.read(ndefTag, tagId: tagId, session: session)
+                self.read(ndefTag, tagId: tagId, technology: technology, session: session)
             case .writeJSON(let json, _):
                 self.write(json, to: ndefTag, tagId: tagId, session: session)
             }
@@ -208,35 +220,54 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
 
     // MARK: Lesen / Schreiben
 
-    private func read(_ tag: NFCNDEFTag, tagId: String, session: NFCTagReaderSession) {
-        tag.queryNDEFStatus { [weak self] status, _, error in
+    private func read(_ tag: NFCNDEFTag, tagId: String, technology: String, session: NFCTagReaderSession) {
+        tag.queryNDEFStatus { [weak self] status, capacity, error in
             guard let self else { return }
+            var details = TagDetails(uid: tagId, technology: technology)
+            if error == nil {
+                switch status {
+                case .readWrite: details.ndefStatus = "beschreibbar"
+                case .readOnly: details.ndefStatus = "schreibgeschützt"
+                case .notSupported: details.ndefStatus = "kein NDEF"
+                @unknown default: break
+                }
+                if status != .notSupported { details.capacity = capacity }
+            }
             // Tag ohne NDEF: wie in der Android-App die UID verwenden
             guard error == nil, status != .notSupported else {
-                self.complete(session, with: ScannedTag(tagId: tagId))
+                self.complete(session, with: ScannedTag(tagId: tagId, details: details))
                 return
             }
-            tag.readNDEF { message, _ in
+            tag.readNDEF { [details] message, _ in
+                var details = details
+                details.records = message?.records.map {
+                    TagRecord(
+                        format: UInt8($0.typeNameFormat.rawValue),
+                        type: String(data: $0.type, encoding: .utf8) ?? "",
+                        payload: $0.payload
+                    )
+                } ?? []
                 // Leerer Tag oder Lesefehler: ebenfalls die UID verwenden
                 guard let record = message?.records.first else {
-                    self.complete(session, with: ScannedTag(tagId: tagId))
+                    self.complete(session, with: ScannedTag(tagId: tagId, details: details))
                     return
                 }
                 let type = String(data: record.type, encoding: .utf8)
                 if record.typeNameFormat == .media, type == Self.jsonMimeType {
                     do {
                         let data = try JSONDecoder().decode(ItemJsonData.self, from: record.payload)
-                        self.complete(session, with: ScannedTag(tagId: tagId, itemData: data))
+                        self.complete(session, with: ScannedTag(tagId: tagId, itemData: data, details: details))
                     } catch {
                         self.complete(session, with: ScannedTag(
                             tagId: tagId,
-                            parseError: "Fehler beim Parsen der JSON-Daten: \(error.localizedDescription)"
+                            parseError: "Fehler beim Parsen der JSON-Daten: \(error.localizedDescription)",
+                            details: details
                         ))
                     }
                 } else {
                     // Sonstige Records: Payload als Kennung, wie in der Android-App
                     let text = String(data: record.payload, encoding: .utf8) ?? tagId
-                    self.complete(session, with: ScannedTag(tagId: text))
+                    self.complete(session, with: ScannedTag(tagId: text, details: details))
                 }
             }
         }

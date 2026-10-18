@@ -31,6 +31,7 @@ Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 e
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.
 - **Container anlegen**: Beschreiben und Auslesen der UID passieren in einem Scan statt in zwei.
+- **Tag lesen** (oben rechts im Scannen-Tab): listet alles auf, was auf einem Tag steht (UID, Chip-Typ, Speicher, alle NDEF-Records, jedes Feld des OpenSpool-JSON, auch unbekannte wie `subtype` vom U1) und was Fil-o-mat zu der Sorte bzw. dem Container weiß.
 - **Unformatierte Tags**: iOS kann Tags nicht NDEF-formatieren. NTAG213/215/216 sind ab Werk formatiert und funktionieren direkt.
 - **Schutz vor Verwechslungen**: Ein Tag, das schon zu einem Container oder Filament gehört, wird nicht versehentlich überschrieben.
 - **Filament-Übersicht** zeigt alle Filamente, auch herausgenommene ohne Container.
