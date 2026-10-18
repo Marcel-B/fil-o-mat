@@ -18,6 +18,9 @@ public class Item
 
     /// <summary>Verbleibendes Filament in Gramm; sinkt mit jedem gebuchten Druck.</summary>
     public double? RemainingWeight { get; set; }
+
+    /// <summary>Gewicht der leeren Spule in Gramm, um gewogene Spulen umzurechnen.</summary>
+    public double? SpoolWeight { get; set; }
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>

@@ -24,6 +24,8 @@ struct FilamentFormView: View {
     @State private var bedMaxTemp: String
     @State private var netWeight: String
     @State private var remainingWeight: String
+    @State private var spoolWeight: String
+    @State private var weighed = ""
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -38,6 +40,7 @@ struct FilamentFormView: View {
         }
         _netWeight = State(initialValue: Self.gramText(item?.netWeight))
         _remainingWeight = State(initialValue: Self.gramText(item?.remainingWeight))
+        _spoolWeight = State(initialValue: Self.gramText(item?.spoolWeight))
         _type = State(initialValue: data?.type ?? "")
         _brand = State(initialValue: data?.brand ?? "")
         _variant = State(initialValue: data?.variant ?? "")
@@ -96,6 +99,15 @@ struct FilamentFormView: View {
                     } footer: {
                         Text("Gedruckter Verbrauch wird automatisch vom Restgewicht abgezogen. Ohne Restgewicht wird vom Füllgewicht ausgegangen.")
                     }
+
+                    Section {
+                        GramField(title: "Gewogen mit Spule (g)", text: $weighed)
+                        GramField(title: "Leere Spule (g)", text: $spoolWeight)
+                    } header: {
+                        Text("Angebrochene Spule wiegen")
+                    } footer: {
+                        Text("Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet. Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke.")
+                    }
                 }
 
                 if !consumption.isEmpty {
@@ -151,7 +163,12 @@ struct FilamentFormView: View {
                     Button("Abbrechen") { dismiss() }
                 }
             }
-            .task { await loadConsumption() }
+            .task {
+                await loadConsumption()
+                await suggestSpoolWeight()
+            }
+            .onChange(of: weighed) { updateRemainingFromScale() }
+            .onChange(of: spoolWeight) { updateRemainingFromScale() }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
         }
@@ -165,6 +182,23 @@ struct FilamentFormView: View {
     private func applyWeights(to item: inout Item) {
         item.netWeight = Self.grams(netWeight)
         item.remainingWeight = Self.grams(remainingWeight)
+        item.spoolWeight = Self.grams(spoolWeight)
+    }
+
+    private func updateRemainingFromScale() {
+        guard let gross = Self.grams(weighed), let empty = Self.grams(spoolWeight) else { return }
+        remainingWeight = Self.gramText(max(0, gross - empty))
+    }
+
+    /// Leergewicht der Marke aus der SpoolmanDB vorschlagen, wenn noch keins eingetragen ist.
+    private func suggestSpoolWeight() async {
+        let brandName = brand.trimmingCharacters(in: .whitespaces).lowercased()
+        guard editedItem != nil, spoolWeight.isEmpty, !brandName.isEmpty, let backend = store.backend,
+              let weights = try? await backend.spoolWeights(),
+              let match = weights.first(where: { $0.key.lowercased() == brandName })?.value
+                ?? weights.first(where: { $0.key.lowercased().hasPrefix(brandName) })?.value,
+              spoolWeight.isEmpty else { return }
+        spoolWeight = Self.gramText(match)
     }
 
     private static func grams(_ text: String) -> Double? {

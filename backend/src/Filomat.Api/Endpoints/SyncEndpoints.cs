@@ -24,7 +24,8 @@ public record SnapshotItem(
     string? ContainerId,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null);
+    double? RemainingWeight = null,
+    double? SpoolWeight = null);
 
 public record Snapshot(List<SnapshotContainer> Containers, List<SnapshotItem> Items);
 
@@ -39,7 +40,7 @@ public static class SyncEndpoints
                 c.Id, c.RfidTag, c.Name, c.Description, c.Capacity, ToMillis(c.CreatedAt), c.IsStandard)).ToList(),
             (await db.Items.OrderBy(i => i.CreatedAt).ToListAsync()).Select(i => new SnapshotItem(
                 i.Id, i.RfidTag, i.Name, i.Description, ToMillis(i.CreatedAt), i.ContainerId, i.ItemData,
-                i.NetWeight, i.RemainingWeight)).ToList()))
+                i.NetWeight, i.RemainingWeight, i.SpoolWeight)).ToList()))
             .WithTags("Abgleich");
 
         api.MapPost("/import", ImportAsync).WithTags("Abgleich");
@@ -122,6 +123,7 @@ public static class SyncEndpoints
             // Gewichte nur übernehmen, wenn die App sie kennt; sonst bleibt der gebuchte Verbrauch erhalten
             if (incoming.NetWeight is not null) existing.NetWeight = incoming.NetWeight;
             if (incoming.RemainingWeight is not null) existing.RemainingWeight = incoming.RemainingWeight;
+            if (incoming.SpoolWeight is not null) existing.SpoolWeight = incoming.SpoolWeight;
             itemByTag[incoming.RfidTag] = incoming.Id;
             items++;
         }

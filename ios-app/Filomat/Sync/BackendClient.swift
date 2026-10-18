@@ -52,6 +52,11 @@ struct BackendClient {
         try await send(request("api/items/\(id)", method: "DELETE"), allowNotFound: true)
     }
 
+    /// Leergewichte von Spulen pro Hersteller (aus der SpoolmanDB, über das Backend).
+    func spoolWeights() async throws -> [String: Double] {
+        try Self.decoder.decode([String: Double].self, from: try await send(request("api/spool-weights", method: "GET")))
+    }
+
     // MARK: - Drucker
 
     func printers() async throws -> [Printer] {

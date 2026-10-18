@@ -13,14 +13,16 @@ public record ItemRequest(
     string? ContainerId,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null);
+    double? RemainingWeight = null,
+    double? SpoolWeight = null);
 
 public record ItemUpdateRequest(
     string Name,
     string? Description,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null);
+    double? RemainingWeight = null,
+    double? SpoolWeight = null);
 
 public record MoveItemRequest(string? ContainerId);
 
@@ -91,6 +93,7 @@ public static class ItemEndpoints
             ItemData = request.ItemData,
             NetWeight = request.NetWeight,
             RemainingWeight = request.RemainingWeight,
+            SpoolWeight = request.SpoolWeight,
             CreatedAt = DateTime.UtcNow,
         };
         db.Items.Add(item);
@@ -111,6 +114,7 @@ public static class ItemEndpoints
         item.ItemData = request.ItemData;
         item.NetWeight = request.NetWeight;
         item.RemainingWeight = request.RemainingWeight;
+        item.SpoolWeight = request.SpoolWeight;
         await db.SaveChangesAsync();
         return TypedResults.Ok(item);
     }

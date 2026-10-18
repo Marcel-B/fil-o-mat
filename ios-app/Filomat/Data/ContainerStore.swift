@@ -201,6 +201,7 @@ final class ContainerStore {
         var item = item
         item.netWeight = nil
         item.remainingWeight = nil
+        item.spoolWeight = nil
         return item
     }
 

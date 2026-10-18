@@ -1,4 +1,5 @@
 using Filomat.Api.Data;
+using Filomat.Api.Catalog;
 using Filomat.Api.Endpoints;
 using Filomat.Api.Printers;
 using Microsoft.EntityFrameworkCore;
@@ -13,6 +14,11 @@ builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<Moonr
 builder.Services.AddHttpClient<SnapmakerU1Adapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<SnapmakerU1Adapter>());
 builder.Services.AddScoped<ConsumptionSync>();
+builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
+builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
+    sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpoolWeightCatalog)),
+    sp.GetRequiredService<IConfiguration>(),
+    sp.GetRequiredService<ILogger<SpoolWeightCatalog>>()));
 builder.Services.AddHostedService<PrinterSyncService>();
 builder.Services.AddOpenApi();
 
@@ -38,6 +44,9 @@ api.MapContainerEndpoints();
 api.MapItemEndpoints();
 api.MapPrinterEndpoints();
 api.MapSyncEndpoints();
+api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
+    .WithTags("Katalog")
+    .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
 app.MapGet("/health", () => TypedResults.Ok("ok"));
 
 app.Run();

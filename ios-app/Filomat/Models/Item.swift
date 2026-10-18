@@ -13,6 +13,8 @@ struct Item: Identifiable, Codable, Hashable {
     var netWeight: Double?
     /// Verbleibendes Filament in Gramm; das Backend zieht gedruckte Mengen ab.
     var remainingWeight: Double?
+    /// Gewicht der leeren Spule in Gramm, um eine gewogene Spule umzurechnen.
+    var spoolWeight: Double?
 
     /// Titel im Format "<brand> <type> <variant>", Fallback auf den Namen.
     var displayTitle: String {

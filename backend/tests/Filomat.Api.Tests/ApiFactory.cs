@@ -21,6 +21,8 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Filomat:ApiKey", ApiKey ?? "");
         // Kein automatischer Abgleich in Tests
         builder.UseSetting("Filomat:PrinterSyncInterval", "00:00:00");
+        // Kein Zugriff aufs Internet in Tests
+        builder.UseSetting("Filomat:SpoolWeightCatalogUrl", "http://127.0.0.1:9/filaments.json");
         if (PrinterHandler is { } handler)
             builder.ConfigureTestServices(services =>
             {
