@@ -5,10 +5,14 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.filomat.app.ui.screens.BackendScreen
 import com.filomat.app.ui.screens.ContainerDetailScreen
 import com.filomat.app.ui.screens.ContainerListScreen
+import com.filomat.app.ui.screens.ItemDetailScreen
 import com.filomat.app.ui.screens.ItemsOverviewScreen
+import com.filomat.app.ui.screens.PrintersScreen
 import com.filomat.app.ui.screens.ScanScreen
+import com.filomat.app.ui.screens.TagReadScreen
 
 @Composable
 fun AppNavigation(navController: NavHostController = rememberNavController()) {
@@ -29,8 +33,23 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         composable("scan") {
             ScanScreen(navController = navController)
         }
+        composable("read") {
+            TagReadScreen(navController = navController)
+        }
         composable("items") {
             ItemsOverviewScreen(navController = navController)
+        }
+        composable("item/{itemId}") { backStackEntry ->
+            ItemDetailScreen(
+                itemId = backStackEntry.arguments?.getString("itemId") ?: "",
+                navController = navController
+            )
+        }
+        composable("printers") {
+            PrintersScreen(navController = navController)
+        }
+        composable("backend") {
+            BackendScreen(navController = navController)
         }
     }
 }

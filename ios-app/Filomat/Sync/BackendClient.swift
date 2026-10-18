@@ -88,10 +88,11 @@ struct BackendClient {
 
     /// Neue Spule der Sorte anbrechen; ohne Restgewicht ist sie voll, der Vorrat sinkt um eins.
     @discardableResult
-    func openSpool(itemId: String, remainingWeight: Double? = nil, printerId: String? = nil, tool: Int? = nil) async throws -> Spool {
+    func openSpool(itemId: String, remainingWeight: Double? = nil, printerId: String? = nil, tool: Int? = nil,
+                   containerId: String? = nil) async throws -> Spool {
         var request = request("api/items/\(itemId)/spools", method: "POST")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try Self.encoder.encode(SpoolUpdate(remainingWeight: remainingWeight, printerId: printerId, tool: tool))
+        request.httpBody = try Self.encoder.encode(SpoolUpdate(remainingWeight: remainingWeight, printerId: printerId, tool: tool, containerId: containerId))
         return try Self.decoder.decode(Spool.self, from: try await send(request))
     }
 

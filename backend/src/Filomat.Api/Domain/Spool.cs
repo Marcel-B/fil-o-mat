@@ -21,6 +21,9 @@ public class Spool
     /// <summary>Werkzeugkopf im Drucker (0 bei Druckern mit einem Kopf).</summary>
     public int? Tool { get; set; }
 
+    /// <summary>Container, in dem die Spule im Lager liegt; <c>null</c>, solange sie im Drucker steckt oder kein Platz bekannt ist.</summary>
+    public string? ContainerId { get; set; }
+
     public DateTime OpenedAt { get; set; }
 
     /// <summary>Zeitpunkt, an dem die Spule leer wurde; leere Spulen bleiben nur für den Verlauf erhalten.</summary>

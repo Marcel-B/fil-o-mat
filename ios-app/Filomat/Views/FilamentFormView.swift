@@ -25,6 +25,7 @@ struct FilamentFormView: View {
     @State private var netWeight: String
     @State private var spoolWeight: String
     @State private var spoolsInStock: Int
+    @State private var transmissionDistance: String
     @State private var isOpeningSpool = false
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
@@ -41,6 +42,7 @@ struct FilamentFormView: View {
         _netWeight = State(initialValue: Self.gramText(item?.netWeight))
         _spoolWeight = State(initialValue: Self.gramText(item?.spoolWeight))
         _spoolsInStock = State(initialValue: item?.spoolsInStock ?? 0)
+        _transmissionDistance = State(initialValue: GramText.format(item?.transmissionDistance))
         _type = State(initialValue: data?.type ?? "")
         _brand = State(initialValue: data?.brand ?? "")
         _variant = State(initialValue: data?.variant ?? "")
@@ -95,10 +97,11 @@ struct FilamentFormView: View {
                         GramField(title: "Füllgewicht neue Spule (g)", text: $netWeight)
                         GramField(title: "Leere Spule (g)", text: $spoolWeight)
                         Stepper("Volle Spulen im Vorrat: \(spoolsInStock)", value: $spoolsInStock, in: 0...99)
+                        TransmissionField(text: $transmissionDistance)
                     } header: {
                         Text("Sorte")
                     } footer: {
-                        Text("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen.")
+                        Text("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst.")
                     }
 
                     if store.backend != nil {
@@ -107,7 +110,7 @@ struct FilamentFormView: View {
                                 NavigationLink {
                                     SpoolEditView(spool: spool, emptySpoolWeight: Self.grams(spoolWeight))
                                 } label: {
-                                    SpoolRow(spool: spool, location: spool.locationText(printers: store.printers))
+                                    SpoolRow(spool: spool, location: spool.locationText(printers: store.printers, containers: store.containers))
                                 }
                             }
                             Button {
@@ -199,6 +202,7 @@ struct FilamentFormView: View {
         item.netWeight = Self.grams(netWeight)
         item.spoolWeight = Self.grams(spoolWeight)
         item.spoolsInStock = spoolsInStock
+        item.transmissionDistance = GramText.parse(transmissionDistance)
     }
 
     /// Bricht eine volle Spule an (Platz: Lager). Gewicht und Platz werden danach an der Spule gesetzt.
@@ -341,21 +345,15 @@ private struct SpoolEditView: View {
     @State private var remaining: String
     @State private var weighed = ""
     @State private var emptySpool: String
-    @State private var location: Location
+    @State private var location: SpoolPlace
     @State private var isSaving = false
     @State private var errorMessage: String?
-
-    /// Platz einer Spule: Lager oder ein Kopf eines Druckers.
-    struct Location: Hashable {
-        var printerId: String?
-        var tool: Int?
-    }
 
     init(spool: Spool, emptySpoolWeight: Double?) {
         self.spool = spool
         _remaining = State(initialValue: GramText.format(spool.remainingWeight))
         _emptySpool = State(initialValue: GramText.format(emptySpoolWeight))
-        _location = State(initialValue: Location(printerId: spool.printerId, tool: spool.printerId == nil ? nil : spool.tool ?? 0))
+        _location = State(initialValue: spool.place)
     }
 
     var body: some View {
@@ -371,15 +369,7 @@ private struct SpoolEditView: View {
             }
 
             Section("Platz") {
-                Picker("Steckt in", selection: $location) {
-                    Text("Lager").tag(Location(printerId: nil, tool: nil))
-                    ForEach(store.printers) { printer in
-                        ForEach(0..<printer.toolCount, id: \.self) { tool in
-                            Text(printer.placeName(tool: tool))
-                                .tag(Location(printerId: printer.id, tool: tool))
-                        }
-                    }
-                }
+                SpoolPlacePicker(title: "Steckt in", selection: $location)
             }
 
             Section {
@@ -408,6 +398,7 @@ private struct SpoolEditView: View {
         updated.remainingWeight = GramText.parse(remaining)
         updated.printerId = location.printerId
         updated.tool = location.tool
+        updated.containerId = location.containerId
         do {
             try await store.updateSpool(updated)
             dismiss()
@@ -428,8 +419,8 @@ private struct SpoolEditView: View {
     }
 }
 
-/// Gramm-Angaben als Text (Komma oder Punkt als Dezimaltrenner).
-private enum GramText {
+/// Gramm- und andere Dezimalangaben als Text (Komma oder Punkt als Dezimaltrenner).
+enum GramText {
     static func parse(_ text: String) -> Double? {
         Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
     }
@@ -483,6 +474,19 @@ private struct TemperatureField: View {
                     let digits = newValue.filter { $0.isASCII && $0.isNumber }
                     if digits != newValue { text = digits }
                 }
+        }
+    }
+}
+
+/// Eingabefeld für die Lichtdurchlässigkeit (TD in mm).
+struct TransmissionField: View {
+    @Binding var text: String
+
+    var body: some View {
+        LabeledContent("Lichtdurchlässigkeit (TD, mm)") {
+            TextField("z. B. 3,5", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
         }
     }
 }

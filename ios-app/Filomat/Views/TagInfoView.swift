@@ -55,6 +55,8 @@ struct TagInfoView: View {
                     Text(container.description).foregroundStyle(.secondary)
                 }
                 InfoRow(label: "Filamente darin", value: "\(store.items(in: container.id).count)")
+                let spools = store.spools(inContainer: container.id)
+                if !spools.isEmpty { InfoRow(label: "Angebrochene Spulen darin", value: "\(spools.count)") }
             }
         } else if let item = store.findItem(byTag: uid) ?? store.findItem(byTag: tag.tagId) {
             Section("In Fil-o-mat") {
@@ -73,6 +75,7 @@ struct TagInfoView: View {
                 if let stock = item.spoolsInStock { InfoRow(label: "Volle Spulen im Vorrat", value: "\(stock)") }
                 if let net = item.netWeight { InfoRow(label: "Filament pro Spule", value: grams(net)) }
                 if let spool = item.spoolWeight { InfoRow(label: "Leere Spule", value: grams(spool)) }
+                if let td = item.transmissionText { InfoRow(label: "Lichtdurchlässigkeit (TD)", value: td) }
                 let spools = store.spools(of: item.id)
                 if spools.isEmpty {
                     InfoRow(label: "Angebrochene Spulen", value: "keine")
@@ -81,7 +84,7 @@ struct TagInfoView: View {
                         LabeledContent("Spule \(spool.number)") {
                             VStack(alignment: .trailing) {
                                 Text(spool.remainingWeight.map(grams) ?? "Rest unbekannt")
-                                Text(spool.locationText(printers: store.printers))
+                                Text(spool.locationText(printers: store.printers, containers: store.containers))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
                             }

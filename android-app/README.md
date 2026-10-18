@@ -11,7 +11,11 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 - **Herausnehmen**: Item scannen, dann Container scannen, um Items aus Containern zu entfernen
 - **Tag-Beschreibung**: Tags mit Namen und Beschreibungen versehen
 - **Persistenz**: Daten werden lokal mit DataStore gespeichert
-- **Backend-Upload**: Über das Wolken-Symbol lassen sich alle Container und Filamente ins [Backend](../backend/README.md) hochladen, z. B. um sie in der iOS-App zu nutzen
+- **Backend-Abgleich**: Über das Wolken-Symbol wird die App mit dem [Backend](../backend/README.md) verbunden. Beim Verbinden werden die Daten des Geräts hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen; danach geht jede Änderung sofort ans Backend. Beim Öffnen und alle 2 Minuten, solange die App sichtbar ist, wird neu geladen (das Backend fragt die Drucker im selben Takt ab). Wie in der iOS-App.
+- **Drucker**: Drucker im Backend anlegen (Snapmaker U1, PrusaLink, Moonraker), abgleichen und entfernen
+- **Sorten und Spulen**: Ein Tipp auf ein Filament zeigt die Sorte mit Füll- und Leergewicht, Vorrat, angebrochenen Spulen (Nummer, Restgewicht, Platz im Drucker oder Lager, wiegen, leer melden) und dem gebuchten Verbrauch
+- **Backend-Version**: Neue Commits anzeigen und das Backend aktualisieren
+- **Tag lesen**: Zeigt alles an, was auf einem Tag steht (OpenSpool-Felder, auch fremde, NDEF-Records, Chip, UID) und ob die App ihn kennt; ändert nichts
 
 ## Technologie
 
@@ -85,6 +89,9 @@ android-app/
 ```
 
 ## Hinweise
+
+- Unter GrapheneOS braucht die App die Berechtigung „Netzwerk“, sonst scheitert der Abgleich mit „socket failed: EPERM“
+- Ein Update der App über Android Studio behält die lokalen Daten; die App nie deinstallieren, solange sie nicht mit dem Backend abgeglichen ist
 
 - NFC funktioniert nur auf physischen Geräten, nicht im Emulator
 - Stellen Sie sicher, dass NFC auf Ihrem Android-Gerät aktiviert ist

@@ -7,9 +7,9 @@ namespace Filomat.Api.Printers;
 /// <summary>Anbrechen, Einlegen und Abbuchen von Spulen.</summary>
 public class SpoolStock(FilomatDbContext db)
 {
-    /// <summary>Bricht eine Spule aus dem Vorrat an und legt sie optional in einen Drucker-Kopf.</summary>
+    /// <summary>Bricht eine Spule aus dem Vorrat an und legt sie optional in einen Drucker-Kopf oder einen Container.</summary>
     public async Task<Spool> OpenAsync(Item item, string? printerId = null, int? tool = null, double? remainingWeight = null,
-        CancellationToken cancellationToken = default)
+        CancellationToken cancellationToken = default, string? containerId = null)
     {
         if (printerId is not null) await ClearLocationAsync(printerId, tool ?? 0, cancellationToken);
         var number = await db.Spools.Where(s => s.ItemId == item.Id).MaxAsync(s => (int?)s.Number, cancellationToken) ?? 0;
@@ -21,6 +21,7 @@ public class SpoolStock(FilomatDbContext db)
             RemainingWeight = remainingWeight ?? item.NetWeight,
             PrinterId = printerId,
             Tool = printerId is null ? null : tool ?? 0,
+            ContainerId = printerId is null ? containerId : null,
             OpenedAt = DateTime.UtcNow,
         };
         if (item.SpoolsInStock is > 0) item.SpoolsInStock--;
@@ -29,13 +30,18 @@ public class SpoolStock(FilomatDbContext db)
         return spool;
     }
 
-    /// <summary>Legt eine Spule in einen Drucker-Kopf (oder mit <c>null</c> ins Lager); eine dort steckende Spule wandert ins Lager.</summary>
-    public async Task PlaceAsync(Spool spool, string? printerId, int? tool, CancellationToken cancellationToken = default)
+    /// <summary>
+    /// Legt eine Spule in einen Drucker-Kopf oder (mit <c>printerId = null</c>) ins Lager, dort optional in einen Container.
+    /// Eine Spule, die im Zielkopf steckt, wandert ins Lager.
+    /// </summary>
+    public async Task PlaceAsync(Spool spool, string? printerId, int? tool, CancellationToken cancellationToken = default,
+        string? containerId = null)
     {
         if (printerId is not null && (spool.PrinterId != printerId || spool.Tool != (tool ?? 0)))
             await ClearLocationAsync(printerId, tool ?? 0, cancellationToken);
         spool.PrinterId = printerId;
         spool.Tool = printerId is null ? null : tool ?? 0;
+        spool.ContainerId = printerId is null ? containerId : null;
         await db.SaveChangesAsync(cancellationToken);
     }
 
@@ -44,6 +50,7 @@ public class SpoolStock(FilomatDbContext db)
         spool.EmptiedAt = DateTime.UtcNow;
         spool.PrinterId = null;
         spool.Tool = null;
+        spool.ContainerId = null;
         await db.SaveChangesAsync(cancellationToken);
     }
 

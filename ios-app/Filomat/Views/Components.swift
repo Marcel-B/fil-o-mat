@@ -93,45 +93,82 @@ struct ItemDetailRow: View {
     }
 }
 
-struct ContainerStatusCard: View {
-    var container: Container
+/// Knopf, der einen Tag scannt und das Ergebnis weiterreicht. Abbrechen im Scanfenster ist kein Fehler.
+struct ScanButton: View {
+    var title: String
+    var prompt: String
+    var onTag: (ScannedTag) -> Void
+    var onError: (String) -> Void = { _ in }
+
+    @State private var isScanning = false
 
     var body: some View {
-        HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).font(.title2)
-            VStack(alignment: .leading, spacing: 2) {
-                Text("Container erkannt").font(.subheadline.weight(.semibold))
-                Text(container.name)
-                if !container.description.isEmpty {
-                    Text(container.description).font(.caption).foregroundStyle(.secondary)
+        if NFCService.isAvailable {
+            Button {
+                Task { await scan() }
+            } label: {
+                HStack {
+                    if isScanning { ProgressView() } else { Image(systemName: "wave.3.right") }
+                    Text(isScanning ? "Scanne..." : title)
                 }
+                .frame(maxWidth: .infinity)
             }
-            Spacer()
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .disabled(isScanning)
+        } else {
+            Text("NFC ist auf diesem Gerät nicht verfügbar.").foregroundStyle(.red)
         }
-        .padding()
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+
+    private func scan() async {
+        isScanning = true
+        defer { isScanning = false }
+        do {
+            onTag(try await NFCService.shared.scan(prompt: prompt))
+        } catch NFCError.cancelled {
+            // Nutzer hat das Scanfenster geschlossen
+        } catch {
+            onError(error.localizedDescription)
+        }
     }
 }
 
-struct ItemStatusCard: View {
+/// Kopfzeile einer Sorte: Farbe, Titel und eine Zeile darunter.
+struct ItemHeader: View {
     var item: Item
+    var detail: String?
 
     var body: some View {
         HStack(spacing: 12) {
-            Image(systemName: "checkmark.circle.fill").foregroundStyle(.tint).font(.title2)
-            ColorDot(hex: item.itemData?.colorHex, size: 40, showsPlaceholder: false)
+            ColorDot(hex: item.itemData?.colorHex, size: 36)
             VStack(alignment: .leading, spacing: 2) {
-                Text("Filament erkannt").font(.subheadline.weight(.semibold))
-                Text(item.displayTitle)
-                HStack(spacing: 8) {
-                    Text("Farbe:").foregroundStyle(.secondary)
-                    ColorInfo(data: item.itemData)
+                Text(item.displayTitle).font(.headline)
+                if let detail {
+                    Text(detail).font(.caption).foregroundStyle(.secondary)
                 }
-                .font(.caption)
             }
-            Spacer()
         }
-        .padding()
-        .background(Color(uiColor: .secondarySystemBackground), in: RoundedRectangle(cornerRadius: 12))
+    }
+}
+
+/// Auswahl eines Spulenplatzes: Lager, ein Container im Lager oder ein Kopf eines Druckers.
+struct SpoolPlacePicker: View {
+    @Environment(ContainerStore.self) private var store
+    var title: String
+    @Binding var selection: SpoolPlace
+
+    var body: some View {
+        Picker(title, selection: $selection) {
+            Text("Lager").tag(SpoolPlace.storage)
+            ForEach(store.storageContainers) { container in
+                Text(container.name).tag(SpoolPlace.container(container.id))
+            }
+            ForEach(store.printers) { printer in
+                ForEach(0..<printer.toolCount, id: \.self) { tool in
+                    Text(printer.placeName(tool: tool)).tag(SpoolPlace.printer(printer.id, tool: tool))
+                }
+            }
+        }
     }
 }

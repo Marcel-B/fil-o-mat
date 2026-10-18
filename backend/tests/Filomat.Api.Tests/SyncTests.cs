@@ -56,4 +56,20 @@ public class SyncTests : IDisposable
         // Spule ohne gültigen Container landet ohne Container
         Assert.Null((await _client.GetFromJsonAsync<Item>("/api/items/spool-1"))!.ContainerId);
     }
+
+    [Fact]
+    public async Task KeepsTransmissionDistanceWhenAppDoesNotSendIt()
+    {
+        var withTd = new Snapshot([], [new SnapshotItem("pla", "04112233", "PLA", "", 1, null, null, TransmissionDistance: 4.2)]);
+        await _client.PostAsJsonAsync("/api/import", withTd);
+        Assert.Equal(4.2, (await _client.GetFromJsonAsync<Snapshot>("/api/snapshot"))!.Items.Single().TransmissionDistance);
+
+        // Ältere App ohne das Feld
+        await _client.PostAsJsonAsync("/api/import", new Snapshot([], [new SnapshotItem("pla", "04112233", "PLA neu", "", 1, null, null)]));
+        var item = await _client.GetFromJsonAsync<Item>("/api/items/pla");
+        Assert.Equal(("PLA neu", 4.2), (item!.Name, item.TransmissionDistance!.Value));
+
+        var negative = await _client.PutAsJsonAsync("/api/items/pla", new ItemUpdateRequest("PLA", null, null, TransmissionDistance: -1));
+        Assert.Equal(System.Net.HttpStatusCode.BadRequest, negative.StatusCode);
+    }
 }

@@ -19,6 +19,8 @@ import androidx.compose.ui.unit.dp
 import android.graphics.Color as AndroidColor
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.filomat.app.data.ContainerStore
+import com.filomat.app.ui.components.MainNavigationBar
+import com.filomat.app.ui.components.MainTab
 import com.filomat.app.nfc.NFCReader
 import com.filomat.app.ui.viewmodel.ScanViewModel
 
@@ -29,7 +31,7 @@ fun ScanScreen(
     viewModel: ScanViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val containerStore = remember { ContainerStore(context) }
+    val containerStore = remember { ContainerStore.get(context) }
     val nfcReader = remember { NFCReader(context as android.app.Activity) }
     
     val scanMode by viewModel.scanMode.collectAsState()
@@ -59,28 +61,7 @@ fun ScanScreen(
         topBar = {
             TopAppBar(title = { Text("Scannen") })
         },
-        bottomBar = {
-            NavigationBar {
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate("containers") },
-                    icon = { Icon(Icons.Default.Archive, contentDescription = null) },
-                    label = { Text("Container") }
-                )
-                NavigationBarItem(
-                    selected = true,
-                    onClick = { },
-                    icon = { Icon(Icons.Default.QrCodeScanner, contentDescription = null) },
-                    label = { Text("Scannen") }
-                )
-                NavigationBarItem(
-                    selected = false,
-                    onClick = { navController.navigate("items") },
-                    icon = { Icon(Icons.Default.Search, contentDescription = null) },
-                    label = { Text("Filamente") }
-                )
-            }
-        }
+        bottomBar = { MainNavigationBar(navController, MainTab.SCAN) }
     ) { padding ->
         Column(
             modifier = Modifier

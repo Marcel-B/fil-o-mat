@@ -80,6 +80,10 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
                 .WithMany()
                 .HasForeignKey(s => s.PrinterId)
                 .OnDelete(DeleteBehavior.SetNull);
+            spool.HasOne<Container>()
+                .WithMany()
+                .HasForeignKey(s => s.ContainerId)
+                .OnDelete(DeleteBehavior.SetNull);
         });
     }
 }
