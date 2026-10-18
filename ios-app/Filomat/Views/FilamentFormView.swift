@@ -25,6 +25,7 @@ struct FilamentFormView: View {
     @State private var netWeight: String
     @State private var remainingWeight: String
     @State private var isWriting = false
+    @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
 
     init(mode: Mode) {
@@ -97,6 +98,25 @@ struct FilamentFormView: View {
                     }
                 }
 
+                if !consumption.isEmpty {
+                    Section("Verbrauch") {
+                        ForEach(consumption) { entry in
+                            HStack {
+                                VStack(alignment: .leading) {
+                                    Text(entry.jobName).lineLimit(1)
+                                    if let date = entry.endedDate {
+                                        Text(date.formatted(date: .abbreviated, time: .shortened))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Spacer()
+                                Text(String(format: "%.1f g", entry.grams)).monospacedDigit()
+                            }
+                        }
+                    }
+                }
+
                 Section {
                     if editedItem != nil {
                         Button("Speichern") { save() }
@@ -131,9 +151,15 @@ struct FilamentFormView: View {
                     Button("Abbrechen") { dismiss() }
                 }
             }
+            .task { await loadConsumption() }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
         }
+    }
+
+    private func loadConsumption() async {
+        guard let item = editedItem, let backend = store.backend else { return }
+        consumption = (try? await backend.consumption(itemId: item.id)) ?? []
     }
 
     private func applyWeights(to item: inout Item) {

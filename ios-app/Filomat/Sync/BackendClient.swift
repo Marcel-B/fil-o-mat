@@ -52,6 +52,36 @@ struct BackendClient {
         try await send(request("api/items/\(id)", method: "DELETE"), allowNotFound: true)
     }
 
+    // MARK: - Drucker
+
+    func printers() async throws -> [Printer] {
+        try Self.decoder.decode([Printer].self, from: try await send(request("api/printers", method: "GET")))
+    }
+
+    @discardableResult
+    func createPrinter(_ printer: PrinterRequest) async throws -> Printer {
+        var request = request("api/printers", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(printer)
+        return try Self.decoder.decode(Printer.self, from: try await send(request))
+    }
+
+    func deletePrinter(id: String) async throws {
+        try await send(request("api/printers/\(id)", method: "DELETE"), allowNotFound: true)
+    }
+
+    func syncPrinter(id: String) async throws -> SyncResponse {
+        try Self.decoder.decode(SyncResponse.self, from: try await send(request("api/printers/\(id)/sync", method: "POST")))
+    }
+
+    func consumption(itemId: String) async throws -> [ConsumptionEntry] {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/consumption"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "itemId", value: itemId)]
+        var request = request("api/consumption", method: "GET")
+        request.url = components.url
+        return try Self.decoder.decode([ConsumptionEntry].self, from: try await send(request))
+    }
+
     private func request(_ path: String, method: String) -> URLRequest {
         var request = URLRequest(url: baseURL.appendingPathComponent(path), timeoutInterval: 15)
         request.httpMethod = method

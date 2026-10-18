@@ -23,6 +23,10 @@ Native iPhone-App (SwiftUI + CoreNFC) mit demselben Funktionsumfang wie die Andr
 
 Container und Filamente aus der Android-App kommen so aufs iPhone: in der Android-App über das Wolken-Symbol hochladen, danach auf dem iPhone verbinden.
 
+## Drucker
+
+Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 erkennt der Drucker die Spulen selbst; bei anderen Druckern legst du die Spule in den Container des Druckers. Beim Bearbeiten eines Filaments trägst du Füll- und Restgewicht ein und siehst die gebuchten Drucke.
+
 ## Unterschiede zur Android-App
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.

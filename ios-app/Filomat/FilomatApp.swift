@@ -30,6 +30,8 @@ struct ContentView: View {
                 .tabItem { Label("Scannen", systemImage: "wave.3.right") }
             NavigationStack { ItemsOverviewView() }
                 .tabItem { Label("Filamente", systemImage: "magnifyingglass") }
+            NavigationStack { PrintersView() }
+                .tabItem { Label("Drucker", systemImage: "printer") }
         }
     }
 }
