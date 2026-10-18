@@ -1,6 +1,11 @@
 # Fil-o-mat - Container- und Item-Verwaltung mit RFID
 
-Eine iPhone Mobile App zur Verwaltung von Containern und deren Inhalten mit RFID-Tag-Unterstützung.
+Apps zur Verwaltung von Containern und deren Inhalten (Filamentspulen) mit RFID/NFC-Tags:
+
+- **Android**: Kotlin + Jetpack Compose in [`android-app/`](android-app/README.md)
+- **iOS**: Swift + SwiftUI + CoreNFC in [`ios-app/`](ios-app/README.md)
+
+Beide Apps verwenden dasselbe Tag-Format (OpenSpool-JSON) und erkennen Tags über dieselbe UID.
 
 ## Features
 
@@ -12,33 +17,9 @@ Eine iPhone Mobile App zur Verwaltung von Containern und deren Inhalten mit RFID
 - **Tag-Beschreibung**: Tags mit Namen und Beschreibungen versehen
 - **Persistenz**: Daten werden lokal gespeichert
 
-## Technologie
-
-- **SwiftUI**: Moderne UI-Framework für iOS
-- **CoreNFC**: NFC-Reader-Integration für iPhone
-- **UserDefaults**: Lokale Datenspeicherung
-
-## Anforderungen
-
-- iOS 17.0 oder höher
-- iPhone mit NFC-Unterstützung (iPhone 7 oder neuer)
-- Xcode 15.0 oder höher
-
 ## Installation
 
-1. Öffnen Sie das Projekt in Xcode:
-   ```bash
-   open Fil-o-mat.xcodeproj
-   ```
-
-2. Wählen Sie ein iPhone-Simulator oder ein physisches Gerät als Ziel
-
-3. Stellen Sie sicher, dass die NFC-Capability aktiviert ist:
-   - Wählen Sie das Projekt in Xcode
-   - Gehen Sie zu "Signing & Capabilities"
-   - Fügen Sie "Near Field Communication Tag Reading" hinzu
-
-4. Build und Run (⌘R)
+Siehe [`android-app/README.md`](android-app/README.md) bzw. [`ios-app/README.md`](ios-app/README.md).
 
 ## Verwendung
 
@@ -75,46 +56,6 @@ Eine iPhone Mobile App zur Verwaltung von Containern und deren Inhalten mit RFID
 4. Geben Sie Name und Beschreibung ein
 5. Wählen Sie zwischen Container oder Item
 6. Speichern oder auf Tag schreiben
-
-## Tests
-
-Die App enthält Unit Tests für:
-- ContainerStore (Datenverwaltung)
-- NFCReader (NFC-Funktionalität)
-
-Um die Tests auszuführen:
-1. Öffnen Sie das Projekt in Xcode
-2. Drücken Sie ⌘U oder wählen Sie "Product" > "Test"
-
-## Projektstruktur
-
-```
-Fil-o-mat/
-├── Fil-o-mat/
-│   ├── App.swift                 # App-Einstiegspunkt
-│   ├── ContentView.swift         # Haupt-View mit TabView
-│   ├── Models/
-│   │   ├── Container.swift       # Container-Datenmodell
-│   │   └── Item.swift            # Item-Datenmodell
-│   ├── Services/
-│   │   ├── ContainerStore.swift  # Datenverwaltung
-│   │   └── NFCReader.swift       # NFC-Reader-Service
-│   └── Views/
-│       ├── ContainerListView.swift    # Container-Liste
-│       ├── ContainerDetailView.swift   # Container-Details
-│       ├── ScanView.swift             # Scan-Interface
-│       └── TagDescriptionView.swift   # Tag-Verwaltung
-└── Fil-o-matTests/
-    ├── ContainerStoreTests.swift      # Tests für ContainerStore
-    └── NFCReaderTests.swift           # Tests für NFCReader
-```
-
-## Hinweise
-
-- NFC-Funktionalität funktioniert nur auf physischen Geräten, nicht im Simulator
-- Stellen Sie sicher, dass NFC auf Ihrem iPhone aktiviert ist
-- Die App verwendet NDEF-Format für NFC-Tags
-- Tags, die NDEF nicht unterstützen, erhalten automatisch eine generierte UUID
 
 ## Lizenz
 
