@@ -1,0 +1,14 @@
+services:
+  filomat:
+    build: .
+    ports:
+      - "8080:8080"
+    volumes:
+      - filomat-data:/data
+    environment:
+      # Optional: API-Schlüssel, den die Apps im Header X-Api-Key mitschicken
+      Filomat__ApiKey: ""
+    restart: unless-stopped
+
+volumes:
+  filomat-data:
