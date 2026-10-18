@@ -8,6 +8,11 @@ services:
     environment:
       # Optional (z. B. in backend/.env): API-Schlüssel, den die Apps im Header X-Api-Key mitschicken
       Filomat__ApiKey: "${FILOMAT_API_KEY:-}"
+      # Optional: nächtliche Sicherung in die Nextcloud (siehe README)
+      NEXTCLOUD_WEBDAV_URL: "${NEXTCLOUD_WEBDAV_URL:-}"
+      NEXTCLOUD_USERNAME: "${NEXTCLOUD_USERNAME:-}"
+      NEXTCLOUD_APP_PASSWORD: "${NEXTCLOUD_APP_PASSWORD:-}"
+      TZ: Europe/Berlin
     restart: unless-stopped
 
 volumes:

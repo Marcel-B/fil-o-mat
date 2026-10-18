@@ -22,6 +22,10 @@ BRANCH="${BRANCH:-main}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"           # nur bei privatem Repository
 FILOMAT_API_KEY="${FILOMAT_API_KEY:-}"     # optional, dann müssen die Apps ihn mitschicken
 PORT="${PORT:-8080}"
+# optional: nächtliche Sicherung in die Nextcloud (siehe backend/README.md)
+NEXTCLOUD_WEBDAV_URL="${NEXTCLOUD_WEBDAV_URL:-}"
+NEXTCLOUD_USERNAME="${NEXTCLOUD_USERNAME:-}"
+NEXTCLOUD_APP_PASSWORD="${NEXTCLOUD_APP_PASSWORD:-}"
 
 info() { echo -e "\e[1;34m==>\e[0m $*"; }
 fail() { echo -e "\e[1;31mFehler:\e[0m $*" >&2; exit 1; }
@@ -72,6 +76,8 @@ info "Docker installieren und Backend starten (dauert ein paar Minuten)"
 pct exec "$CTID" -- env \
   CLONE_URL="$CLONE_URL" REPO_URL="$REPO_URL" BRANCH="$BRANCH" \
   FILOMAT_API_KEY="$FILOMAT_API_KEY" PORT="$PORT" \
+  NEXTCLOUD_WEBDAV_URL="$NEXTCLOUD_WEBDAV_URL" NEXTCLOUD_USERNAME="$NEXTCLOUD_USERNAME" \
+  NEXTCLOUD_APP_PASSWORD="$NEXTCLOUD_APP_PASSWORD" \
   bash -euo pipefail -c '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
@@ -85,6 +91,9 @@ pct exec "$CTID" -- env \
     cat > /opt/fil-o-mat/backend/.env <<ENV
 FILOMAT_API_KEY=$FILOMAT_API_KEY
 FILOMAT_PORT=$PORT
+NEXTCLOUD_WEBDAV_URL=$NEXTCLOUD_WEBDAV_URL
+NEXTCLOUD_USERNAME=$NEXTCLOUD_USERNAME
+NEXTCLOUD_APP_PASSWORD=$NEXTCLOUD_APP_PASSWORD
 ENV
     chmod 600 /opt/fil-o-mat/backend/.env
 
@@ -104,6 +113,7 @@ info "Fertig"
 echo "  Container:  $CTID ($CT_HOSTNAME)"
 echo "  Backend:    http://${CT_IP}:${PORT}"
 [[ -n "$FILOMAT_API_KEY" ]] && echo "  API-Schlüssel ist gesetzt."
+[[ -n "$NEXTCLOUD_WEBDAV_URL" ]] && echo "  Nextcloud-Sicherung jede Nacht um 3 Uhr nach $NEXTCLOUD_WEBDAV_URL."
 echo
 echo "  Diese Adresse in der Android- und iOS-App eintragen."
 echo "  Aktualisieren: pct exec $CTID -- bash -c 'cd /opt/fil-o-mat && git pull && cd backend && docker compose up -d --build'"

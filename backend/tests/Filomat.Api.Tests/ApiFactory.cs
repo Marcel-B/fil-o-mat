@@ -15,6 +15,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die HTTP-Verbindung zu den Druckern.</summary>
     public HttpMessageHandler? PrinterHandler { get; init; }
 
+    /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
+    public HttpMessageHandler? NextcloudHandler { get; init; }
+
     protected override void ConfigureWebHost(Microsoft.AspNetCore.Hosting.IWebHostBuilder builder)
     {
         builder.UseSetting("ConnectionStrings:Filomat", $"Data Source={_dbPath}");
@@ -23,6 +26,15 @@ public class ApiFactory : WebApplicationFactory<Program>
         builder.UseSetting("Filomat:PrinterSyncInterval", "00:00:00");
         // Kein Zugriff aufs Internet in Tests
         builder.UseSetting("Filomat:SpoolWeightCatalogUrl", "http://127.0.0.1:9/filaments.json");
+        builder.UseSetting("Backup:At", "");
+        if (NextcloudHandler is { } nextcloud)
+        {
+            builder.UseSetting("Backup:WebDavUrl", "https://cloud.test/remote.php/dav/files/marcel/fil-o-mat");
+            builder.UseSetting("Backup:Username", "marcel");
+            builder.UseSetting("Backup:AppPassword", "geheim");
+            builder.ConfigureTestServices(services =>
+                services.AddHttpClient(Filomat.Api.Backup.WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => nextcloud));
+        }
         if (PrinterHandler is { } handler)
             builder.ConfigureTestServices(services =>
             {
