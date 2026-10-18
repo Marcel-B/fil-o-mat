@@ -14,6 +14,7 @@ builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<Moonr
 builder.Services.AddHttpClient<SnapmakerU1Adapter>(client => client.Timeout = TimeSpan.FromSeconds(15));
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<SnapmakerU1Adapter>());
 builder.Services.AddScoped<ConsumptionSync>();
+builder.Services.AddScoped<SpoolStock>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpoolWeightCatalog)),
@@ -44,6 +45,7 @@ api.MapContainerEndpoints();
 api.MapItemEndpoints();
 api.MapPrinterEndpoints();
 api.MapSyncEndpoints();
+api.MapSpoolEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");

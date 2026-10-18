@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Filomat.Api.Printers;
 
 /// <summary>Holt beendete Drucke vom Drucker und bucht den Verbrauch auf die eingelegte Spule.</summary>
-public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> adapters, ILogger<ConsumptionSync> logger)
+public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable<IPrinterAdapter> adapters, ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
     private static readonly TimeSpan Overlap = TimeSpan.FromDays(2);
@@ -66,6 +66,7 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         var item = loaded.Count == 1 ? loaded[0] : null;
         var grams = Math.Round(FilamentMath.GramsForJob(job, item?.ItemData?.Type), 2);
 
+        var spool = item is null ? null : await BookAsync(item, printer.Id, 0, grams, cancellationToken);
         db.Consumptions.Add(new Consumption
         {
             Id = Guid.NewGuid().ToString(),
@@ -77,9 +78,17 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
             LengthMm = job.LengthMm,
             Grams = grams,
             ItemId = item?.Id,
+            SpoolId = spool?.Id,
             RecordedAt = DateTime.UtcNow,
         });
-        if (item is not null) Deduct(item, grams);
+    }
+
+    /// <summary>Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde.</summary>
+    private async Task<Spool> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
+    {
+        var spool = await spools.ResolveAsync(item, printerId, tool, cancellationToken);
+        await spools.DeductAsync(spool, item, grams, cancellationToken);
+        return spool;
     }
 
     /// <summary>Bucht jeden Werkzeugkopf einzeln auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat.</summary>
@@ -107,6 +116,7 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
             var tag = tools.TagFor(extruder);
             var item = tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
+            var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption
             {
                 Id = Guid.NewGuid().ToString(),
@@ -120,9 +130,9 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 Tool = extruder,
                 TagUid = tag,
                 ItemId = item?.Id,
+                SpoolId = spool?.Id,
                 RecordedAt = DateTime.UtcNow,
             });
-            if (item is not null) Deduct(item, grams);
         }
     }
 
@@ -147,6 +157,8 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 foreach (var entry in open) entry.ItemId = item.Id;
             }
             item.ContainerId = printer.ContainerId;
+            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort
+            await spools.ResolveAsync(item, printer.Id, tool, cancellationToken);
         }
     }
 
@@ -187,23 +199,5 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         {
             return null;
         }
-    }
-
-    /// <summary>Zieht Gramm vom Restgewicht ab; ohne Restgewicht wird von der vollen Spule ausgegangen.</summary>
-    /// <remarks>
-    /// Reicht die angebrochene Spule nicht und liegt Vorrat bereit, wurde offenbar eine neue Spule eingelegt
-    /// (das Tag bleibt dasselbe, z. B. auf einem Musterplättchen): der Rest wird von der neuen Spule abgezogen.
-    /// </remarks>
-    public static void Deduct(Item item, double grams)
-    {
-        var current = item.RemainingWeight ?? item.NetWeight;
-        if (current is null) return;
-        var remaining = current.Value - grams;
-        while (remaining < 0 && item.SpoolsInStock is > 0 && item.NetWeight is > 0)
-        {
-            item.SpoolsInStock--;
-            remaining += item.NetWeight.Value;
-        }
-        item.RemainingWeight = Math.Max(0, Math.Round(remaining, 2));
     }
 }

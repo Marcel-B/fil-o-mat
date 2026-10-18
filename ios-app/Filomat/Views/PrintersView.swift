@@ -119,7 +119,9 @@ private struct PrinterRow: View {
                 Spacer()
                 if isSyncing { ProgressView() }
             }
-            Text("\(printer.type.title) · \(printer.baseUrl)")
+            Text(printer.toolCount > 1
+                 ? "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)"
+                 : "\(printer.type.title) · \(printer.baseUrl)")
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let error = printer.lastSyncError {

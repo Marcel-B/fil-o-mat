@@ -9,10 +9,13 @@ struct Printer: Identifiable, Codable, Hashable {
     var hasApiKey: Bool
     var enabled: Bool
     var containerId: String
+    /// Anzahl Köpfe bzw. Slots (U1: 4); ältere Backends liefern den Wert nicht.
+    var tools: Int?
     var lastSyncAt: String?
     var lastSyncError: String?
 
     var lastSyncDate: Date? { lastSyncAt.flatMap(BackendDate.parse) }
+    var toolCount: Int { max(tools ?? 1, 1) }
 }
 
 enum PrinterType: String, Codable, CaseIterable, Identifiable {

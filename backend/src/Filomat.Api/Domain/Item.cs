@@ -5,7 +5,7 @@ namespace Filomat.Api.Domain;
 /// <summary>
 /// Filament mit RFID-Tag; gehört über <see cref="ContainerId"/> zu höchstens einem Container.
 /// Das Tag kann auf der Spule oder auf einem Musterplättchen kleben; im zweiten Fall steht es für eine
-/// Filamentsorte mit angebrochener Spule (<see cref="RemainingWeight"/>) und Vorrat (<see cref="SpoolsInStock"/>).
+/// Filamentsorte mit angebrochenen Spulen (<see cref="Spool"/>) und Vorrat (<see cref="SpoolsInStock"/>).
 /// </summary>
 public class Item
 {
@@ -20,23 +20,12 @@ public class Item
     /// <summary>Filamentgewicht einer vollen Spule in Gramm (ohne Spule), z. B. 1000.</summary>
     public double? NetWeight { get; set; }
 
-    /// <summary>Verbleibendes Filament in Gramm; sinkt mit jedem gebuchten Druck.</summary>
-    public double? RemainingWeight { get; set; }
-
     /// <summary>Gewicht der leeren Spule in Gramm, um gewogene Spulen umzurechnen.</summary>
     public double? SpoolWeight { get; set; }
 
     /// <summary>Volle, noch nicht angebrochene Spulen dieser Sorte; <c>null</c>, wenn kein Vorrat geführt wird.</summary>
     public int? SpoolsInStock { get; set; }
 
-    /// <summary>Bricht eine neue Spule an: Restgewicht = Füllgewicht, eine Spule weniger im Vorrat.</summary>
-    public bool OpenNewSpool()
-    {
-        if (NetWeight is not > 0) return false;
-        RemainingWeight = NetWeight;
-        if (SpoolsInStock is > 0) SpoolsInStock--;
-        return true;
-    }
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>

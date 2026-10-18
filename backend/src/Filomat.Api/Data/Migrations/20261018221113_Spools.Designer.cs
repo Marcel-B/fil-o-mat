@@ -11,8 +11,8 @@ using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 namespace Filomat.Api.Data.Migrations
 {
     [DbContext(typeof(FilomatDbContext))]
-    [Migration("20261018220309_SpoolStock")]
-    partial class SpoolStock
+    [Migration("20261018221113_Spools")]
+    partial class Spools
     {
         /// <inheritdoc />
         protected override void BuildTargetModel(ModelBuilder modelBuilder)
@@ -52,6 +52,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<DateTime>("RecordedAt")
                         .HasColumnType("TEXT");
 
+                    b.Property<string>("SpoolId")
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Status")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -65,6 +68,8 @@ namespace Filomat.Api.Data.Migrations
                     b.HasKey("Id");
 
                     b.HasIndex("ItemId");
+
+                    b.HasIndex("SpoolId");
 
                     b.HasIndex("PrinterId", "JobId", "Tool")
                         .IsUnique();
@@ -126,9 +131,6 @@ namespace Filomat.Api.Data.Migrations
                         .HasColumnType("TEXT");
 
                     b.Property<double?>("NetWeight")
-                        .HasColumnType("REAL");
-
-                    b.Property<double?>("RemainingWeight")
                         .HasColumnType("REAL");
 
                     b.Property<string>("RfidTag")
@@ -199,6 +201,43 @@ namespace Filomat.Api.Data.Migrations
                     b.ToTable("Printers");
                 });
 
+            modelBuilder.Entity("Filomat.Api.Domain.Spool", b =>
+                {
+                    b.Property<string>("Id")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("EmptiedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ItemId")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
+                    b.Property<int>("Number")
+                        .HasColumnType("INTEGER");
+
+                    b.Property<DateTime>("OpenedAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("PrinterId")
+                        .HasColumnType("TEXT");
+
+                    b.Property<double?>("RemainingWeight")
+                        .HasColumnType("REAL");
+
+                    b.Property<int?>("Tool")
+                        .HasColumnType("INTEGER");
+
+                    b.HasKey("Id");
+
+                    b.HasIndex("ItemId", "Number")
+                        .IsUnique();
+
+                    b.HasIndex("PrinterId", "Tool");
+
+                    b.ToTable("Spools");
+                });
+
             modelBuilder.Entity("Filomat.Api.Domain.Consumption", b =>
                 {
                     b.HasOne("Filomat.Api.Domain.Item", null)
@@ -211,6 +250,11 @@ namespace Filomat.Api.Data.Migrations
                         .HasForeignKey("PrinterId")
                         .OnDelete(DeleteBehavior.Cascade)
                         .IsRequired();
+
+                    b.HasOne("Filomat.Api.Domain.Spool", null)
+                        .WithMany()
+                        .HasForeignKey("SpoolId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 
             modelBuilder.Entity("Filomat.Api.Domain.Item", b =>
@@ -279,6 +323,20 @@ namespace Filomat.Api.Data.Migrations
                         .HasForeignKey("ContainerId")
                         .OnDelete(DeleteBehavior.Restrict)
                         .IsRequired();
+                });
+
+            modelBuilder.Entity("Filomat.Api.Domain.Spool", b =>
+                {
+                    b.HasOne("Filomat.Api.Domain.Item", null)
+                        .WithMany()
+                        .HasForeignKey("ItemId")
+                        .OnDelete(DeleteBehavior.Cascade)
+                        .IsRequired();
+
+                    b.HasOne("Filomat.Api.Domain.Printer", null)
+                        .WithMany()
+                        .HasForeignKey("PrinterId")
+                        .OnDelete(DeleteBehavior.SetNull);
                 });
 #pragma warning restore 612, 618
         }

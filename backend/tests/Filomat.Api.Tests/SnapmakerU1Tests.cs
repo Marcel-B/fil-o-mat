@@ -67,8 +67,10 @@ public class SnapmakerU1Tests : IDisposable
         Assert.Null(printer!.LastSyncError);
 
         // 20,73 g geplant, 7092,2 von 7105,0 mm gedruckt
-        Assert.Equal(979.31, (await _client.GetFromJsonAsync<Item>($"/api/items/{black.Id}"))!.RemainingWeight);
-        Assert.Null((await _client.GetFromJsonAsync<Item>($"/api/items/{white.Id}"))!.RemainingWeight);
+        var blackSpool = Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!);
+        Assert.Equal((979.31, 1), (blackSpool.RemainingWeight!.Value, blackSpool.Tool!.Value));
+        var whiteSpool = Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={white.Id}"))!);
+        Assert.Equal((1000d, 0), (whiteSpool.RemainingWeight!.Value, whiteSpool.Tool!.Value));
 
         var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={u1.Id}");
         Assert.Equal(2, entries!.Count);

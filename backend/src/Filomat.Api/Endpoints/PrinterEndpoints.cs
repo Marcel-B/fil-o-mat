@@ -20,6 +20,7 @@ public record PrinterResponse(
     bool HasApiKey,
     bool Enabled,
     string ContainerId,
+    int Tools,
     DateTime CreatedAt,
     DateTime? LastJobEndedAt,
     DateTime? LastSyncAt,
@@ -27,12 +28,14 @@ public record PrinterResponse(
 {
     public static PrinterResponse From(Printer p) => new(
         p.Id, p.Name, p.Type, p.BaseUrl, !string.IsNullOrEmpty(p.ApiKey), p.Enabled, p.ContainerId,
+        p.Type == PrinterType.SnapmakerU1 ? 4 : 1,
         p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError);
 }
 
 public record SyncResponse(int Recorded, string? Error);
 
-public record AssignConsumptionRequest(string ItemId);
+/// <param name="SpoolId">Angebrochene Spule; ohne Angabe die Spule der Sorte in diesem Kopf bzw. die einzige angebrochene.</param>
+public record AssignConsumptionRequest(string ItemId, string? SpoolId = null);
 
 public static class PrinterEndpoints
 {
@@ -72,15 +75,25 @@ public static class PrinterEndpoints
         });
 
         consumption.MapPost("/{id}/assign", async Task<Results<Ok<Consumption>, NotFound, ValidationProblem, Conflict<string>>> (
-            string id, AssignConsumptionRequest request, FilomatDbContext db) =>
+            string id, AssignConsumptionRequest request, FilomatDbContext db, SpoolStock spools) =>
         {
             if (await db.Consumptions.FindAsync(id) is not { } entry) return TypedResults.NotFound();
             if (entry.ItemId is not null) return TypedResults.Conflict("Dieser Verbrauch ist bereits einer Spule zugeordnet.");
             if (await db.Items.FindAsync(request.ItemId) is not { } item)
                 return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["itemId"] = ["Filament nicht gefunden."] });
 
+            var open = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null).ToListAsync();
+            var spool = request.SpoolId is not null
+                ? open.FirstOrDefault(s => s.Id == request.SpoolId)
+                : open.FirstOrDefault(s => s.PrinterId == entry.PrinterId && s.Tool == entry.Tool)
+                    ?? (open.Count == 1 ? open[0] : null);
+            if (request.SpoolId is not null && spool is null)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["spoolId"] = ["Spule nicht gefunden."] });
+            spool ??= await spools.OpenAsync(item);
+
             entry.ItemId = item.Id;
-            ConsumptionSync.Deduct(item, entry.Grams);
+            await spools.DeductAsync(spool, item, entry.Grams);
+            entry.SpoolId = spool.Id;
             await db.SaveChangesAsync();
             return TypedResults.Ok(entry);
         });
@@ -161,6 +174,8 @@ public static class PrinterEndpoints
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == printer.ContainerId)
             .ExecuteUpdateAsync(setters => setters.SetProperty(i => i.ContainerId, target));
+        await db.Spools.Where(s => s.PrinterId == printer.Id)
+            .ExecuteUpdateAsync(setters => setters.SetProperty(s => s.PrinterId, (string?)null).SetProperty(s => s.Tool, (int?)null));
         db.Printers.Remove(printer);
         if (await db.Containers.FindAsync(printer.ContainerId) is { } container) db.Containers.Remove(container);
         await db.SaveChangesAsync();

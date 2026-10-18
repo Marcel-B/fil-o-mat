@@ -23,10 +23,9 @@ struct FilamentFormView: View {
     @State private var bedMinTemp: String
     @State private var bedMaxTemp: String
     @State private var netWeight: String
-    @State private var remainingWeight: String
     @State private var spoolWeight: String
-    @State private var weighed = ""
     @State private var spoolsInStock: Int
+    @State private var isOpeningSpool = false
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -40,7 +39,6 @@ struct FilamentFormView: View {
             data = edited.itemData
         }
         _netWeight = State(initialValue: Self.gramText(item?.netWeight))
-        _remainingWeight = State(initialValue: Self.gramText(item?.remainingWeight))
         _spoolWeight = State(initialValue: Self.gramText(item?.spoolWeight))
         _spoolsInStock = State(initialValue: item?.spoolsInStock ?? 0)
         _type = State(initialValue: data?.type ?? "")
@@ -92,36 +90,41 @@ struct FilamentFormView: View {
                     TemperatureField(title: "Max. Bett-Temperatur (°C)", text: $bedMaxTemp)
                 }
 
-                if editedItem != nil {
+                if let item = editedItem {
                     Section {
                         GramField(title: "Füllgewicht neue Spule (g)", text: $netWeight)
-                        GramField(title: "Restgewicht (g)", text: $remainingWeight)
-                    } header: {
-                        Text("Gewicht")
-                    } footer: {
-                        Text("Gedruckter Verbrauch wird automatisch vom Restgewicht abgezogen. Ohne Restgewicht wird vom Füllgewicht ausgegangen.")
-                    }
-
-                    Section {
-                        Stepper("Volle Spulen im Vorrat: \(spoolsInStock)", value: $spoolsInStock, in: 0...99)
-                        Button("Neue Spule anbrechen") {
-                            remainingWeight = netWeight
-                            if spoolsInStock > 0 { spoolsInStock -= 1 }
-                        }
-                        .disabled(Self.grams(netWeight) == nil)
-                    } header: {
-                        Text("Vorrat")
-                    } footer: {
-                        Text("Reicht die angebrochene Spule für einen Druck nicht, wird automatisch eine Spule aus dem Vorrat angebrochen.")
-                    }
-
-                    Section {
-                        GramField(title: "Gewogen mit Spule (g)", text: $weighed)
                         GramField(title: "Leere Spule (g)", text: $spoolWeight)
+                        Stepper("Volle Spulen im Vorrat: \(spoolsInStock)", value: $spoolsInStock, in: 0...99)
                     } header: {
-                        Text("Angebrochene Spule wiegen")
+                        Text("Sorte")
                     } footer: {
-                        Text("Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet. Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke.")
+                        Text("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen.")
+                    }
+
+                    if store.backend != nil {
+                        Section {
+                            ForEach(store.spools(of: item.id)) { spool in
+                                NavigationLink {
+                                    SpoolEditView(spool: spool, emptySpoolWeight: Self.grams(spoolWeight))
+                                } label: {
+                                    SpoolRow(spool: spool, location: spool.locationText(printers: store.printers))
+                                }
+                            }
+                            Button {
+                                Task { await openSpool(item) }
+                            } label: {
+                                HStack {
+                                    Text("Neue Spule anbrechen")
+                                    Spacer()
+                                    if isOpeningSpool { ProgressView() }
+                                }
+                            }
+                            .disabled(isOpeningSpool)
+                        } header: {
+                            Text("Angebrochene Spulen")
+                        } footer: {
+                            Text("Schreib die Nummer mit Stift auf die Spule. Gedruckter Verbrauch wird von der Spule abgezogen, die im Drucker an diesem Kopf steckt.")
+                        }
                     }
                 }
 
@@ -182,8 +185,6 @@ struct FilamentFormView: View {
                 await loadConsumption()
                 await suggestSpoolWeight()
             }
-            .onChange(of: weighed) { updateRemainingFromScale() }
-            .onChange(of: spoolWeight) { updateRemainingFromScale() }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
         }
@@ -196,14 +197,27 @@ struct FilamentFormView: View {
 
     private func applyWeights(to item: inout Item) {
         item.netWeight = Self.grams(netWeight)
-        item.remainingWeight = Self.grams(remainingWeight)
         item.spoolWeight = Self.grams(spoolWeight)
         item.spoolsInStock = spoolsInStock
     }
 
-    private func updateRemainingFromScale() {
-        guard let gross = Self.grams(weighed), let empty = Self.grams(spoolWeight) else { return }
-        remainingWeight = Self.gramText(max(0, gross - empty))
+    /// Bricht eine volle Spule an (Platz: Lager). Gewicht und Platz werden danach an der Spule gesetzt.
+    private func openSpool(_ item: Item) async {
+        isOpeningSpool = true
+        defer { isOpeningSpool = false }
+        do {
+            // Eingetragene Werte zuerst speichern (abwarten, damit der Vorrat danach nicht überschrieben wird)
+            var updated = item
+            updated.itemData = filamentData
+            applyWeights(to: &updated)
+            try await store.backend?.importData(BackendSnapshot(containers: [], items: [updated]))
+            try await store.openSpool(itemId: item.id)
+            if let refreshed = store.items.first(where: { $0.id == item.id }) {
+                spoolsInStock = refreshed.spoolsInStock ?? 0
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Leergewicht der Marke aus der SpoolmanDB vorschlagen, wenn noch keins eingetragen ist.
@@ -217,14 +231,9 @@ struct FilamentFormView: View {
         spoolWeight = Self.gramText(match)
     }
 
-    private static func grams(_ text: String) -> Double? {
-        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-    }
+    private static func grams(_ text: String) -> Double? { GramText.parse(text) }
 
-    private static func gramText(_ value: Double?) -> String {
-        guard let value else { return "" }
-        return value.rounded() == value ? String(Int(value)) : String(value)
-    }
+    private static func gramText(_ value: Double?) -> String { GramText.format(value) }
 
     /// Temperaturen aus den Presets übernehmen. Beim Bearbeiten werden nur leere Felder gefüllt.
     private func loadTemperatures() {
@@ -304,6 +313,130 @@ struct FilamentFormView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+}
+
+private struct SpoolRow: View {
+    var spool: Spool
+    var location: String
+
+    var body: some View {
+        HStack {
+            Text("#\(spool.number)").font(.headline).monospacedDigit()
+            Text(location).foregroundStyle(.secondary)
+            Spacer()
+            if let grams = spool.remainingWeight {
+                Text("\(Int(grams.rounded())) g").monospacedDigit()
+            }
+        }
+    }
+}
+
+/// Angebrochene Spule wiegen, einlegen oder als leer markieren.
+private struct SpoolEditView: View {
+    @Environment(ContainerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    let spool: Spool
+    @State private var remaining: String
+    @State private var weighed = ""
+    @State private var emptySpool: String
+    @State private var location: Location
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+
+    /// Platz einer Spule: Lager oder ein Kopf eines Druckers.
+    struct Location: Hashable {
+        var printerId: String?
+        var tool: Int?
+    }
+
+    init(spool: Spool, emptySpoolWeight: Double?) {
+        self.spool = spool
+        _remaining = State(initialValue: GramText.format(spool.remainingWeight))
+        _emptySpool = State(initialValue: GramText.format(emptySpoolWeight))
+        _location = State(initialValue: Location(printerId: spool.printerId, tool: spool.printerId == nil ? nil : spool.tool ?? 0))
+    }
+
+    var body: some View {
+        Form {
+            Section {
+                GramField(title: "Gewogen mit Spule (g)", text: $weighed)
+                GramField(title: "Leere Spule (g)", text: $emptySpool)
+                GramField(title: "Restgewicht (g)", text: $remaining)
+            } header: {
+                Text("Wiegen")
+            } footer: {
+                Text("Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet.")
+            }
+
+            Section("Platz") {
+                Picker("Steckt in", selection: $location) {
+                    Text("Lager").tag(Location(printerId: nil, tool: nil))
+                    ForEach(store.printers) { printer in
+                        ForEach(0..<printer.toolCount, id: \.self) { tool in
+                            Text(printer.toolCount > 1 ? "\(printer.name) Kopf \(tool + 1)" : printer.name)
+                                .tag(Location(printerId: printer.id, tool: tool))
+                        }
+                    }
+                }
+            }
+
+            Section {
+                Button("Speichern") { Task { await save() } }
+                    .disabled(isSaving)
+                Button("Spule ist leer", role: .destructive) { Task { await markEmpty() } }
+                    .disabled(isSaving)
+            } footer: {
+                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("Spule #\(spool.number)")
+        .onChange(of: weighed) { updateFromScale() }
+        .onChange(of: emptySpool) { updateFromScale() }
+    }
+
+    private func updateFromScale() {
+        guard let gross = GramText.parse(weighed), let empty = GramText.parse(emptySpool) else { return }
+        remaining = GramText.format(max(0, gross - empty))
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        var updated = spool
+        updated.remainingWeight = GramText.parse(remaining)
+        updated.printerId = location.printerId
+        updated.tool = location.tool
+        do {
+            try await store.updateSpool(updated)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func markEmpty() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await store.markSpoolEmpty(id: spool.id)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Gramm-Angaben als Text (Komma oder Punkt als Dezimaltrenner).
+private enum GramText {
+    static func parse(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    static func format(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value.rounded() == value ? String(Int(value)) : String(value)
     }
 }
 
