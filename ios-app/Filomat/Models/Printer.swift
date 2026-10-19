@@ -73,6 +73,14 @@ struct PrinterRequest: Encodable {
     var rfidTag: String?
 }
 
+/// Änderungen an einem Drucker. `apiKey` `nil` lässt den Schlüssel, ein leerer Text löscht ihn.
+struct PrinterUpdateRequest: Encodable {
+    var name: String
+    var baseUrl: String
+    var apiKey: String?
+    var enabled: Bool
+}
+
 struct SyncResponse: Decodable {
     var recorded: Int
     var error: String?

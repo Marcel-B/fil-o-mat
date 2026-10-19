@@ -145,7 +145,7 @@ public static class PrinterEndpoints
     }
 
     private static async Task<Results<Ok<PrinterResponse>, NotFound, ValidationProblem>> UpdateAsync(
-        string id, PrinterUpdateRequest request, FilomatDbContext db)
+        string id, PrinterUpdateRequest request, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken)
     {
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
@@ -156,6 +156,7 @@ public static class PrinterEndpoints
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
 
+        var connectionChanged = printer.BaseUrl != baseUrl || request.ApiKey is not null;
         printer.Name = name;
         printer.BaseUrl = baseUrl;
         printer.Enabled = request.Enabled;
@@ -163,6 +164,9 @@ public static class PrinterEndpoints
             printer.ApiKey = request.ApiKey.Trim().Length == 0 ? null : request.ApiKey.Trim();
         if (await db.Containers.FindAsync(printer.ContainerId) is { } container) container.Name = name;
         await db.SaveChangesAsync();
+        // Neue Adresse oder neuer Schlüssel (z. B. nach einer neuen IP per DHCP) gleich ausprobieren,
+        // damit der alte Fehler nicht stehen bleibt
+        if (connectionChanged && printer.Enabled) await sync.SyncAsync(printer, cancellationToken);
         return TypedResults.Ok(PrinterResponse.From(printer));
     }
 

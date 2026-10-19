@@ -185,6 +185,39 @@ public class PrinterTests : IDisposable
     }
 
     [Fact]
+    public async Task ChangingAddressSyncsAgainAndKeepsKey()
+    {
+        var printer = await CreatePrinterAsync("geheim");
+        _moonraker.Status = HttpStatusCode.Unauthorized;
+        await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
+        _moonraker.Status = HttpStatusCode.OK;
+        _moonraker.Requests.Clear();
+
+        var response = await _client.PutAsJsonAsync($"/api/printers/{printer.Id}",
+            new PrinterUpdateRequest("Voron", "http://192.168.2.97:7125", null, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var updated = (await response.Content.ReadFromJsonAsync<PrinterResponse>())!;
+
+        Assert.Equal("http://192.168.2.97:7125", updated.BaseUrl);
+        Assert.True(updated.HasApiKey);
+        Assert.Null(updated.LastSyncError);
+        Assert.Contains(_moonraker.Requests, r => r.RequestUri!.Host == "192.168.2.97");
+        Assert.Equal("Voron", (await _client.GetFromJsonAsync<Container>($"/api/containers/{printer.ContainerId}"))!.Name);
+    }
+
+    [Fact]
+    public async Task RenamingDoesNotSync()
+    {
+        var printer = await CreatePrinterAsync();
+        _moonraker.Requests.Clear();
+
+        var response = await _client.PutAsJsonAsync($"/api/printers/{printer.Id}",
+            new PrinterUpdateRequest("Voron", printer.BaseUrl, null, true));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Empty(_moonraker.Requests);
+    }
+
+    [Fact]
     public async Task PrinterContainerCannotBeDeletedButPrinterCan()
     {
         var printer = await CreatePrinterAsync();

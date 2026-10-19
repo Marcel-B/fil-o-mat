@@ -51,6 +51,10 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
         decode(send("POST", "api/printers", json.encodeToString(request)))
     }
 
+    suspend fun updatePrinter(id: String, request: PrinterUpdateRequest): Printer = io {
+        decode(send("PUT", "api/printers/${path(id)}", json.encodeToString(request)))
+    }
+
     suspend fun deletePrinter(id: String) = io { send("DELETE", "api/printers/${path(id)}", allowNotFound = true); Unit }
 
     suspend fun syncPrinter(id: String): SyncResponse = io { decode(send("POST", "api/printers/${path(id)}/sync")) }

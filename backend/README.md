@@ -49,7 +49,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | DELETE | `/api/items/{id}` | Filament löschen |
 | GET | `/api/printers` · `/api/printers/{id}` | Drucker mit Stand des letzten Abgleichs |
 | POST | `/api/printers` | Drucker anlegen, legt seinen Container mit an |
-| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv |
+| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv; neue Adresse oder neuer Schlüssel gleicht sofort ab |
 | DELETE | `/api/printers/{id}` | Drucker und Container entfernen; Spulen wandern nach „Lose“ |
 | POST | `/api/printers/{id}/sync` | Sofort abgleichen |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
