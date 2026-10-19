@@ -83,6 +83,8 @@ PrusaLink hat keine Druckhistorie. Das Backend merkt sich deshalb bei jedem Abgl
 
 Anycubic-Drucker werden im LAN-Modus abgefragt (am Drucker Einstellungen > Netzwerk > LAN-Modus; die Anycubic-Cloud und die App sind dann aus, Anycubic Slicer Next druckt weiter im LAN). Der Drucker gibt über `:18910/info` und eine signierte Anfrage Zugangsdaten für seinen MQTT-Broker (TLS, Port 9883) heraus, die bei jedem Abgleich neu geholt werden; Ablauf nach [anycubic-lan](https://github.com/Nino6689/anycubic-lan/blob/main/docs/PROTOCOL.md). Eine Historie gibt es nicht, aber der laufende Druck meldet die tatsächlich geförderte Länge (`supplies_usage`, mm, inklusive Spülen). Das Backend verfolgt den Druck und rechnet jeden Zuwachs zwischen zwei Abgleichen dem ACE-Slot zu, der beim vorigen Abgleich förderte (Slots über alle ACE-Einheiten gezählt, Einheit · 4 + Slot). Bei Mehrfarbdrucken ist die Aufteilung deshalb nur so genau wie das Abgleich-Intervall. Gramm über die Dichte des Materials, das die ACE für den Slot meldet. Gebucht wird auf die Spule, die in der App an diesem Slot eingelegt ist; ohne ACE auf die Spule im Drucker.
 
+Der Kobra X meldet seinen eingebauten Vierer als Einheit -1. Dann zählen die Slots ab ihm: eingebaut 0–3, erste externe ACE 4–7 (in der App Slot 1–4 und 5–8). Der eingebaute Slot, der zur externen ACE durchreicht (`edit_status` 3), fördert nie selbst. Welcher Slot gerade fördert, liest der Adapter aus `loaded_slot`; der Kobra X hat mehrere Slots zugleich im Kopf eingezogen, daher gilt Status 5 nur, wenn es genau ein Slot ist. `last_project` des Kobra X hat kein `print_status`, nur `state` (`finished`).
+
 Bambu LAN folgt.
 
 ### Tags auf Musterplättchen

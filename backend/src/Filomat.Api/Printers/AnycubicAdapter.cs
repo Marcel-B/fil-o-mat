@@ -24,6 +24,8 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
     /// <param name="Slot">Slot, der beim letzten Abgleich förderte.</param>
     /// <param name="MmPerSlot">Bisher pro Slot zugerechnete Länge.</param>
     /// <param name="SlotTypes">Material pro Slot für die Umrechnung in Gramm.</param>
+    /// <param name="Provisional">Der Drucker hat noch keine Auftragsnummer gemeldet; <see cref="JobId"/> ist selbst vergeben.</param>
+    /// <param name="State">Zuletzt gemeldeter Zustand des Drucks.</param>
     public record TrackedJob(
         string JobId,
         string Name,
@@ -31,7 +33,9 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         double UsageMm,
         int? Slot,
         Dictionary<int, double> MmPerSlot,
-        Dictionary<int, string> SlotTypes);
+        Dictionary<int, string> SlotTypes,
+        bool Provisional = false,
+        string? State = null);
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
@@ -50,26 +54,40 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
             {
                 report.Info.TryGetProperty("last_project", out var last);
                 var status = (string?)null;
-                if (last.ValueKind == JsonValueKind.Object && JobIdOf(last) == tracked.JobId)
+                if (last.ValueKind == JsonValueKind.Object && (JobIdOf(last) == tracked.JobId || tracked.Provisional && JobIdOf(last) is null))
                 {
                     tracked = Advance(tracked, last, ace);
                     status = StatusOf(last);
                 }
-                finished.Add(Finish(printer, tracked, status ?? (tracked.Progress >= 99.5 ? "completed" : "cancelled")));
+                finished.Add(Finish(printer, tracked, status ?? Ended(tracked)));
             }
             printer.AdapterStateJson = null;
             return finished;
         }
 
+        // Beim Aufheizen meldet der Kobra X task_id -1; bis eine echte Nummer kommt, gilt eine eigene
         var jobId = JobIdOf(project);
-        if (jobId is null) return finished;
-        if (tracked is not null && tracked.JobId != jobId)
+        if (jobId is null)
         {
-            finished.Add(Finish(printer, tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled"));
+            if (tracked is { Provisional: false })
+            {
+                finished.Add(Finish(printer, tracked, Ended(tracked)));
+                tracked = null;
+            }
+            tracked ??= new TrackedJob($"local-{DateTime.UtcNow:yyyyMMddHHmmss}", NameOf(project), 0, 0, null, [], [], Provisional: true);
+        }
+        else if (tracked is { Provisional: true })
+        {
+            tracked = tracked with { JobId = jobId, Provisional = false };
+        }
+        else if (tracked is not null && tracked.JobId != jobId)
+        {
+            finished.Add(Finish(printer, tracked, Ended(tracked)));
             tracked = null;
         }
 
-        var current = Advance(tracked ?? new TrackedJob(jobId, NameOf(project), 0, 0, null, [], []), project, ace);
+        var current = Advance(tracked ?? new TrackedJob(jobId!, NameOf(project), 0, 0, null, [], []), project, ace);
+        if (current.Name.Length == 0) current = current with { Name = NameOf(project) };
         if (StatusOf(project) is { } done)
         {
             finished.Add(Finish(printer, current, done));
@@ -100,6 +118,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
 
         return job with
         {
+            State = project.GetStringOrNull("state") ?? job.State,
             Progress = Math.Max(job.Progress, project.GetDoubleOrNull("progress") ?? 0),
             UsageMm = Math.Max(usage, job.UsageMm),
             Slot = ace.LoadedSlot ?? job.Slot,
@@ -142,18 +161,34 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
             SlicedLengthPerFilament: lengths);
     }
 
-    /// <summary><c>print_status</c> 2 = fertig, 3 = abgebrochen; alles andere (auch die 0 des Kobra X) läuft noch.</summary>
+    /// <summary>
+    /// <c>print_status</c> 2 = fertig, 3 = abgebrochen; alles andere (auch die 0 des Kobra X) läuft noch.
+    /// <c>last_project</c> des Kobra X hat kein <c>print_status</c>, nur <c>state</c>.
+    /// </summary>
     private static string? StatusOf(JsonElement project) => project.GetDoubleOrNull("print_status") switch
     {
         2 => "completed",
         3 => "cancelled",
-        _ => null,
+        _ => project.GetStringOrNull("state") switch
+        {
+            "finished" => "completed",
+            "canceled" or "cancelled" or "stopped" => "cancelled",
+            _ => null,
+        },
     };
 
+    /// <summary>
+    /// Ein Druck, der ohne Abschlussmeldung verschwindet: fertig, wenn er fast durch war oder schon abkühlte. Der
+    /// Kobra X bleibt am Ende bei 99 % und meldet danach in <c>last_project</c> noch den Druck davor.
+    /// </summary>
+    private static string Ended(TrackedJob job) =>
+        job.Progress >= 99 || job.State is "nozzle_cooling_off" or "finished" ? "completed" : "cancelled";
+
+    /// <summary>Auftragsnummer des Druckers; 0 und -1 (Kobra X beim Aufheizen) zählen nicht.</summary>
     private static string? JobIdOf(JsonElement project)
     {
-        var taskId = project.GetStringOrNull("task_id");
-        return taskId is not (null or "0") ? taskId : project.GetStringOrNull("localtask");
+        if (project.GetDoubleOrNull("task_id") is > 0) return project.GetStringOrNull("task_id");
+        return project.GetStringOrNull("localtask") is { Length: > 0 } local ? local : null;
     }
 
     private static string NameOf(JsonElement project) =>
@@ -162,28 +197,53 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
     /// <summary>Slots der ACE-Einheiten: Anzahl, förderndem Slot und Material.</summary>
     public record AceState(int SlotCount, int? LoadedSlot, Dictionary<int, string> Types);
 
+    /// <summary><c>edit_status</c> eines Slots, der nur zu einer weiteren ACE durchreicht (Kobra X).</summary>
+    private const int LinkedSlot = 3;
+
+    /// <summary>
+    /// Slots über alle Einheiten: Einheit · 4 + Slot. Der Kobra X meldet seinen eingebauten Vierer als Einheit -1;
+    /// dann zählen alle Einheiten um eins verschoben (eingebaut 0–3, erste externe ACE 4–7). Ein eingebauter
+    /// Slot mit <c>edit_status</c> 3 reicht zur externen ACE durch und fördert nie selbst.
+    /// </summary>
     public static AceState ReadAce(JsonElement? boxes)
     {
         var types = new Dictionary<int, string>();
         if (boxes is not { ValueKind: JsonValueKind.Array } list) return new AceState(0, null, types);
 
+        var all = list.EnumerateArray().Where(b => b.ValueKind == JsonValueKind.Object).ToList();
+        if (all.Count == 0) return new AceState(0, null, types);
+        var ids = all.Select(b => (int)(b.GetDoubleOrNull("id") ?? 0)).ToList();
+        var offset = -Math.Min(0, ids.Min());
+
         int count = 0;
-        int? loaded = null, loadedByStatus = null;
-        foreach (var box in list.EnumerateArray())
+        int? loaded = null;
+        var loadedByStatus = new List<int>();
+        var linked = new HashSet<int>();
+        for (var b = 0; b < all.Count; b++)
         {
-            var id = (int)(box.GetDoubleOrNull("id") ?? 0);
-            count = Math.Max(count, (id + 1) * SlotsPerBox);
-            if (box.GetDoubleOrNull("loaded_slot") is double slot && slot >= 0) loaded ??= id * SlotsPerBox + (int)slot;
-            if (!box.TryGetProperty("slots", out var slots) || slots.ValueKind != JsonValueKind.Array) continue;
-            foreach (var s in slots.EnumerateArray())
+            var box = all[b];
+            var first = (ids[b] + offset) * SlotsPerBox;
+            count = Math.Max(count, first + SlotsPerBox);
+            if (box.TryGetProperty("slots", out var slots) && slots.ValueKind == JsonValueKind.Array)
             {
-                var index = id * SlotsPerBox + (int)(s.GetDoubleOrNull("index") ?? 0);
-                if (s.GetStringOrNull("type") is { Length: > 0 } type) types[index] = type;
-                // Status 5 = eingezogen; beim S1 steht loaded_slot dann oft auf -1
-                if (s.GetDoubleOrNull("status") == 5) loadedByStatus ??= index;
+                foreach (var s in slots.EnumerateArray())
+                {
+                    var index = first + (int)(s.GetDoubleOrNull("index") ?? 0);
+                    if (s.GetDoubleOrNull("edit_status") == LinkedSlot)
+                    {
+                        linked.Add(index);
+                        continue;
+                    }
+                    if (s.GetStringOrNull("type") is { Length: > 0 } type) types[index] = type;
+                    if (s.GetDoubleOrNull("status") == 5) loadedByStatus.Add(index);
+                }
             }
+            if (box.GetDoubleOrNull("loaded_slot") is double slot && slot >= 0 && !linked.Contains(first + (int)slot))
+                loaded ??= first + (int)slot;
         }
-        return new AceState(count, loaded ?? loadedByStatus, types);
+        // Status 5 = eingezogen; nur eindeutig, wenn es genau ein Slot ist (der Kobra X hat mehrere zugleich im Kopf)
+        if (loaded is null && loadedByStatus.Count == 1) loaded = loadedByStatus[0];
+        return new AceState(count, loaded, types);
     }
 
     private static TrackedJob? ReadTracked(Printer printer)
