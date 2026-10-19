@@ -23,6 +23,9 @@ struct PlaceFlowView: View {
                 choiceSection
             }
             if model.step == .chooseTarget {
+                if model.asksForWeight {
+                    weightSection
+                }
                 switch model.target {
                 case .container: containerSection
                 case .printer: printerSection
@@ -133,6 +136,23 @@ struct PlaceFlowView: View {
                 ? "Aus dem Vorrat (\(stock) \(stock == 1 ? "Spule" : "Spulen"))"
                 : "Im Vorrat ist keine Spule mehr eingetragen"
         }
+    }
+
+    // MARK: Gewicht der Spule
+
+    private var weightSection: some View {
+        @Bindable var model = model
+        return Section {
+            GramField(title: "Gewogen mit Spule (g)", text: $model.weighed)
+            GramField(title: "Leere Spule (g)", text: $model.emptySpool)
+            GramField(title: "Restgewicht (g)", text: $model.remaining)
+        } header: {
+            Text("Gewicht")
+        } footer: {
+            Text("Wiegen ist optional. Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet.")
+        }
+        .onChange(of: model.weighed) { model.scaleChanged() }
+        .onChange(of: model.emptySpool) { model.scaleChanged() }
     }
 
     // MARK: Schritt 3: Ziel
