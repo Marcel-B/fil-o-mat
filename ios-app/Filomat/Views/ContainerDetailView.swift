@@ -49,7 +49,15 @@ struct ContainerDetailView: View {
                                 Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
                             } label: {
                                 Text(printer.placeName(tool: tool))
-                                Text("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)")
+                                // Farbe dazu: zwei Sorten gleicher Marke und Art unterscheiden sich sonst nicht
+                                let item = store.item(id: spool.itemId)
+                                HStack(spacing: 6) {
+                                    ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
+                                    Text([item?.displayTitle ?? "Filament", item?.itemData?.color]
+                                        .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") + " #\(spool.number)")
+                                }
+                                .font(.subheadline)
+                                .foregroundStyle(.secondary)
                             }
                         } else {
                             LabeledContent(printer.placeName(tool: tool), value: "frei")
