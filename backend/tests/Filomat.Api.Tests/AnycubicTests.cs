@@ -211,6 +211,47 @@ public class AnycubicTests : IDisposable
     }
 
     [Fact]
+    public async Task FollowsAPrintThatStartsWithoutATaskId()
+    {
+        _printer.Boxes = KobraXBoxes.Replace("\"id\":-1,\"loaded_slot\":-1", "\"id\":-1,\"loaded_slot\":0");
+        var printer = await CreatePrinterAsync();
+        var white = await PlaceSpoolAsync("W", printer.Id, 0);
+
+        // Kobra X beim Aufheizen: task_id -1, noch nichts gefördert
+        _printer.Info = FakeAnycubic.Printing("""{"task_id":-1,"state":"nozzle_heating","progress":0,"supplies_usage":0}""");
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Info = FakeAnycubic.Printing("""{"task_id":-1,"state":"printing","progress":5,"supplies_usage":300,"filename":"cube.gcode"}""");
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Info = FakeAnycubic.Printing(FakeAnycubic.Project(555, 900, 50, 0));
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Info = FakeAnycubic.Idle("""{"task_id":555,"state":"finished","progress":1,"supplies_usage":1500}""");
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal(1000 - Grams(1500), await RemainingAsync(white.Id), 2);
+        var consumption = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("555", consumption.JobId);
+        Assert.Equal("cube", consumption.JobName);
+    }
+
+    [Fact]
+    public async Task BooksPrintsThatNeverGetATaskIdSeparately()
+    {
+        var printer = await CreatePrinterAsync();
+        var spool = await PlaceSpoolAsync("S", printer.Id, 0);
+
+        foreach (var usage in new[] { 400, 700 })
+        {
+            _printer.Info = FakeAnycubic.Printing($$"""{"task_id":-1,"state":"printing","progress":50,"supplies_usage":{{usage / 2}}}""");
+            await SyncAsync(printer.Id);
+            _printer.Info = FakeAnycubic.Idle($$"""{"task_id":-1,"state":"finished","progress":1,"supplies_usage":{{usage}}}""");
+            Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+            await Task.Delay(1100);
+        }
+
+        Assert.Equal(1000 - Grams(400) - Grams(700), await RemainingAsync(spool.Id), 1);
+    }
+
+    [Fact]
     public async Task UsesTheStateOfTheKobraXLastProject()
     {
         _printer.Boxes = KobraXBoxes.Replace("\"id\":0,\"loaded_slot\":-1", "\"id\":0,\"loaded_slot\":1");
