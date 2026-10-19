@@ -46,6 +46,24 @@ struct ContainerDetailView: View {
                 }
             }
 
+            // Der Container eines Druckers: was in seinen Köpfen oder Slots steckt
+            if let printer = store.printer(owningContainer: container.id) {
+                Section("Im Drucker") {
+                    ForEach(0..<printer.toolCount, id: \.self) { tool in
+                        if let spool = store.spool(inPrinter: printer.id, tool: tool) {
+                            LabeledContent {
+                                Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                            } label: {
+                                Text(printer.placeName(tool: tool))
+                                Text("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)")
+                            }
+                        } else {
+                            LabeledContent(printer.placeName(tool: tool), value: "frei")
+                        }
+                    }
+                }
+            }
+
             let spools = store.spools(inContainer: container.id)
             if !spools.isEmpty {
                 Section("Angebrochene Spulen (\(spools.count))") {
