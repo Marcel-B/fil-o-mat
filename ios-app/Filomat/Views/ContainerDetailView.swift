@@ -45,12 +45,13 @@ struct ContainerDetailView: View {
                 Section("Im Drucker") {
                     ForEach(0..<printer.toolCount, id: \.self) { tool in
                         if let spool = store.spool(inPrinter: printer.id, tool: tool) {
+                            let item = store.item(id: spool.itemId)
                             LabeledContent {
-                                Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                                // Ohne Restgewicht rechnet das Backend mit einer vollen Spule der Sorte
+                                Text((spool.remainingWeight ?? item?.netWeight).map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
                             } label: {
                                 Text(printer.placeName(tool: tool))
                                 // Farbe dazu: zwei Sorten gleicher Marke und Art unterscheiden sich sonst nicht
-                                let item = store.item(id: spool.itemId)
                                 HStack(spacing: 6) {
                                     ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
                                     Text([item?.displayTitle ?? "Filament", item?.itemData?.color]

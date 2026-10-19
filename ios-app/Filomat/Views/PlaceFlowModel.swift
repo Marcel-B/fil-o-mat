@@ -106,7 +106,7 @@ final class PlaceFlowModel {
         weighed = ""
         emptySpool = GramText.format(item?.spoolWeight)
         switch choice {
-        case .spool(let id): remaining = GramText.format(store.spools.first { $0.id == id }?.remainingWeight)
+        case .spool(let id): remaining = GramText.format(store.spools.first { $0.id == id }?.remainingWeight ?? item?.netWeight)
         case .newSpool: remaining = GramText.format(item?.netWeight)
         case .stock: remaining = ""
         }
