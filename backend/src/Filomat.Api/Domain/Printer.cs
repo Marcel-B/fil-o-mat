@@ -11,6 +11,9 @@ public enum PrinterType
 
     /// <summary>Prusa MK4, Core One, Mini, XL über PrusaLink; mit MMU3 pro Slot.</summary>
     PrusaLink,
+
+    /// <summary>Anycubic Kobra X, S1, 3, 4 im LAN-Modus (MQTT); mit ACE pro Slot.</summary>
+    Anycubic,
 }
 
 /// <summary>Konfigurierter Drucker. Jeder Drucker hat einen eigenen Container für die eingelegten Spulen.</summary>

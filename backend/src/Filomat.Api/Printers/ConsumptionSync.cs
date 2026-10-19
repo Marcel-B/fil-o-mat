@@ -49,7 +49,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
             if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException)
         {
             logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
             printer.LastSyncError = ex.Message;

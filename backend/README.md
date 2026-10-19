@@ -49,7 +49,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | DELETE | `/api/items/{id}` | Filament löschen |
 | GET | `/api/printers` · `/api/printers/{id}` | Drucker mit Stand des letzten Abgleichs |
 | POST | `/api/printers` | Drucker anlegen, legt seinen Container mit an |
-| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv |
+| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv; neue Adresse oder neuer Schlüssel gleicht sofort ab |
 | DELETE | `/api/printers/{id}` | Drucker und Container entfernen; Spulen wandern nach „Lose“ |
 | POST | `/api/printers/{id}/sync` | Sofort abgleichen |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
@@ -75,12 +75,17 @@ Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (
 | `Moonraker` | Klipper, z. B. Voron | `http://<drucker>:7125` (oder über Fluidd/Mainsail-Port); `apiKey` nur bei aktivierter Moonraker-Authentifizierung |
 | `SnapmakerU1` | Snapmaker U1 mit paxx12-Firmware | `http://<drucker>` |
 | `PrusaLink` | Prusa MK4, Core One, Mini, XL | `http://<drucker>`; `apiKey` aus Einstellungen > Netzwerk > PrusaLink am Drucker |
+| `Anycubic` | Anycubic Kobra X, S1, 3, 4 im LAN-Modus | `http://<drucker>` (Port 18910 wird ergänzt); kein Schlüssel |
 
 Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das Backend bucht daher jeden Kopf einzeln auf die Spule mit diesem Tag, verschiebt erkannte Spulen automatisch in den Drucker-Container und verwendet die Spulen, die beim vorigen Abgleich eingelegt waren (also während des Drucks). Grundlage sind die Slicer-Angaben pro Filament (`filament_weight`, z. B. OrcaSlicer), bei abgebrochenen Drucken anteilig.
 
 PrusaLink hat keine Druckhistorie. Das Backend merkt sich deshalb bei jedem Abgleich den laufenden Druck und bucht ihn, sobald er beendet ist oder der Drucker keinen Druck mehr meldet (abgebrochene Drucke anteilig nach Fortschritt). Ist ein Druck schon vom Display verschwunden, bevor der nächste Abgleich (alle zwei Minuten) ihn als beendet sieht, wird nach dem zuletzt gesehenen Fortschritt gebucht; ab 99,5 % gilt er als fertig. Mit MMU3 kommen die Slicer-Werte pro Slot; gebucht wird jeweils auf die Spule, die in der App an diesem Slot eingelegt ist.
 
-Weitere Typen (Bambu LAN, Anycubic) folgen.
+Anycubic-Drucker werden im LAN-Modus abgefragt (am Drucker Einstellungen > Netzwerk > LAN-Modus; die Anycubic-Cloud und die App sind dann aus, Anycubic Slicer Next druckt weiter im LAN). Der Drucker gibt über `:18910/info` und eine signierte Anfrage Zugangsdaten für seinen MQTT-Broker (TLS, Port 9883) heraus, die bei jedem Abgleich neu geholt werden; Ablauf nach [anycubic-lan](https://github.com/Nino6689/anycubic-lan/blob/main/docs/PROTOCOL.md). Eine Historie gibt es nicht, aber der laufende Druck meldet die tatsächlich geförderte Länge (`supplies_usage`, mm, inklusive Spülen). Das Backend verfolgt den Druck und rechnet jeden Zuwachs zwischen zwei Abgleichen dem ACE-Slot zu, der beim vorigen Abgleich förderte (Slots über alle ACE-Einheiten gezählt, Einheit · 4 + Slot). Bei Mehrfarbdrucken ist die Aufteilung deshalb nur so genau wie das Abgleich-Intervall. Gramm über die Dichte des Materials, das die ACE für den Slot meldet. Gebucht wird auf die Spule, die in der App an diesem Slot eingelegt ist; ohne ACE auf die Spule im Drucker.
+
+Der Kobra X meldet seinen eingebauten Vierer als Einheit -1. Dann zählen die Slots ab ihm: eingebaut 0–3, erste externe ACE 4–7 (in der App Slot 1–4 und 5–8). Der eingebaute Slot, der zur externen ACE durchreicht (`edit_status` 3), fördert nie selbst. Welcher Slot gerade fördert, liest der Adapter aus `loaded_slot`; der Kobra X hat mehrere Slots zugleich im Kopf eingezogen, daher gilt Status 5 nur, wenn es genau ein Slot ist. `last_project` des Kobra X hat kein `print_status`, nur `state` (`finished`).
+
+Bambu LAN folgt.
 
 ### Tags auf Musterplättchen
 

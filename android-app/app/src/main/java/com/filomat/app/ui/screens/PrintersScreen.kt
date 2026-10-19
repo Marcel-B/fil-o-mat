@@ -23,12 +23,13 @@ import androidx.navigation.NavController
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.sync.Printer
 import com.filomat.app.data.sync.PrinterRequest
+import com.filomat.app.data.sync.PrinterUpdateRequest
 import com.filomat.app.data.sync.PrinterType
 import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
 import kotlinx.coroutines.launch
 
-/** Drucker im Backend: anlegen, abgleichen, entfernen. */
+/** Drucker im Backend: anlegen, bearbeiten, abgleichen, entfernen. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun PrintersScreen(navController: NavController) {
@@ -40,6 +41,7 @@ fun PrintersScreen(navController: NavController) {
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showingAdd by remember { mutableStateOf(false) }
     var printerToDelete by remember { mutableStateOf<Printer?>(null) }
+    var printerToEdit by remember { mutableStateOf<Printer?>(null) }
     var syncingId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
 
@@ -120,6 +122,7 @@ fun PrintersScreen(navController: NavController) {
                             syncingId = null
                         }
                     },
+                    onEdit = { printerToEdit = printer },
                     onDelete = { printerToDelete = printer }
                 )
             }
@@ -127,7 +130,14 @@ fun PrintersScreen(navController: NavController) {
     }
 
     if (showingAdd) {
-        AddPrinterDialog(store = store, onDismiss = { showingAdd = false })
+        PrinterDialog(store = store, printer = null, onDismiss = { showingAdd = false })
+    }
+
+    printerToEdit?.let { printer ->
+        PrinterDialog(store = store, printer = printer, onDismiss = {
+            printerToEdit = null
+            load()
+        })
     }
 
     printerToDelete?.let { printer ->
@@ -167,13 +177,15 @@ private fun EmptyHint(title: String, text: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit, onDelete: () -> Unit) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
+    Card(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(printer.name, style = MaterialTheme.typography.titleMedium)
                 Text(
+                    (if (printer.enabled) "" else "Pausiert · ") +
                     if (printer.toolCount > 1) "${printer.typeTitle} · ${printer.toolCount} Köpfe · ${printer.baseUrl}"
                     else "${printer.typeTitle} · ${printer.baseUrl}",
                     style = MaterialTheme.typography.bodySmall,
@@ -210,13 +222,16 @@ private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
+/** Neuer Drucker ([printer] ist `null`) oder Änderungen an einem vorhandenen, z. B. eine neue IP nach DHCP. */
+private fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
-    var name by remember { mutableStateOf("") }
-    var type by remember { mutableStateOf(PrinterType.SNAPMAKER_U1) }
+    var name by remember { mutableStateOf(printer?.name ?: "") }
+    var type by remember { mutableStateOf(printer?.printerType ?: PrinterType.SNAPMAKER_U1) }
     var typeExpanded by remember { mutableStateOf(false) }
-    var baseUrl by remember { mutableStateOf("") }
+    var baseUrl by remember { mutableStateOf(printer?.baseUrl ?: "") }
     var apiKey by remember { mutableStateOf("") }
+    var removeApiKey by remember { mutableStateOf(false) }
+    var enabled by remember { mutableStateOf(printer?.enabled ?: true) }
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
@@ -224,7 +239,7 @@ private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Drucker hinzufügen") },
+        title = { Text(if (printer == null) "Drucker hinzufügen" else "Drucker bearbeiten") },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
@@ -235,7 +250,16 @@ private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
-                ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
+                if (printer != null) {
+                    OutlinedTextField(
+                        value = printer.typeTitle,
+                        onValueChange = {},
+                        readOnly = true,
+                        enabled = false,
+                        label = { Text("Typ") },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                } else ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
                     OutlinedTextField(
                         value = type.title,
                         onValueChange = {},
@@ -267,11 +291,20 @@ private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = apiKey,
                     onValueChange = { apiKey = it },
-                    label = { Text("API-Schlüssel (optional)") },
+                    label = {
+                        Text(if (printer?.hasApiKey == true) "Neuer API-Schlüssel (leer = unverändert)" else "API-Schlüssel (optional)")
+                    },
                     singleLine = true,
+                    enabled = !removeApiKey,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
+                if (printer?.hasApiKey == true) {
+                    SwitchRow("API-Schlüssel entfernen", removeApiKey) { removeApiKey = it }
+                }
+                if (printer != null) {
+                    SwitchRow("Automatisch abgleichen", enabled) { enabled = it }
+                }
                 Text(type.setupHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isSaving) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -284,14 +317,26 @@ private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
                 errorMessage = null
                 scope.launch {
                     try {
-                        client.createPrinter(
-                            PrinterRequest(
-                                name = name.trim(),
-                                type = type.raw,
-                                baseUrl = baseUrl.trim(),
-                                apiKey = apiKey.trim().ifEmpty { null }
+                        if (printer != null) {
+                            client.updatePrinter(
+                                printer.id,
+                                PrinterUpdateRequest(
+                                    name = name.trim(),
+                                    baseUrl = baseUrl.trim(),
+                                    apiKey = if (removeApiKey) "" else apiKey.trim().ifEmpty { null },
+                                    enabled = enabled
+                                )
                             )
-                        )
+                        } else {
+                            client.createPrinter(
+                                PrinterRequest(
+                                    name = name.trim(),
+                                    type = type.raw,
+                                    baseUrl = baseUrl.trim(),
+                                    apiKey = apiKey.trim().ifEmpty { null }
+                                )
+                            )
+                        }
                         store.refresh()
                         onDismiss()
                     } catch (e: Exception) {
@@ -299,8 +344,16 @@ private fun AddPrinterDialog(store: ContainerStore, onDismiss: () -> Unit) {
                     }
                     isSaving = false
                 }
-            }) { Text("Hinzufügen") }
+            }) { Text(if (printer == null) "Hinzufügen" else "Sichern") }
         },
         dismissButton = { TextButton(enabled = !isSaving, onClick = onDismiss) { Text("Abbrechen") } }
     )
+}
+
+@Composable
+private fun SwitchRow(label: String, checked: Boolean, onChange: (Boolean) -> Unit) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Text(label, modifier = Modifier.weight(1f))
+        Switch(checked = checked, onCheckedChange = onChange)
+    }
 }
