@@ -34,8 +34,13 @@ data class TagReading(
     val records: List<TagRecord> = emptyList(),
     /** Gelesene Filamentdaten, wenn ein JSON-Record vorhanden war. */
     val contents: TagContents? = null,
-    val error: String? = null
-)
+    val error: String? = null,
+    /** Kennung beim Scannen, falls sie nicht die UID ist (Tag mit reinem Text statt Filamentdaten). */
+    val textId: String? = null
+) {
+    /** Kennungen, unter denen die App den Tag kennen kann. */
+    val ids: List<String> get() = listOfNotNull(textId, uid)
+}
 
 /** Ein Feld aus dem JSON des Tags mit deutscher Bezeichnung, falls bekannt. */
 data class TagField(val key: String, val label: String, val value: String)
@@ -111,3 +116,6 @@ data class TagContents(
         }
     }
 }
+
+/** Ein gescannter Tag: Kennung, Filamentdaten (falls vorhanden) und ein Lesefehler. */
+data class ScannedTag(val tagId: String, val itemData: ItemJsonData? = null, val parseError: String? = null)

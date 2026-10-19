@@ -16,6 +16,7 @@ import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
 import com.filomat.app.data.sync.Snapshot
 import com.filomat.app.data.sync.Spool
+import com.filomat.app.data.sync.SpoolPlace
 import com.filomat.app.data.sync.SpoolUpdate
 import com.filomat.app.data.sync.StoreState
 import com.filomat.app.data.sync.toSnapshot
@@ -277,11 +278,22 @@ class ContainerStore private constructor(context: Context) {
         refresh()
     }
 
+    /** Bricht eine volle Spule der Sorte an und legt sie gleich an [place]; liefert die neue Spule (mit Nummer). */
+    suspend fun openSpool(itemId: String, place: SpoolPlace): Spool? {
+        val client = backend ?: return null
+        val spool = client.openSpool(itemId, SpoolUpdate(printerId = place.printerId, tool = place.tool, containerId = place.containerId))
+        refresh()
+        return spool
+    }
+
     suspend fun updateSpool(spool: Spool) {
         val client = backend ?: return
-        client.updateSpool(spool.id, SpoolUpdate(spool.remainingWeight, spool.printerId, spool.tool))
+        client.updateSpool(spool.id, SpoolUpdate(spool.remainingWeight, spool.printerId, spool.tool, spool.containerId))
         refresh()
     }
+
+    /** Legt eine angebrochene Spule an einen anderen Platz; was dort im Drucker steckte, wandert ins Lager. */
+    suspend fun placeSpool(spool: Spool, place: SpoolPlace) = updateSpool(spool.movedTo(place))
 
     suspend fun markSpoolEmpty(spoolId: String) {
         val client = backend ?: return
@@ -383,7 +395,7 @@ class ContainerStore private constructor(context: Context) {
     }
 
     companion object {
-        const val PRINTER_ID = "standard_drucker"
+        const val PRINTER_ID = StoreState.PRINTER_CONTAINER_ID
         const val LOOSE_ID = "standard_lose"
 
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; coerceInputValues = true }

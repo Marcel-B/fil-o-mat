@@ -5,7 +5,12 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
+import com.filomat.app.data.PlaceTarget
 import com.filomat.app.ui.screens.BackendScreen
+import com.filomat.app.ui.screens.ContainerScanScreen
+import com.filomat.app.ui.screens.PlaceFlowScreen
+import com.filomat.app.ui.screens.StockScreen
+import com.filomat.app.ui.screens.TransmissionScreen
 import com.filomat.app.ui.screens.ContainerDetailScreen
 import com.filomat.app.ui.screens.ContainerListScreen
 import com.filomat.app.ui.screens.ItemDetailScreen
@@ -35,6 +40,19 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
         composable("read") {
             TagReadScreen(navController = navController)
+        }
+        composable("scan/container") {
+            ContainerScanScreen(navController = navController)
+        }
+        composable("scan/place/{target}") { backStackEntry ->
+            val target = if (backStackEntry.arguments?.getString("target") == "printer") PlaceTarget.PRINTER else PlaceTarget.CONTAINER
+            PlaceFlowScreen(target = target, navController = navController)
+        }
+        composable("scan/transmission") {
+            TransmissionScreen(navController = navController)
+        }
+        composable("stock") {
+            StockScreen(navController = navController)
         }
         composable("items") {
             ItemsOverviewScreen(navController = navController)

@@ -168,6 +168,56 @@ class NFCReader(private val activity: Activity) {
         )
     }
 
+    /**
+     * Scannt einen Tag für die Abläufe im Scannen-Tab: die Kennung (wie beim bisherigen Scannen die UID, bei einem
+     * reinen Text-Tag dessen Inhalt) und die Filamentdaten. Der Callback läuft auf dem Main-Thread.
+     */
+    fun scanTag(callback: (ScannedTag) -> Unit) {
+        if (!isAvailable) {
+            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            return
+        }
+        _isScanning.value = true
+        _errorMessage.value = null
+        nfcAdapter?.enableReaderMode(
+            activity,
+            { tag ->
+                val scanned = scannedTag(tag)
+                android.os.Handler(android.os.Looper.getMainLooper()).post {
+                    disableReaderMode()
+                    _isScanning.value = false
+                    callback(scanned)
+                }
+            },
+            NfcAdapter.FLAG_READER_NFC_A or
+                    NfcAdapter.FLAG_READER_NFC_B or
+                    NfcAdapter.FLAG_READER_NFC_F or
+                    NfcAdapter.FLAG_READER_NFC_V,
+            null
+        )
+    }
+
+    /** Dieselbe Kennung wie `processTag`, damit vorhandene Container und Filamente gefunden werden. */
+    private fun scannedTag(tag: Tag): ScannedTag {
+        val uid = bytesToHex(tag.id)
+        val ndef = Ndef.get(tag) ?: return ScannedTag(uid)
+        return try {
+            ndef.connect()
+            val record = ndef.ndefMessage?.records?.firstOrNull() ?: return ScannedTag(uid)
+            val payload = record.payload ?: ByteArray(0)
+            if (record.tnf == NdefRecord.TNF_MIME_MEDIA && String(record.type, Charsets.UTF_8) == "application/json") {
+                val contents = TagContents.parse(String(payload, Charsets.UTF_8))
+                ScannedTag(uid, contents.itemData, contents.error?.let { "Filamentdaten auf dem Tag nicht lesbar: $it" })
+            } else {
+                ScannedTag(String(payload, Charsets.UTF_8))
+            }
+        } catch (e: Exception) {
+            ScannedTag(uid, parseError = "Fehler beim Lesen des Tags: ${e.message ?: e.javaClass.simpleName}")
+        } finally {
+            try { ndef.close() } catch (_: Exception) {}
+        }
+    }
+
     private fun describeTag(tag: Tag): TagReading {
         val base = TagReading(
             uid = bytesToHex(tag.id),
@@ -181,13 +231,18 @@ class NFCReader(private val activity: Activity) {
             val message = ndef.ndefMessage
             val records = message?.records?.map(::describeRecord) ?: emptyList()
             val json = records.firstOrNull { it.type == "application/json" }?.text
+            // Wie beim Scannen: steht vorne kein JSON, ist der Inhalt des ersten Records die Kennung
+            val first = message?.records?.firstOrNull()
+            val textId = first?.takeIf { !(it.tnf == NdefRecord.TNF_MIME_MEDIA && String(it.type, Charsets.UTF_8) == "application/json") }
+                ?.let { String(it.payload ?: ByteArray(0), Charsets.UTF_8) }
             base.copy(
                 ndefType = ndef.type,
                 ndefCapacity = ndef.maxSize,
                 ndefUsed = message?.byteArrayLength,
                 isWritable = ndef.isWritable,
                 records = records,
-                contents = json?.let(TagContents::parse)
+                contents = json?.let(TagContents::parse),
+                textId = textId
             )
         } catch (e: Exception) {
             base.copy(error = "Fehler beim Lesen des Tags: ${e.message ?: e.javaClass.simpleName}")

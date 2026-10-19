@@ -7,15 +7,18 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 - **Container-Verwaltung**: Erstellen, bearbeiten und löschen von Containern mit RFID-Tags
 - **Item-Verwaltung**: Verwalten von Items mit RFID-Tags
 - **NFC/RFID-Scanning**: Lesen und Schreiben von NFC/RFID-Tags
-- **Einlagern**: Container scannen, dann Item scannen, um Items in Container einzulagern
-- **Herausnehmen**: Item scannen, dann Container scannen, um Items aus Containern zu entfernen
+- **Scannen-Tab**: eine Liste von Abläufen wie in der iOS-App: Filament-Tag lesen, Container ansehen, Einlagern, In Drucker einlegen, Vorrat und Lichtdurchlässigkeit erfassen
+- **Einlagern**: Musterplättchen scannen, wählen, ob die Sorte mit ihren vollen Spulen oder eine angebrochene Spule eingelagert wird, dann den Container scannen oder aus der Liste wählen
+- **In Drucker einlegen**: Musterplättchen scannen, angebrochene Spule wählen oder eine neue anbrechen, dann Drucker und Kopf antippen; was dort steckte, kommt ins Lager (braucht das Backend)
+- **Vorrat**: volle und angebrochene Spulen je Sorte mit Gesamtgewicht und einer Liste „Nachkaufen“ (keine volle Spule mehr und angebrochen unter 250 g)
+- **Lichtdurchlässigkeit**: TD-Wert in mm pro Sorte (z. B. vom TD-1), beim Musterplättchen, in der Sorte, in „Tag lesen“ und in den Listen
 - **Tag-Beschreibung**: Tags mit Namen und Beschreibungen versehen
 - **Persistenz**: Daten werden lokal mit DataStore gespeichert
 - **Backend-Abgleich**: Über das Wolken-Symbol wird die App mit dem [Backend](../backend/README.md) verbunden. Beim Verbinden werden die Daten des Geräts hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen; danach geht jede Änderung sofort ans Backend. Beim Öffnen und alle 2 Minuten, solange die App sichtbar ist, wird neu geladen (das Backend fragt die Drucker im selben Takt ab). Wie in der iOS-App.
 - **Drucker**: Drucker im Backend anlegen (Snapmaker U1, PrusaLink, Moonraker), abgleichen und entfernen
 - **Sorten und Spulen**: Ein Tipp auf ein Filament zeigt die Sorte mit Füll- und Leergewicht, Vorrat, angebrochenen Spulen (Nummer, Restgewicht, Platz im Drucker oder Lager, wiegen, leer melden) und dem gebuchten Verbrauch
 - **Backend-Version**: Neue Commits anzeigen und das Backend aktualisieren
-- **Tag lesen**: Zeigt alles an, was auf einem Tag steht (OpenSpool-Felder, auch fremde, NDEF-Records, Chip, UID) und ob die App ihn kennt; ändert nichts
+- **Filament-Tag lesen** (im Scannen-Tab): Zeigt alles an, was auf einem Tag steht (OpenSpool-Felder, auch fremde, NDEF-Records, Chip, UID) und ob die App ihn kennt; ändert nichts
 
 ## Technologie
 
@@ -52,21 +55,15 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 4. Scannen Sie einen RFID-Tag oder geben Sie manuell einen Tag ein
 5. Tippen Sie auf "Hinzufügen"
 
-### Items einlagern
+### Filament einlagern
 
-1. Gehen Sie zum Tab "Scannen"
-2. Wählen Sie "Einlagern"
-3. Scannen Sie zuerst den Container
-4. Scannen Sie dann das Item
-5. Tippen Sie auf "Item einlagern"
+1. Gehen Sie zum Tab "Scannen" und wählen Sie "Einlagern"
+2. Scannen Sie das Musterplättchen
+3. Wählen Sie die Sorte (volle Spulen) oder eine angebrochene Spule
+4. Scannen Sie den Container oder wählen Sie ihn aus der Liste
+5. Tippen Sie auf "Einlagern"
 
-### Items herausnehmen
-
-1. Gehen Sie zum Tab "Scannen"
-2. Wählen Sie "Herausnehmen"
-3. Scannen Sie zuerst das Item
-4. Scannen Sie dann den Container
-5. Tippen Sie auf "Item herausnehmen"
+Herausnehmen geht in der Container-Ansicht.
 
 ## Projektstruktur
 

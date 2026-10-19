@@ -22,10 +22,12 @@ import androidx.navigation.NavController
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.Item
 import com.filomat.app.data.sync.ConsumptionEntry
-import com.filomat.app.data.sync.Printer
+import com.filomat.app.data.sync.StoreState
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
+import com.filomat.app.ui.components.SpoolPlacePicker
+import com.filomat.app.ui.components.TransmissionField
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 
@@ -63,7 +65,7 @@ fun ItemDetailScreen(itemId: String, navController: NavController) {
                 item = item,
                 containerName = current.container(item.containerId)?.name ?: "Lose",
                 spools = current.spoolsOf(item.id),
-                printers = current.printers,
+                state = current,
                 connected = sync.connected,
                 store = store,
                 modifier = Modifier.padding(padding)
@@ -77,7 +79,7 @@ private fun ItemDetailContent(
     item: Item,
     containerName: String,
     spools: List<Spool>,
-    printers: List<Printer>,
+    state: StoreState,
     connected: Boolean,
     store: ContainerStore,
     modifier: Modifier
@@ -86,6 +88,7 @@ private fun ItemDetailContent(
     var netWeight by remember(item.id) { mutableStateOf(GramText.format(item.netWeight)) }
     var spoolWeight by remember(item.id) { mutableStateOf(GramText.format(item.spoolWeight)) }
     var spoolsInStock by remember(item.id) { mutableStateOf(item.spoolsInStock ?: 0) }
+    var transmission by remember(item.id) { mutableStateOf(GramText.format(item.transmissionDistance)) }
     var consumption by remember(item.id) { mutableStateOf<List<ConsumptionEntry>>(emptyList()) }
     var isBusy by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -107,7 +110,8 @@ private fun ItemDetailContent(
     fun withWeights(): Item = item.copy(
         netWeight = GramText.parse(netWeight),
         spoolWeight = GramText.parse(spoolWeight),
-        spoolsInStock = spoolsInStock
+        spoolsInStock = spoolsInStock,
+        transmissionDistance = GramText.parse(transmission)
     )
 
     LazyColumn(
@@ -155,8 +159,9 @@ private fun ItemDetailContent(
                             Icon(Icons.Default.Add, contentDescription = "Eine mehr")
                         }
                     }
+                    TransmissionField(transmission) { transmission = it }
                     Text(
-                        "Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen.",
+                        "Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -188,7 +193,7 @@ private fun ItemDetailContent(
                     Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
                         Text("#${spool.number}", style = MaterialTheme.typography.titleMedium)
                         Spacer(Modifier.width(12.dp))
-                        Text(spool.locationText(printers), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
+                        Text(spool.locationText(state.printers, state.containers), color = MaterialTheme.colorScheme.onSurfaceVariant, modifier = Modifier.weight(1f))
                         spool.remainingWeight?.let { Text(GramText.label(it)) }
                     }
                 }
@@ -255,7 +260,7 @@ private fun ItemDetailContent(
         SpoolEditDialog(
             spool = spool,
             emptySpoolWeight = GramText.parse(spoolWeight),
-            printers = printers,
+            state = state,
             store = store,
             onDismiss = { spoolToEdit = null }
         )
@@ -275,16 +280,13 @@ private fun GramField(label: String, value: String, onChange: (String) -> Unit) 
     )
 }
 
-/** Platz einer Spule: Lager oder ein Kopf eines Druckers. */
-private data class SpoolLocation(val printerId: String?, val tool: Int?)
-
 /** Angebrochene Spule wiegen, einlegen oder als leer markieren. */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SpoolEditDialog(
     spool: Spool,
     emptySpoolWeight: Double?,
-    printers: List<Printer>,
+    state: StoreState,
     store: ContainerStore,
     onDismiss: () -> Unit
 ) {
@@ -292,19 +294,9 @@ private fun SpoolEditDialog(
     var remaining by remember { mutableStateOf(GramText.format(spool.remainingWeight)) }
     var weighed by remember { mutableStateOf("") }
     var emptySpool by remember { mutableStateOf(GramText.format(emptySpoolWeight)) }
-    var location by remember {
-        mutableStateOf(SpoolLocation(spool.printerId, if (spool.printerId == null) null else spool.tool ?: 0))
-    }
-    var locationExpanded by remember { mutableStateOf(false) }
+    var location by remember { mutableStateOf(spool.place) }
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
-
-    val locations = remember(printers) {
-        listOf(SpoolLocation(null, null) to "Lager") + printers.flatMap { printer ->
-            (0 until printer.toolCount).map { tool -> SpoolLocation(printer.id, tool) to printer.placeName(tool) }
-        }
-    }
-    val locationName = locations.firstOrNull { it.first == location }?.second ?: spool.locationText(printers)
 
     // Das Restgewicht ergibt sich aus dem gewogenen Gewicht minus leerer Spule
     fun updateFromScale() {
@@ -335,26 +327,7 @@ private fun SpoolEditDialog(
                 GramField("Gewogen mit Spule (g)", weighed) { weighed = it; updateFromScale() }
                 GramField("Leere Spule (g)", emptySpool) { emptySpool = it; updateFromScale() }
                 GramField("Restgewicht (g)", remaining) { remaining = it }
-                ExposedDropdownMenuBox(expanded = locationExpanded, onExpandedChange = { locationExpanded = it }) {
-                    OutlinedTextField(
-                        value = locationName,
-                        onValueChange = {},
-                        readOnly = true,
-                        label = { Text("Steckt in") },
-                        trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .menuAnchor()
-                    )
-                    ExposedDropdownMenu(expanded = locationExpanded, onDismissRequest = { locationExpanded = false }) {
-                        locations.forEach { (option, name) ->
-                            DropdownMenuItem(text = { Text(name) }, onClick = {
-                                location = option
-                                locationExpanded = false
-                            })
-                        }
-                    }
-                }
+                SpoolPlacePicker("Steckt in", state, location) { location = it }
                 if (isSaving) LinearProgressIndicator(Modifier.fillMaxWidth())
                 errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 TextButton(
@@ -367,11 +340,7 @@ private fun SpoolEditDialog(
             Button(enabled = !isSaving, onClick = {
                 perform {
                     store.updateSpool(
-                        spool.copy(
-                            remainingWeight = GramText.parse(remaining),
-                            printerId = location.printerId,
-                            tool = location.tool
-                        )
+                        spool.movedTo(location).copy(remainingWeight = GramText.parse(remaining))
                     )
                 }
             }) { Text("Speichern") }

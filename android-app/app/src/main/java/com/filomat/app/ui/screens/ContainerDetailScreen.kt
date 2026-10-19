@@ -34,6 +34,7 @@ fun ContainerDetailScreen(
     val context = LocalContext.current
     val containerStore = remember { ContainerStore.get(context) }
     val container by viewModel.container.collectAsState()
+    val storeState by containerStore.state.collectAsState(initial = com.filomat.app.data.sync.StoreState())
     var showingEditContainer by remember { mutableStateOf(false) }
     var showingAddItem by remember { mutableStateOf(false) }
     var showingDeleteDialog by remember { mutableStateOf(false) }
@@ -145,6 +146,11 @@ fun ContainerDetailScreen(
                             isLoseContainer = cont.id == "standard_lose"
                         )
                     }
+                }
+
+                val spools = storeState.spoolsIn(cont.id)
+                if (spools.isNotEmpty()) {
+                    item { OpenedSpoolsCard(spools, storeState) }
                 }
             }
         } ?: run {
