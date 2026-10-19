@@ -20,7 +20,12 @@ struct ContainerDetailView: View {
     }
 
     private func content(for container: Container) -> some View {
-        let items = store.items(in: container.id)
+        let printer = store.printer(owningContainer: container.id)
+        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zeigt "Im Drucker"
+        let items = store.items(in: container.id).filter { item in
+            guard let printer else { return true }
+            return !store.spools(of: item.id).contains { $0.printerId == printer.id }
+        }
         let isLoose = container.id == Container.looseId
 
         return List {
@@ -35,19 +40,8 @@ struct ContainerDetailView: View {
                 }
             }
 
-            Section("Filamente (\(items.count))") {
-                if items.isEmpty {
-                    Text("Keine Filamente in diesem Container").foregroundStyle(.secondary)
-                }
-                ForEach(items) { item in
-                    ItemDetailRow(item: item, isLooseContainer: isLoose) {
-                        itemToRemove = item
-                    }
-                }
-            }
-
             // Der Container eines Druckers: was in seinen Köpfen oder Slots steckt
-            if let printer = store.printer(owningContainer: container.id) {
+            if let printer {
                 Section("Im Drucker") {
                     ForEach(0..<printer.toolCount, id: \.self) { tool in
                         if let spool = store.spool(inPrinter: printer.id, tool: tool) {
@@ -59,6 +53,20 @@ struct ContainerDetailView: View {
                             }
                         } else {
                             LabeledContent(printer.placeName(tool: tool), value: "frei")
+                        }
+                    }
+                }
+            }
+
+            // Im Drucker-Container stehen Sorten, die in einem Slot stecken, schon oben
+            if printer == nil || !items.isEmpty {
+                Section("Filamente (\(items.count))") {
+                    if items.isEmpty {
+                        Text("Keine Filamente in diesem Container").foregroundStyle(.secondary)
+                    }
+                    ForEach(items) { item in
+                        ItemDetailRow(item: item, isLooseContainer: isLoose) {
+                            itemToRemove = item
                         }
                     }
                 }
