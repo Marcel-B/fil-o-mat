@@ -22,6 +22,24 @@ Einstellungen über Umgebungsvariablen:
 | `GITHUB_TOKEN` | – | nur bei privatem Repository (Token mit Lesezugriff) |
 | `FILOMAT_API_KEY` | – | optionaler API-Schlüssel für die Apps |
 | `PORT` | `8080` | Port des Backends |
+| `TAILSCALE` | `0` | `1`: Backend zusätzlich über Tailscale erreichbar machen |
+| `TS_AUTHKEY` | – | Auth-Key fürs Tailnet; ohne zeigt Tailscale einen Login-Link an |
+| `TS_SERVE` | `0` | `1`: zusätzlich HTTPS über `tailscale serve` |
+
+## Tailscale
+
+Damit die Apps das Backend auch unterwegs erreichen, läuft Tailscale direkt im LXC (kein Sidecar-Container). Ein neuer Container bekommt es mit `TAILSCALE=1 bash create-lxc.sh`, ein bestehender so:
+
+```bash
+# in der Proxmox-Shell als root
+CTID=<CTID> bash add-tailscale.sh
+```
+
+Das Skript reicht `/dev/net/tun` an den Container durch (zwei `lxc.*`-Zeilen in `/etc/pve/lxc/<CTID>.conf`, startet ihn dafür einmal neu), installiert Tailscale und meldet ihn im Tailnet an: mit `TS_AUTHKEY` ohne Rückfrage, sonst über den angezeigten Link. Mehrmals aufrufen schadet nicht. Am Ende stehen die Adressen da, die in der App als Backend eingetragen werden, z. B. `http://filomat.<tailnet>.ts.net:8080` oder `http://100.x.y.z:8080`. Auf dem Handy muss die Tailscale-App verbunden sein; im LAN funktioniert die alte Adresse weiter.
+
+Mit `TS_SERVE=1` gibt es zusätzlich `https://filomat.<tailnet>.ts.net` ohne Port (dafür im Tailnet MagicDNS und HTTPS-Zertifikate einschalten).
+
+Die Drucker im LAN erreicht das Backend weiter direkt über `eth0`: Tailscale wird ohne `--accept-routes` gestartet, ein Subnet-Router im Tailnet lenkt den Verkehr also nicht um.
 
 ## Aktualisieren
 
