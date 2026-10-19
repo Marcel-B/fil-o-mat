@@ -130,6 +130,15 @@ data class PrinterRequest(
     val rfidTag: String? = null
 )
 
+/** Änderungen an einem Drucker; [apiKey] `null` lässt den Schlüssel, ein leerer Text löscht ihn. */
+@Serializable
+data class PrinterUpdateRequest(
+    val name: String,
+    val baseUrl: String,
+    val apiKey: String? = null,
+    val enabled: Boolean = true
+)
+
 @Serializable
 data class SyncResponse(val recorded: Int, val error: String? = null)
 

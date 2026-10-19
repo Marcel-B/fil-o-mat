@@ -1,12 +1,13 @@
 import SwiftUI
 
-/// Drucker im Backend: anlegen, abgleichen, entfernen.
+/// Drucker im Backend: anlegen, bearbeiten, abgleichen, entfernen.
 struct PrintersView: View {
     @Environment(ContainerStore.self) private var store
     @State private var printers: [Printer] = []
     @State private var errorMessage: String?
     @State private var showingAdd = false
     @State private var printerToDelete: Printer?
+    @State private var printerToEdit: Printer?
     @State private var syncingId: String?
 
     var body: some View {
@@ -22,20 +23,25 @@ struct PrintersView: View {
                 Text(errorMessage).foregroundStyle(.red)
             }
             ForEach(printers) { printer in
-                PrinterRow(printer: printer, isSyncing: syncingId == printer.id)
-                    .swipeActions {
-                        Button(role: .destructive) {
-                            printerToDelete = printer
-                        } label: {
-                            Label("Entfernen", systemImage: "trash")
-                        }
-                        Button {
-                            Task { await sync(printer) }
-                        } label: {
-                            Label("Abgleichen", systemImage: "arrow.triangle.2.circlepath")
-                        }
-                        .tint(.accentColor)
+                Button {
+                    printerToEdit = printer
+                } label: {
+                    PrinterRow(printer: printer, isSyncing: syncingId == printer.id)
+                }
+                .tint(.primary)
+                .swipeActions {
+                    Button(role: .destructive) {
+                        printerToDelete = printer
+                    } label: {
+                        Label("Entfernen", systemImage: "trash")
                     }
+                    Button {
+                        Task { await sync(printer) }
+                    } label: {
+                        Label("Abgleichen", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                    .tint(.accentColor)
+                }
             }
         }
         .overlay {
@@ -56,7 +62,10 @@ struct PrintersView: View {
         .refreshable { await syncAll() }
         .task { await load() }
         .sheet(isPresented: $showingAdd) {
-            AddPrinterView { await load() }
+            PrinterFormView(printer: nil) { await load() }
+        }
+        .sheet(item: $printerToEdit) { printer in
+            PrinterFormView(printer: printer) { await load() }
         }
         .alert(
             "Drucker entfernen",
@@ -109,7 +118,7 @@ struct PrintersView: View {
         await store.refresh()
     }
 
-        private func delete(_ printer: Printer) async {
+    private func delete(_ printer: Printer) async {
         guard let backend = store.backend else { return }
         do {
             try await backend.deletePrinter(id: printer.id)
@@ -132,9 +141,9 @@ private struct PrinterRow: View {
                 Spacer()
                 if isSyncing { ProgressView() }
             }
-            Text(printer.toolCount > 1
+            Text((printer.enabled ? "" : "Pausiert · ") + (printer.toolCount > 1
                  ? "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)"
-                 : "\(printer.type.title) · \(printer.baseUrl)")
+                 : "\(printer.type.title) · \(printer.baseUrl)"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let error = printer.lastSyncError {
@@ -151,21 +160,36 @@ private struct PrinterRow: View {
     }
 }
 
-private struct AddPrinterView: View {
+/// Neuer Drucker (`printer` ist `nil`) oder Änderungen an einem vorhandenen, z. B. eine neue IP nach DHCP.
+private struct PrinterFormView: View {
     @Environment(ContainerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
-    var onAdded: () async -> Void
+    var printer: Printer?
+    var onSaved: () async -> Void
 
-    @State private var name = ""
-    @State private var type: PrinterType = .snapmakerU1
-    @State private var baseUrl = ""
+    @State private var name: String
+    @State private var type: PrinterType
+    @State private var baseUrl: String
     @State private var apiKey = ""
+    @State private var removeApiKey = false
+    @State private var enabled: Bool
     @State private var isSaving = false
     @State private var errorMessage: String?
 
+    init(printer: Printer?, onSaved: @escaping () async -> Void) {
+        self.printer = printer
+        self.onSaved = onSaved
+        _name = State(initialValue: printer?.name ?? "")
+        _type = State(initialValue: printer?.type ?? .snapmakerU1)
+        _baseUrl = State(initialValue: printer?.baseUrl ?? "")
+        _enabled = State(initialValue: printer?.enabled ?? true)
+    }
+
+    private var trimmedUrl: String { baseUrl.trimmingCharacters(in: .whitespaces) }
+
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
-            && (baseUrl.hasPrefix("http://") || baseUrl.hasPrefix("https://"))
+            && (trimmedUrl.hasPrefix("http://") || trimmedUrl.hasPrefix("https://"))
     }
 
     var body: some View {
@@ -173,29 +197,46 @@ private struct AddPrinterView: View {
             Form {
                 Section {
                     TextField("Name, z. B. Snapmaker U1", text: $name)
-                    Picker("Typ", selection: $type) {
-                        ForEach(PrinterType.allCases) { Text($0.title).tag($0) }
+                    if printer == nil {
+                        Picker("Typ", selection: $type) {
+                            ForEach(PrinterType.allCases) { Text($0.title).tag($0) }
+                        }
+                    } else {
+                        LabeledContent("Typ", value: type.title)
                     }
                     TextField(type.addressHint, text: $baseUrl)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    SecureField("API-Schlüssel (optional)", text: $apiKey)
+                    if printer?.hasApiKey == true {
+                        SecureField("Neuer API-Schlüssel (leer = unverändert)", text: $apiKey)
+                            .disabled(removeApiKey)
+                        Toggle("API-Schlüssel entfernen", isOn: $removeApiKey)
+                    } else {
+                        SecureField("API-Schlüssel (optional)", text: $apiKey)
+                    }
                 } footer: {
                     Text(type.setupHint)
+                }
+                if printer != nil {
+                    Section {
+                        Toggle("Automatisch abgleichen", isOn: $enabled)
+                    } footer: {
+                        Text("Ausgeschaltet fragt das Backend den Drucker nicht mehr ab, z. B. solange er nicht im Netz ist.")
+                    }
                 }
                 if let errorMessage {
                     Section { Text(errorMessage).foregroundStyle(.red) }
                 }
             }
-            .navigationTitle("Drucker hinzufügen")
+            .navigationTitle(printer == nil ? "Drucker hinzufügen" : "Drucker bearbeiten")
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Abbrechen") { dismiss() }
                 }
                 ToolbarItem(placement: .confirmationAction) {
-                    Button("Hinzufügen") { Task { await save() } }
+                    Button(printer == nil ? "Hinzufügen" : "Sichern") { Task { await save() } }
                         .disabled(!isValid || isSaving)
                 }
             }
@@ -206,15 +247,25 @@ private struct AddPrinterView: View {
         guard let backend = store.backend else { return }
         isSaving = true
         defer { isSaving = false }
+        let key = apiKey.trimmingCharacters(in: .whitespaces)
         do {
-            try await backend.createPrinter(PrinterRequest(
-                name: name.trimmingCharacters(in: .whitespaces),
-                type: type,
-                baseUrl: baseUrl.trimmingCharacters(in: .whitespaces),
-                apiKey: apiKey.isEmpty ? nil : apiKey
-            ))
+            if let printer {
+                try await backend.updatePrinter(id: printer.id, PrinterUpdateRequest(
+                    name: name.trimmingCharacters(in: .whitespaces),
+                    baseUrl: trimmedUrl,
+                    apiKey: removeApiKey ? "" : (key.isEmpty ? nil : key),
+                    enabled: enabled
+                ))
+            } else {
+                try await backend.createPrinter(PrinterRequest(
+                    name: name.trimmingCharacters(in: .whitespaces),
+                    type: type,
+                    baseUrl: trimmedUrl,
+                    apiKey: key.isEmpty ? nil : key
+                ))
+            }
             await store.refresh()
-            await onAdded()
+            await onSaved()
             dismiss()
         } catch {
             errorMessage = error.localizedDescription

@@ -123,6 +123,14 @@ struct BackendClient {
         return try Self.decoder.decode(Printer.self, from: try await send(request))
     }
 
+    @discardableResult
+    func updatePrinter(id: String, _ update: PrinterUpdateRequest) async throws -> Printer {
+        var request = request("api/printers/\(id)", method: "PUT")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(update)
+        return try Self.decoder.decode(Printer.self, from: try await send(request))
+    }
+
     func deletePrinter(id: String) async throws {
         try await send(request("api/printers/\(id)", method: "DELETE"), allowNotFound: true)
     }
