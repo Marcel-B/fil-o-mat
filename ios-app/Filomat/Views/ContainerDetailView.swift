@@ -8,6 +8,7 @@ struct ContainerDetailView: View {
     @State private var showingEdit = false
     @State private var showingDelete = false
     @State private var itemToRemove: Item?
+    @State private var itemToEdit: Item?
     @State private var isScanning = false
     @State private var scanMessage: String?
 
@@ -45,11 +46,24 @@ struct ContainerDetailView: View {
                 Section("Im Drucker") {
                     ForEach(0..<printer.toolCount, id: \.self) { tool in
                         if let spool = store.spool(inPrinter: printer.id, tool: tool) {
-                            LabeledContent {
-                                Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                            let item = store.item(id: spool.itemId)
+                            NavigationLink {
+                                SpoolEditView(spool: spool, emptySpoolWeight: item?.spoolWeight, showsItem: true)
                             } label: {
-                                Text(printer.placeName(tool: tool))
-                                Text("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)")
+                                LabeledContent {
+                                    // Ohne Restgewicht rechnet das Backend mit einer vollen Spule der Sorte
+                                    Text((spool.remainingWeight ?? item?.netWeight).map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                                } label: {
+                                    Text(printer.placeName(tool: tool))
+                                    // Farbe dazu: zwei Sorten gleicher Marke und Art unterscheiden sich sonst nicht
+                                    HStack(spacing: 6) {
+                                        ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
+                                        Text([item?.displayTitle ?? "Filament", item?.itemData?.color]
+                                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") + " #\(spool.number)")
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                }
                             }
                         } else {
                             LabeledContent(printer.placeName(tool: tool), value: "frei")
@@ -68,6 +82,9 @@ struct ContainerDetailView: View {
                         ItemDetailRow(item: item, isLooseContainer: isLoose) {
                             itemToRemove = item
                         }
+                        // Antippen öffnet die Sorte; der Minus-Knopf behält seinen eigenen Tipp
+                        .contentShape(Rectangle())
+                        .onTapGesture { itemToEdit = item }
                     }
                 }
             }
@@ -76,8 +93,13 @@ struct ContainerDetailView: View {
             if !spools.isEmpty {
                 Section("Angebrochene Spulen (\(spools.count))") {
                     ForEach(spools) { spool in
-                        LabeledContent("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)",
-                                       value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                        let item = store.item(id: spool.itemId)
+                        NavigationLink {
+                            SpoolEditView(spool: spool, emptySpoolWeight: item?.spoolWeight, showsItem: true)
+                        } label: {
+                            LabeledContent("\(item?.displayTitle ?? "Filament") #\(spool.number)",
+                                           value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                        }
                     }
                 }
             }
@@ -113,6 +135,9 @@ struct ContainerDetailView: View {
         }
         .sheet(isPresented: $showingEdit) {
             EditContainerView(container: container)
+        }
+        .sheet(item: $itemToEdit) { item in
+            FilamentFormView(mode: .edit(item))
         }
         .alert("Container löschen", isPresented: $showingDelete) {
             Button("Löschen", role: .destructive) {
