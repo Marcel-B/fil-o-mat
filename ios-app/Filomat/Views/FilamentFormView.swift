@@ -492,7 +492,7 @@ struct TransmissionField: View {
 }
 
 /// Eingabefeld für Gramm.
-private struct GramField: View {
+struct GramField: View {
     var title: String
     @Binding var text: String
 
