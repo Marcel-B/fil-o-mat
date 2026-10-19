@@ -22,6 +22,8 @@ final class ContainerStore {
     private(set) var lastSyncedAt: Date?
     /// Stand der Backend-Version; `nil`, solange unbekannt oder ohne Updater auf dem Server.
     private(set) var updateStatus: BackendUpdateStatus?
+    /// Stand der Nextcloud-Sicherung; `nil`, solange unbekannt oder bei einem Backend ohne `/api/backup`.
+    private(set) var backupStatus: BackupStatus?
 
     @ObservationIgnored var backend: BackendClient?
 
@@ -193,6 +195,24 @@ final class ContainerStore {
         syncError = nil
         lastSyncedAt = nil
         updateStatus = nil
+        backupStatus = nil
+    }
+
+    /// Fehler (z. B. ein älteres Backend ohne `/api/backup`) zählen nicht als Sync-Fehler.
+    func refreshBackupStatus() async {
+        guard let backend else { return }
+        backupStatus = try? await backend.backupStatus()
+    }
+
+    /// Startet eine Sicherung und wartet, bis sie durch ist (höchstens eine Minute).
+    func startBackup() async throws {
+        guard let backend else { return }
+        try await backend.startBackup()
+        for _ in 0..<60 {
+            await refreshBackupStatus()
+            if backupStatus?.running != true { return }
+            try await Task.sleep(for: .seconds(1))
+        }
     }
 
     /// Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein älteres Backend ohne `/api/update`) zählen nicht als Sync-Fehler.

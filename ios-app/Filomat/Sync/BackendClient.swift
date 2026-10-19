@@ -39,6 +39,25 @@ struct BackendUpdateStatus: Codable, Equatable {
     var isUpdating: Bool { state == "requested" || state == "running" }
 }
 
+/// Stand der Nextcloud-Sicherung (`/api/backup`).
+struct BackupStatus: Codable, Equatable {
+    struct Run: Codable, Equatable {
+        var startedAt: Date
+        var finishedAt: Date
+        var success: Bool
+        var archives: [String]
+        var bytes: Int64
+        var error: String?
+        var scheduled: Bool
+    }
+
+    /// `false`, solange auf dem Server keine Nextcloud eingetragen ist.
+    var configured: Bool
+    var running: Bool
+    var last: Run?
+    var nextRun: Date?
+}
+
 enum BackendError: LocalizedError {
     case unauthorized
     case status(Int)
@@ -161,6 +180,17 @@ struct BackendClient {
     /// Spielt die neue Version ein; das Backend startet dabei neu.
     func installUpdate() async throws {
         try await send(request("api/update", method: "POST"))
+    }
+
+    // MARK: - Sicherung
+
+    func backupStatus() async throws -> BackupStatus {
+        try Self.decoder.decode(BackupStatus.self, from: try await send(request("api/backup", method: "GET")))
+    }
+
+    /// Startet eine Sicherung; wie sie lief, liefert danach `backupStatus()`.
+    func startBackup() async throws {
+        try await send(request("api/backup", method: "POST"))
     }
 
     private func request(_ path: String, method: String) -> URLRequest {

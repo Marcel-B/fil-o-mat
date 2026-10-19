@@ -113,6 +113,30 @@ final class BackendSyncTests: XCTestCase {
         XCTAssertEqual(store.updateStatus?.isUpdating, false)
     }
 
+    func testReadsBackupStatusAndIgnoresOlderBackend() async throws {
+        let store = ContainerStore(fileURL: fileURL)
+        store.backend = client
+
+        // Älteres Backend ohne /api/backup: keine Anzeige, kein Sync-Fehler
+        await store.refreshBackupStatus()
+        XCTAssertNil(store.backupStatus)
+        XCTAssertNil(store.syncError)
+
+        StubURLProtocol.responses["/api/backup"] = (200, """
+        {"configured":true,"running":false,"nextRun":1700086400000,
+         "last":{"startedAt":1700000000000,"finishedAt":1700000002000,"success":false,"archives":[],"bytes":0,
+                 "error":"Nextcloud lehnt Benutzer oder App-Passwort ab (401)","scheduled":true}}
+        """)
+        await store.refreshBackupStatus()
+        XCTAssertEqual(store.backupStatus?.configured, true)
+        XCTAssertEqual(store.backupStatus?.last?.success, false)
+        XCTAssertEqual(store.backupStatus?.last?.error, "Nextcloud lehnt Benutzer oder App-Passwort ab (401)")
+        XCTAssertEqual(store.backupStatus?.nextRun, Date(timeIntervalSince1970: 1_700_086_400))
+
+        try await store.startBackup()
+        XCTAssertTrue(StubURLProtocol.requests.contains { $0.httpMethod == "POST" && $0.url?.path == "/api/backup" })
+    }
+
     func testSettingsRequireHttpAddress() {
         XCTAssertNil(BackendSettings.client(serverURL: "nas.local", apiKey: ""))
         XCTAssertNotNil(BackendSettings.client(serverURL: "http://192.168.1.10:8080", apiKey: ""))

@@ -10,6 +10,8 @@ struct BackendSettingsView: View {
     @State private var confirmingUpdate = false
     @State private var isChecking = false
     @State private var updateError: String?
+    @State private var isBackingUp = false
+    @State private var backupError: String?
 
     private var isValid: Bool { BackendSettings.client(serverURL: serverURL, apiKey: apiKey) != nil }
 
@@ -65,11 +67,17 @@ struct BackendSettingsView: View {
                         LabeledContent("Letzter Abgleich", value: lastSyncedAt.formatted(date: .omitted, time: .shortened))
                     }
                 }
+                if let backup = store.backupStatus {
+                    backupSection(backup)
+                }
                 if let update = store.updateStatus {
                     updateSection(update)
                 }
             }
-            .task { await store.refreshUpdateStatus() }
+            .task {
+                await store.refreshUpdateStatus()
+                await store.refreshBackupStatus()
+            }
             // Während der Aktualisierung den Stand verfolgen, bis das Backend wieder läuft
             .task(id: store.updateStatus?.isUpdating) {
                 while store.updateStatus?.isUpdating == true, !Task.isCancelled {
@@ -150,6 +158,60 @@ struct BackendSettingsView: View {
             if let checkedAt = update.checkedAt {
                 Text("Zuletzt geprüft \(checkedAt.formatted(date: .abbreviated, time: .shortened)), Branch \(update.branch ?? "?").")
             }
+        }
+    }
+
+    @ViewBuilder
+    private func backupSection(_ backup: BackupStatus) -> some View {
+        Section {
+            if !backup.configured {
+                Text("Auf dem Server ist keine Nextcloud eingetragen (NEXTCLOUD_WEBDAV_URL, NEXTCLOUD_USERNAME, NEXTCLOUD_APP_PASSWORD in backend/.env).")
+                    .foregroundStyle(.secondary)
+            } else {
+                if let last = backup.last {
+                    LabeledContent("Letzte", value: last.finishedAt.formatted(date: .abbreviated, time: .shortened))
+                    if last.success {
+                        Label("Erfolgreich: \(last.archives.joined(separator: ", "))", systemImage: "checkmark.circle")
+                            .foregroundStyle(.green)
+                    } else {
+                        Label(last.error ?? "Fehlgeschlagen", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.red)
+                    }
+                } else {
+                    Text("Noch keine Sicherung.").foregroundStyle(.secondary)
+                }
+                if let nextRun = backup.nextRun {
+                    LabeledContent("Nächste", value: nextRun.formatted(date: .abbreviated, time: .shortened))
+                }
+                if let backupError {
+                    Text(backupError).foregroundStyle(.red)
+                }
+                Button {
+                    Task { await startBackup() }
+                } label: {
+                    HStack {
+                        Text("Jetzt sichern")
+                        if isBackingUp || backup.running {
+                            Spacer()
+                            ProgressView()
+                        }
+                    }
+                }
+                .disabled(isBackingUp || backup.running)
+            }
+        } header: {
+            Text("Sicherung in die Nextcloud")
+        }
+    }
+
+    private func startBackup() async {
+        backupError = nil
+        isBackingUp = true
+        defer { isBackingUp = false }
+        do {
+            try await store.startBackup()
+        } catch {
+            backupError = error.localizedDescription
         }
     }
 
