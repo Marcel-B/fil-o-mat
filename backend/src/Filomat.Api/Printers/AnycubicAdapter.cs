@@ -25,6 +25,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
     /// <param name="MmPerSlot">Bisher pro Slot zugerechnete Länge.</param>
     /// <param name="SlotTypes">Material pro Slot für die Umrechnung in Gramm.</param>
     /// <param name="Provisional">Der Drucker hat noch keine Auftragsnummer gemeldet; <see cref="JobId"/> ist selbst vergeben.</param>
+    /// <param name="State">Zuletzt gemeldeter Zustand des Drucks.</param>
     public record TrackedJob(
         string JobId,
         string Name,
@@ -33,7 +34,8 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         int? Slot,
         Dictionary<int, double> MmPerSlot,
         Dictionary<int, string> SlotTypes,
-        bool Provisional = false);
+        bool Provisional = false,
+        string? State = null);
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
@@ -57,7 +59,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
                     tracked = Advance(tracked, last, ace);
                     status = StatusOf(last);
                 }
-                finished.Add(Finish(printer, tracked, status ?? (tracked.Progress >= 99.5 ? "completed" : "cancelled")));
+                finished.Add(Finish(printer, tracked, status ?? Ended(tracked)));
             }
             printer.AdapterStateJson = null;
             return finished;
@@ -69,7 +71,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         {
             if (tracked is { Provisional: false })
             {
-                finished.Add(Finish(printer, tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled"));
+                finished.Add(Finish(printer, tracked, Ended(tracked)));
                 tracked = null;
             }
             tracked ??= new TrackedJob($"local-{DateTime.UtcNow:yyyyMMddHHmmss}", NameOf(project), 0, 0, null, [], [], Provisional: true);
@@ -80,7 +82,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         }
         else if (tracked is not null && tracked.JobId != jobId)
         {
-            finished.Add(Finish(printer, tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled"));
+            finished.Add(Finish(printer, tracked, Ended(tracked)));
             tracked = null;
         }
 
@@ -116,6 +118,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
 
         return job with
         {
+            State = project.GetStringOrNull("state") ?? job.State,
             Progress = Math.Max(job.Progress, project.GetDoubleOrNull("progress") ?? 0),
             UsageMm = Math.Max(usage, job.UsageMm),
             Slot = ace.LoadedSlot ?? job.Slot,
@@ -173,6 +176,13 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
             _ => null,
         },
     };
+
+    /// <summary>
+    /// Ein Druck, der ohne Abschlussmeldung verschwindet: fertig, wenn er fast durch war oder schon abkühlte. Der
+    /// Kobra X bleibt am Ende bei 99 % und meldet danach in <c>last_project</c> noch den Druck davor.
+    /// </summary>
+    private static string Ended(TrackedJob job) =>
+        job.Progress >= 99 || job.State is "nozzle_cooling_off" or "finished" ? "completed" : "cancelled";
 
     /// <summary>Auftragsnummer des Druckers; 0 und -1 (Kobra X beim Aufheizen) zählen nicht.</summary>
     private static string? JobIdOf(JsonElement project)

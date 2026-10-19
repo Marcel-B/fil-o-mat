@@ -234,6 +234,29 @@ public class AnycubicTests : IDisposable
     }
 
     [Fact]
+    public async Task FinishesAKobraXPrintThatEndsAt99Percent()
+    {
+        // Ablauf wie am 2026-10-19 aufgezeichnet: task_id bleibt -1, am Ende fällt die Länge auf 0,
+        // danach meldet last_project den vorigen Druck
+        _printer.Boxes = KobraXBoxes.Replace("\"id\":-1,\"loaded_slot\":-1", "\"id\":-1,\"loaded_slot\":0");
+        var printer = await CreatePrinterAsync();
+        var white = await PlaceSpoolAsync("W", printer.Id, 0);
+
+        _printer.Info = FakeAnycubic.Printing("""{"task_id":-1,"state":"printing","progress":0,"supplies_usage":278}""");
+        await SyncAsync(printer.Id);
+        _printer.Info = FakeAnycubic.Printing("""{"task_id":-1,"state":"printing","progress":99,"supplies_usage":7145}""");
+        await SyncAsync(printer.Id);
+        _printer.Info = FakeAnycubic.Printing("""{"task_id":-1,"state":"nozzle_cooling_off","progress":99,"supplies_usage":0}""");
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Info = FakeAnycubic.Idle("""{"task_id":129923691,"state":"finished","progress":1,"supplies_usage":2601.633}""");
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal(1000 - Grams(7145), await RemainingAsync(white.Id), 2);
+        var consumption = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("completed", consumption.Status);
+    }
+
+    [Fact]
     public async Task BooksPrintsThatNeverGetATaskIdSeparately()
     {
         var printer = await CreatePrinterAsync();
