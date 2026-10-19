@@ -22,6 +22,9 @@ BRANCH="${BRANCH:-main}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"           # nur bei privatem Repository
 FILOMAT_API_KEY="${FILOMAT_API_KEY:-}"     # optional, dann müssen die Apps ihn mitschicken
 PORT="${PORT:-8080}"
+TAILSCALE="${TAILSCALE:-0}"                # 1: Backend auch über Tailscale erreichbar machen (add-tailscale.sh)
+TS_AUTHKEY="${TS_AUTHKEY:-}"               # optional, sonst zeigt Tailscale einen Login-Link an
+TS_SERVE="${TS_SERVE:-0}"                  # 1: zusätzlich HTTPS über "tailscale serve"
 
 info() { echo -e "\e[1;34m==>\e[0m $*"; }
 fail() { echo -e "\e[1;31mFehler:\e[0m $*" >&2; exit 1; }
@@ -53,8 +56,16 @@ pct create "$CTID" "${TEMPLATE_STORAGE}:vztmpl/${TEMPLATE}" \
   --net0 "$NET" \
   --unprivileged 1 \
   --features nesting=1,keyctl=1 \
-  --onboot 1 \
-  --start 1
+  --onboot 1
+
+if [[ "$TAILSCALE" == 1 ]]; then
+  # Tailscale braucht /dev/net/tun; vor dem ersten Start eingetragen, spart das einen Neustart
+  cat >> "/etc/pve/lxc/${CTID}.conf" <<CONF
+lxc.cgroup2.devices.allow: c 10:200 rwm
+lxc.mount.entry: /dev/net/tun dev/net/tun none bind,create=file
+CONF
+fi
+pct start "$CTID"
 
 info "Auf Netzwerk warten"
 for _ in $(seq 1 30); do
@@ -101,6 +112,15 @@ ENV
     docker compose logs --tail 50
     exit 1
   ' || fail "Backend startet nicht, Logs stehen oben."
+
+if [[ "$TAILSCALE" == 1 ]]; then
+  # Das Skript aus dem gerade geklonten Stand nehmen, damit create-lxc.sh allein auf dem Host reicht
+  TS_SCRIPT="$(mktemp)"
+  pct exec "$CTID" -- cat /opt/fil-o-mat/deploy/proxmox/add-tailscale.sh > "$TS_SCRIPT"
+  CTID="$CTID" TS_AUTHKEY="$TS_AUTHKEY" TS_HOSTNAME="$CT_HOSTNAME" TS_SERVE="$TS_SERVE" bash "$TS_SCRIPT" \
+    || echo "Tailscale ließ sich nicht einrichten; später mit add-tailscale.sh nachholen."
+  rm -f "$TS_SCRIPT"
+fi
 
 CT_IP="$(pct exec "$CTID" -- hostname -I | awk '{print $1}')"
 info "Fertig"
