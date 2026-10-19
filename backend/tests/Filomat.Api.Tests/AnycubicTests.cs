@@ -178,6 +178,59 @@ public class AnycubicTests : IDisposable
         Assert.Equal(6, ace.LoadedSlot);
         Assert.Equal("ASA", ace.Types[6]);
     }
+
+    /// <summary>Marcels Kobra X (Firmware 2.0.2.2, gekürzt): eingebauter Vierer als Einheit -1, Slot 3 reicht zur externen ACE durch.</summary>
+    private const string KobraXBoxes = """
+        [{"id":-1,"loaded_slot":-1,"model_id":40002,"slots":[
+           {"index":0,"type":"PLA+","color":[255,255,255],"status":5,"edit_status":1},
+           {"index":1,"type":"PLA+","color":[101,88,177],"status":5,"edit_status":1},
+           {"index":2,"type":"PLA Matte","color":[33,39,33],"status":4,"edit_status":2},
+           {"index":3,"type":"PLA","color":[244,0,49],"status":5,"edit_status":3}]},
+         {"id":0,"loaded_slot":-1,"model_id":40002,"humidity":45,"slots":[
+           {"index":0,"type":"PLA+","status":4,"edit_status":2},
+           {"index":1,"type":"PLA+","status":4,"edit_status":2},
+           {"index":2,"type":"PLA+","status":4,"edit_status":2},
+           {"index":3,"type":"PLA+","status":4,"edit_status":2}]}]
+        """;
+
+    [Fact]
+    public void NumbersTheKobraXBuiltInSlotsFirstAndSkipsThePassThrough()
+    {
+        var ace = AnycubicAdapter.ReadAce(JsonDocument.Parse(KobraXBoxes).RootElement);
+        Assert.Equal(8, ace.SlotCount);
+        // Mehrere Slots im Kopf eingezogen: daraus lässt sich der fördernde nicht ablesen
+        Assert.Null(ace.LoadedSlot);
+        Assert.Equal("PLA Matte", ace.Types[2]);
+        Assert.False(ace.Types.ContainsKey(3));
+        Assert.Equal("PLA+", ace.Types[7]);
+
+        var feeding = KobraXBoxes.Replace("\"id\":0,\"loaded_slot\":-1", "\"id\":0,\"loaded_slot\":2");
+        Assert.Equal(6, AnycubicAdapter.ReadAce(JsonDocument.Parse(feeding).RootElement).LoadedSlot);
+        var internalSlot = KobraXBoxes.Replace("\"id\":-1,\"loaded_slot\":-1", "\"id\":-1,\"loaded_slot\":1");
+        Assert.Equal(1, AnycubicAdapter.ReadAce(JsonDocument.Parse(internalSlot).RootElement).LoadedSlot);
+    }
+
+    [Fact]
+    public async Task UsesTheStateOfTheKobraXLastProject()
+    {
+        _printer.Boxes = KobraXBoxes.Replace("\"id\":0,\"loaded_slot\":-1", "\"id\":0,\"loaded_slot\":1");
+        var printer = await CreatePrinterAsync();
+        Assert.Equal(8, (await _client.GetFromJsonAsync<PrinterResponse>($"/api/printers/{printer.Id}"))!.Tools);
+        var blue = await PlaceSpoolAsync("BL", printer.Id, 5);
+
+        _printer.Info = FakeAnycubic.Printing(FakeAnycubic.Project(129923691, 1200, 40, 0));
+        await SyncAsync(printer.Id);
+        // Wie vom Kobra X gemeldet: last_project ohne print_status, Fortschritt 1
+        _printer.Info = FakeAnycubic.Idle("""
+            {"curr_layer":24,"filename":"1011-1729-Eurorack_RevB_Parts_DovetailConnector_4mm_plate(01)_PLA_0.2_52m13s.gcode",
+             "print_time":54,"progress":1,"remain_time":0,"state":"finished","supplies_usage":2601.63301000005,"task_id":129923691,"total_layers":24}
+            """);
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal(1000 - Grams(2601.63301), await RemainingAsync(blue.Id), 2);
+        var consumption = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("completed", consumption.Status);
+    }
 }
 
 /// <summary>Anmeldung am Drucker: Token, Signatur, entschlüsselte Zugangsdaten.</summary>
