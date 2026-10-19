@@ -137,6 +137,7 @@ fun ContainerDetailScreen(
                     items(cont.items) { item ->
                         ItemCard(
                             item = item,
+                            onOpen = { navController.navigate("item/${item.id}") },
                             onRemove = {
                                 itemToRemove = item
                                 showingRemoveItemDialog = true
@@ -309,13 +310,16 @@ fun InfoRow(label: String, value: String) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemCard(
     item: com.filomat.app.data.Item,
+    onOpen: () -> Unit,
     onRemove: () -> Unit,
     isLoseContainer: Boolean = false
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    // Antippen öffnet die Sorte mit Gewichten, angebrochenen Spulen und Verbrauch
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)

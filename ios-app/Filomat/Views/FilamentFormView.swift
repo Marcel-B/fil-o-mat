@@ -337,7 +337,7 @@ private struct SpoolRow: View {
 }
 
 /// Angebrochene Spule wiegen, einlegen oder als leer markieren.
-private struct SpoolEditView: View {
+struct SpoolEditView: View {
     @Environment(ContainerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
 
@@ -348,8 +348,12 @@ private struct SpoolEditView: View {
     @State private var location: SpoolPlace
     @State private var isSaving = false
     @State private var errorMessage: String?
+    @State private var itemToEdit: Item?
+    /// Aus der Sorte heraus geöffnet, wäre der Weg zurück zur Sorte doppelt
+    let showsItem: Bool
 
-    init(spool: Spool, emptySpoolWeight: Double?) {
+    init(spool: Spool, emptySpoolWeight: Double?, showsItem: Bool = false) {
+        self.showsItem = showsItem
         self.spool = spool
         _remaining = State(initialValue: GramText.format(spool.remainingWeight))
         _emptySpool = State(initialValue: GramText.format(emptySpoolWeight))
@@ -358,6 +362,36 @@ private struct SpoolEditView: View {
 
     var body: some View {
         Form {
+            if showsItem, let item = store.item(id: spool.itemId) {
+                Section("Filament") {
+                    Button {
+                        itemToEdit = item
+                    } label: {
+                        LabeledContent {
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        } label: {
+                            Text(item.displayTitle)
+                            Text("Sorte öffnen: Vorrat, alle Spulen, Verbrauch")
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    LabeledContent("Farbe") { ColorInfo(data: item.itemData) }
+                    if let min = item.itemData?.minTemp, let max = item.itemData?.maxTemp {
+                        LabeledContent("Temperatur", value: "\(min)°C - \(max)°C")
+                    }
+                    if let min = item.itemData?.bedMinTemp, let max = item.itemData?.bedMaxTemp {
+                        LabeledContent("Bett-Temp", value: "\(min)°C - \(max)°C")
+                    }
+                    if let net = item.netWeight {
+                        LabeledContent("Füllgewicht neue Spule", value: "\(Int(net.rounded())) g")
+                    }
+                    if let transmission = item.transmissionText {
+                        LabeledContent("Lichtdurchlässigkeit", value: transmission)
+                    }
+                    LabeledContent("Platz", value: spool.locationText(printers: store.printers, containers: store.containers))
+                }
+            }
+
             Section {
                 GramField(title: "Gewogen mit Spule (g)", text: $weighed)
                 GramField(title: "Leere Spule (g)", text: $emptySpool)
@@ -382,6 +416,9 @@ private struct SpoolEditView: View {
             }
         }
         .navigationTitle("Spule #\(spool.number)")
+        .sheet(item: $itemToEdit) { item in
+            FilamentFormView(mode: .edit(item))
+        }
         .onChange(of: weighed) { updateFromScale() }
         .onChange(of: emptySpool) { updateFromScale() }
     }
