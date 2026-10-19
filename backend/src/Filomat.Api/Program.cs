@@ -1,3 +1,4 @@
+using Filomat.Api.Backup;
 using Filomat.Api.Data;
 using Filomat.Api.Catalog;
 using Filomat.Api.Endpoints;
@@ -25,6 +26,12 @@ builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IConfiguration>(),
     sp.GetRequiredService<ILogger<SpoolWeightCatalog>>()));
 builder.Services.AddHostedService<PrinterSyncService>();
+builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.Section));
+builder.Services.AddHttpClient(WebDavClient.HttpClientName);
+builder.Services.AddSingleton<WebDavClient>();
+builder.Services.AddSingleton(TimeProvider.System);
+builder.Services.AddSingleton<CloudBackup>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudBackup>());
 builder.Services.AddOpenApi();
 
 var app = builder.Build();
@@ -50,6 +57,7 @@ api.MapItemEndpoints();
 api.MapPrinterEndpoints();
 api.MapSyncEndpoints();
 api.MapSpoolEndpoints();
+api.MapBackupEndpoints();
 api.MapUpdateEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")

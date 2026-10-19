@@ -28,6 +28,8 @@ dotnet test
 | `ConnectionStrings:Filomat` | `ConnectionStrings__Filomat` | SQLite-Datei, Standard `filomat.db` (im Container `/data/filomat.db`) |
 | `Filomat:ApiKey` | `Filomat__ApiKey` | Optionaler Schlüssel; wenn gesetzt, muss jeder `/api`-Aufruf den Header `X-Api-Key` mitschicken |
 | `Filomat:PrinterSyncInterval` | `Filomat__PrinterSyncInterval` | Abstand des Drucker-Abgleichs, Standard `00:02:00`; `00:00:00` schaltet ihn ab |
+| – | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | Nextcloud-Sicherung, siehe unten |
+| `Backup:At` | `Backup__At` | Uhrzeit der nächtlichen Sicherung, Standard `03:00` (`Backup:TimeZone`, Standard `Europe/Berlin`); leer für nur manuelle |
 
 ## API
 
@@ -58,6 +60,8 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | POST | `/api/items/{id}/spools` | Neue Spule anbrechen (`{"remainingWeight", "printerId", "tool", "containerId"}`, alles optional), Vorrat minus eins |
 | PUT | `/api/spools/{id}` | Restgewicht und Platz setzen (`printerId: null` = Lager, dazu optional `containerId`) |
 | POST | `/api/spools/{id}/empty` | Spule ist leer |
+| GET | `/api/backup` | Stand der Nextcloud-Sicherung: eingerichtet, letzte, nächste |
+| POST | `/api/backup` | Sofort sichern |
 | GET | `/health` | Lebenszeichen (ohne API-Schlüssel) |
 
 Tags sind eindeutig: ein Tag gehört entweder zu genau einem Container oder zu genau einem Filament. Die Tag-Daten (`itemData`) verwenden dasselbe OpenSpool-Format wie auf dem NFC-Tag (`color_hex`, `min_temp` …).
@@ -94,6 +98,29 @@ Ein Filament (Item) ist eine Sorte: Das Tag klebt z. B. auf einem Musterplättch
 Jede angebrochene Spule (`Spool`) hat eine Nummer pro Sorte (mit Stift auf die Spule schreiben), ein eigenes Restgewicht und einen Platz: Drucker und Kopf (`printerId`, `tool`) oder Lager. So können mehrere Spulen derselben Sorte gleichzeitig laufen, etwa als Nachfüllspule am U1 und in einem anderen Drucker.
 
 Gebucht wird auf die Spule, die an diesem Drucker-Kopf steckt. Steckt dort keine Spule der Sorte, wird die einzige Lager-Spule der Sorte eingelegt, sonst eine neue angebrochen. Reicht eine Spule für einen Druck nicht, wird sie als leer markiert und am selben Platz eine aus dem Vorrat angebrochen; ohne Vorrat bleibt das Restgewicht bei 0. Wird eine Spule an einen belegten Platz gelegt, wandert die bisherige ins Lager.
+
+## Sicherung in die Nextcloud
+
+Jede Nacht um 3 Uhr (und auf `POST /api/backup`) kopiert das Backend die Datenbank über SQLites Online-Backup, packt sie als ZIP und lädt sie per WebDAV in einen Nextcloud-Ordner, wie in YuE UI. Es entstehen `filomat-mon.zip` … `filomat-sun.zip` (die letzten sieben Tage) und `filomat-2026-10.zip` (der letzte Stand jedes Monats); in der Nextcloud wird nichts gelöscht. Wie die letzte Sicherung lief, steht unter `GET /api/backup` und in `backup.json` neben der Datenbank. Schlägt die nächtliche fehl, versucht das Backend es nach 30 Minuten erneut.
+
+Einrichten: in der Nextcloud unter Einstellungen → Sicherheit → Geräte & Sitzungen ein App-Passwort anlegen, dann in `backend/.env`:
+
+```bash
+NEXTCLOUD_WEBDAV_URL=https://cloud.example.de/remote.php/dav/files/<benutzer>/Backups/fil-o-mat
+NEXTCLOUD_USERNAME=<benutzer>
+NEXTCLOUD_APP_PASSWORD=<app-passwort>
+```
+
+Der Ordner `fil-o-mat` wird angelegt, der darüber (`Backups`) muss existieren. Danach `docker compose up -d` und zum Prüfen `curl -X POST http://localhost:8080/api/backup` (mit API-Schlüssel `-H "X-Api-Key: …"`), dann `curl http://localhost:8080/api/backup`.
+
+Zurückspielen (im LXC unter `/opt/fil-o-mat/backend`, das entpackte `filomat.db` im aktuellen Ordner; 1654 ist der Benutzer der App im Image):
+
+```bash
+docker compose stop
+docker run --rm -v backend_filomat-data:/data -v "$PWD":/in alpine sh -c \
+  'cp /in/filomat.db /data/ && rm -f /data/filomat.db-wal /data/filomat.db-shm && chown 1654:1654 /data/filomat.db'
+docker compose up -d
+```
 
 ## Datenbank-Migrationen
 

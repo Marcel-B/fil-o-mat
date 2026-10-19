@@ -22,6 +22,7 @@ Einstellungen über Umgebungsvariablen:
 | `GITHUB_TOKEN` | – | nur bei privatem Repository (Token mit Lesezugriff) |
 | `FILOMAT_API_KEY` | – | optionaler API-Schlüssel für die Apps |
 | `PORT` | `8080` | Port des Backends |
+| `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | – | optionale nächtliche Sicherung in die Nextcloud |
 | `TAILSCALE` | `0` | `1`: Backend zusätzlich über Tailscale erreichbar machen |
 | `TS_AUTHKEY` | – | Auth-Key fürs Tailnet; ohne zeigt Tailscale einen Login-Link an |
 | `TS_SERVE` | `0` | `1`: zusätzlich HTTPS über `tailscale serve` |
@@ -62,3 +63,16 @@ pct exec <CTID> -- journalctl -u filomat-update -n 50                      # Log
 So funktioniert es: `filomat-update.sh` schreibt den Stand nach `/var/lib/filomat-update/status.json`. Dieser Ordner ist im Container unter `/update` eingebunden (`backend/docker-compose.updater.yml`, eingetragen über `COMPOSE_FILE` in `backend/.env`). Die API liest die Datei (`GET /api/update`) und legt für einen Auftrag `request` an (`POST /api/update`, `POST /api/update/check`); darauf wartet die systemd-Unit `filomat-update.path`. Der Container selbst bekommt so keinen Zugriff auf Docker.
 
 Die Datenbank liegt im Docker-Volume `backend_filomat-data` im Container.
+
+## Nextcloud-Sicherung nachträglich einschalten
+
+```bash
+pct exec <CTID> -- bash -c 'cd /opt/fil-o-mat/backend && cat >> .env <<ENV
+NEXTCLOUD_WEBDAV_URL=https://cloud.example.de/remote.php/dav/files/<benutzer>/Backups/fil-o-mat
+NEXTCLOUD_USERNAME=<benutzer>
+NEXTCLOUD_APP_PASSWORD=<app-passwort>
+ENV
+docker compose up -d --build && sleep 5 && curl -s -X POST localhost:8080/api/backup'
+```
+
+Mit API-Schlüssel braucht der `curl` noch `-H "X-Api-Key: …"`. Details und Zurückspielen: [backend/README.md](../../backend/README.md#sicherung-in-die-nextcloud).

@@ -22,6 +22,10 @@ BRANCH="${BRANCH:-main}"
 GITHUB_TOKEN="${GITHUB_TOKEN:-}"           # nur bei privatem Repository
 FILOMAT_API_KEY="${FILOMAT_API_KEY:-}"     # optional, dann müssen die Apps ihn mitschicken
 PORT="${PORT:-8080}"
+# optional: nächtliche Sicherung in die Nextcloud (siehe backend/README.md)
+NEXTCLOUD_WEBDAV_URL="${NEXTCLOUD_WEBDAV_URL:-}"
+NEXTCLOUD_USERNAME="${NEXTCLOUD_USERNAME:-}"
+NEXTCLOUD_APP_PASSWORD="${NEXTCLOUD_APP_PASSWORD:-}"
 TAILSCALE="${TAILSCALE:-0}"                # 1: Backend auch über Tailscale erreichbar machen (add-tailscale.sh)
 TS_AUTHKEY="${TS_AUTHKEY:-}"               # optional, sonst zeigt Tailscale einen Login-Link an
 TS_SERVE="${TS_SERVE:-0}"                  # 1: zusätzlich HTTPS über "tailscale serve"
@@ -83,6 +87,8 @@ info "Docker installieren und Backend starten (dauert ein paar Minuten)"
 pct exec "$CTID" -- env \
   CLONE_URL="$CLONE_URL" REPO_URL="$REPO_URL" BRANCH="$BRANCH" \
   FILOMAT_API_KEY="$FILOMAT_API_KEY" PORT="$PORT" \
+  NEXTCLOUD_WEBDAV_URL="$NEXTCLOUD_WEBDAV_URL" NEXTCLOUD_USERNAME="$NEXTCLOUD_USERNAME" \
+  NEXTCLOUD_APP_PASSWORD="$NEXTCLOUD_APP_PASSWORD" \
   bash -euo pipefail -c '
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
@@ -96,6 +102,9 @@ pct exec "$CTID" -- env \
     cat > /opt/fil-o-mat/backend/.env <<ENV
 FILOMAT_API_KEY=$FILOMAT_API_KEY
 FILOMAT_PORT=$PORT
+NEXTCLOUD_WEBDAV_URL=$NEXTCLOUD_WEBDAV_URL
+NEXTCLOUD_USERNAME=$NEXTCLOUD_USERNAME
+NEXTCLOUD_APP_PASSWORD=$NEXTCLOUD_APP_PASSWORD
 ENV
     chmod 600 /opt/fil-o-mat/backend/.env
 
@@ -127,6 +136,7 @@ info "Fertig"
 echo "  Container:  $CTID ($CT_HOSTNAME)"
 echo "  Backend:    http://${CT_IP}:${PORT}"
 [[ -n "$FILOMAT_API_KEY" ]] && echo "  API-Schlüssel ist gesetzt."
+[[ -n "$NEXTCLOUD_WEBDAV_URL" ]] && echo "  Nextcloud-Sicherung jede Nacht um 3 Uhr nach $NEXTCLOUD_WEBDAV_URL."
 echo
 echo "  Diese Adresse in der Android- und iOS-App eintragen."
 echo "  Neue Versionen zeigt die iOS-App unter Backend an und spielt sie auf Wunsch ein."
