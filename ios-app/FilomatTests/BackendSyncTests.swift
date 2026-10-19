@@ -43,7 +43,8 @@ final class BackendSyncTests: XCTestCase {
      "items":[
       {"id":"spool-1","rfidTag":"04112233","name":"PLA Rot","description":"","createdAt":1700000100000,"containerId":"android-box",
        "itemData":{"protocol":"openspool","version":null,"type":"PLA","color_hex":"FF0000","brand":null,"min_temp":"190","max_temp":"220","bed_min_temp":null,"bed_max_temp":null,"variant":null,"color":null},
-       "netWeight":1000,"remainingWeight":850.5}]}
+       "netWeight":1000,"spoolWeight":null,"spoolsInStock":3}],
+     "spools":[{"id":"s1","itemId":"spool-1","number":2,"remainingWeight":850.5,"printerId":null,"tool":null,"openedAt":1700000200000}]}
     """
 
     override func setUp() {
@@ -66,7 +67,9 @@ final class BackendSyncTests: XCTestCase {
         XCTAssertEqual(upload.value(forHTTPHeaderField: "X-Api-Key"), "geheim")
         // Container aus der Android-App sind danach auf dem iPhone bekannt
         XCTAssertEqual(store.findContainer(byTag: "04AABBCC")?.name, "Box aus Android")
-        XCTAssertEqual(store.items(in: "android-box").first?.remainingWeight, 850.5)
+        XCTAssertEqual(store.items(in: "android-box").first?.spoolsInStock, 3)
+        XCTAssertEqual(store.spools(of: "spool-1").first?.remainingWeight, 850.5)
+        XCTAssertEqual(store.spools(of: "spool-1").first?.locationText(printers: []), "Lager")
         XCTAssertEqual(store.items.first?.itemData?.colorHex, "FF0000")
 
         let reloaded = ContainerStore(fileURL: fileURL)

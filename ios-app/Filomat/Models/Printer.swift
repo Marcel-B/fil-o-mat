@@ -9,15 +9,26 @@ struct Printer: Identifiable, Codable, Hashable {
     var hasApiKey: Bool
     var enabled: Bool
     var containerId: String
+    /// Anzahl Köpfe bzw. Slots (U1: 4); ältere Backends liefern den Wert nicht.
+    var tools: Int?
     var lastSyncAt: String?
     var lastSyncError: String?
 
     var lastSyncDate: Date? { lastSyncAt.flatMap(BackendDate.parse) }
+    var toolCount: Int { max(tools ?? 1, 1) }
+
+    /// "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf.
+    func placeName(tool: Int?) -> String {
+        guard toolCount > 1, let tool else { return name }
+        return "\(name) \(type == .prusaLink || type == .anycubic ? "Slot" : "Kopf") \(tool + 1)"
+    }
 }
 
 enum PrinterType: String, Codable, CaseIterable, Identifiable {
     case moonraker = "Moonraker"
     case snapmakerU1 = "SnapmakerU1"
+    case prusaLink = "PrusaLink"
+    case anycubic = "Anycubic"
 
     var id: String { rawValue }
 
@@ -25,6 +36,8 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .moonraker: "Klipper / Moonraker"
         case .snapmakerU1: "Snapmaker U1 (paxx12)"
+        case .prusaLink: "Prusa (PrusaLink)"
+        case .anycubic: "Anycubic Kobra (LAN-Modus)"
         }
     }
 
@@ -32,6 +45,22 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         switch self {
         case .moonraker: "http://voron.local:7125"
         case .snapmakerU1: "http://192.168.2.155"
+        case .prusaLink: "http://prusa-core-one.local"
+        case .anycubic: "http://192.168.2.160"
+        }
+    }
+
+    /// Erklärung unter dem Formular beim Anlegen.
+    var setupHint: String {
+        switch self {
+        case .moonraker:
+            "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist."
+        case .snapmakerU1:
+            "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
+        case .prusaLink:
+            "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+        case .anycubic:
+            "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
         }
     }
 }
@@ -42,6 +71,14 @@ struct PrinterRequest: Encodable {
     var baseUrl: String
     var apiKey: String?
     var rfidTag: String?
+}
+
+/// Änderungen an einem Drucker. `apiKey` `nil` lässt den Schlüssel, ein leerer Text löscht ihn.
+struct PrinterUpdateRequest: Encodable {
+    var name: String
+    var baseUrl: String
+    var apiKey: String?
+    var enabled: Bool
 }
 
 struct SyncResponse: Decodable {

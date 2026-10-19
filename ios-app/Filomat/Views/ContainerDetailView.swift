@@ -8,6 +8,7 @@ struct ContainerDetailView: View {
     @State private var showingEdit = false
     @State private var showingDelete = false
     @State private var itemToRemove: Item?
+    @State private var itemToEdit: Item?
     @State private var isScanning = false
     @State private var scanMessage: String?
 
@@ -20,7 +21,12 @@ struct ContainerDetailView: View {
     }
 
     private func content(for container: Container) -> some View {
-        let items = store.items(in: container.id)
+        let printer = store.printer(owningContainer: container.id)
+        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zeigt "Im Drucker"
+        let items = store.items(in: container.id).filter { item in
+            guard let printer else { return true }
+            return !store.spools(of: item.id).contains { $0.printerId == printer.id }
+        }
         let isLoose = container.id == Container.looseId
 
         return List {
@@ -35,13 +41,65 @@ struct ContainerDetailView: View {
                 }
             }
 
-            Section("Filamente (\(items.count))") {
-                if items.isEmpty {
-                    Text("Keine Filamente in diesem Container").foregroundStyle(.secondary)
+            // Der Container eines Druckers: was in seinen Köpfen oder Slots steckt
+            if let printer {
+                Section("Im Drucker") {
+                    ForEach(0..<printer.toolCount, id: \.self) { tool in
+                        if let spool = store.spool(inPrinter: printer.id, tool: tool) {
+                            let item = store.item(id: spool.itemId)
+                            NavigationLink {
+                                SpoolEditView(spool: spool, emptySpoolWeight: item?.spoolWeight, showsItem: true)
+                            } label: {
+                                LabeledContent {
+                                    // Ohne Restgewicht rechnet das Backend mit einer vollen Spule der Sorte
+                                    Text((spool.remainingWeight ?? item?.netWeight).map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                                } label: {
+                                    Text(printer.placeName(tool: tool))
+                                    // Farbe dazu: zwei Sorten gleicher Marke und Art unterscheiden sich sonst nicht
+                                    HStack(spacing: 6) {
+                                        ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
+                                        Text([item?.displayTitle ?? "Filament", item?.itemData?.color]
+                                            .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") + " #\(spool.number)")
+                                    }
+                                    .font(.subheadline)
+                                    .foregroundStyle(.secondary)
+                                }
+                            }
+                        } else {
+                            LabeledContent(printer.placeName(tool: tool), value: "frei")
+                        }
+                    }
                 }
-                ForEach(items) { item in
-                    ItemDetailRow(item: item, isLooseContainer: isLoose) {
-                        itemToRemove = item
+            }
+
+            // Im Drucker-Container stehen Sorten, die in einem Slot stecken, schon oben
+            if printer == nil || !items.isEmpty {
+                Section("Filamente (\(items.count))") {
+                    if items.isEmpty {
+                        Text("Keine Filamente in diesem Container").foregroundStyle(.secondary)
+                    }
+                    ForEach(items) { item in
+                        ItemDetailRow(item: item, isLooseContainer: isLoose) {
+                            itemToRemove = item
+                        }
+                        // Antippen öffnet die Sorte; der Minus-Knopf behält seinen eigenen Tipp
+                        .contentShape(Rectangle())
+                        .onTapGesture { itemToEdit = item }
+                    }
+                }
+            }
+
+            let spools = store.spools(inContainer: container.id)
+            if !spools.isEmpty {
+                Section("Angebrochene Spulen (\(spools.count))") {
+                    ForEach(spools) { spool in
+                        let item = store.item(id: spool.itemId)
+                        NavigationLink {
+                            SpoolEditView(spool: spool, emptySpoolWeight: item?.spoolWeight, showsItem: true)
+                        } label: {
+                            LabeledContent("\(item?.displayTitle ?? "Filament") #\(spool.number)",
+                                           value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                        }
                     }
                 }
             }
@@ -77,6 +135,9 @@ struct ContainerDetailView: View {
         }
         .sheet(isPresented: $showingEdit) {
             EditContainerView(container: container)
+        }
+        .sheet(item: $itemToEdit) { item in
+            FilamentFormView(mode: .edit(item))
         }
         .alert("Container löschen", isPresented: $showingDelete) {
             Button("Löschen", role: .destructive) {

@@ -13,6 +13,10 @@ import Observation
 final class ContainerStore {
     private(set) var containers: [Container] = []
     private(set) var items: [Item] = []
+    /// Angebrochene Spulen, wie sie das Backend führt.
+    private(set) var spools: [Spool] = []
+    /// Drucker aus dem Backend, für die Platzangabe der Spulen.
+    private(set) var printers: [Printer] = []
     private(set) var isSyncing = false
     private(set) var syncError: String?
     private(set) var lastSyncedAt: Date?
@@ -27,6 +31,8 @@ final class ContainerStore {
     private struct Snapshot: Codable {
         var containers: [Container]
         var items: [Item]
+        var spools: [Spool]?
+        var printers: [Printer]?
         var standardContainersInitialized: Bool
     }
 
@@ -57,6 +63,34 @@ final class ContainerStore {
 
     func findItem(byTag rfidTag: String) -> Item? {
         items.first { $0.rfidTag == rfidTag }
+    }
+
+    func spools(of itemId: String) -> [Spool] {
+        spools.filter { $0.itemId == itemId }.sorted { $0.number < $1.number }
+    }
+
+    func item(id: String) -> Item? {
+        items.first { $0.id == id }
+    }
+
+    /// Angebrochene Spulen, die im Lager in diesem Container liegen.
+    func spools(inContainer containerId: String) -> [Spool] {
+        spools.filter { $0.printerId == nil && $0.containerId == containerId }
+    }
+
+    /// Die Spule, die in diesem Kopf steckt.
+    func spool(inPrinter printerId: String, tool: Int) -> Spool? {
+        spools.first { $0.printerId == printerId && ($0.tool ?? 0) == tool }
+    }
+
+    /// Container, in die man Filament einlagern kann: alle außer denen der Drucker.
+    var storageContainers: [Container] {
+        containers.filter { $0.id != Container.printerId && printer(owningContainer: $0.id) == nil }
+    }
+
+    /// Der Drucker, dem dieser Container gehört (jeder Drucker im Backend hat einen).
+    func printer(owningContainer containerId: String) -> Printer? {
+        printers.first { $0.containerId == containerId }
     }
 
     // MARK: - Container
@@ -146,6 +180,7 @@ final class ContainerStore {
                 items: items.map(Self.withoutWeights)
             ))
             apply(try await client.snapshot())
+            await loadPrinters(client)
             return result
         } catch {
             syncError = error.localizedDescription
@@ -189,14 +224,59 @@ final class ContainerStore {
         defer { isSyncing = false }
         do {
             apply(try await backend.snapshot())
+            await loadPrinters(backend)
         } catch {
             syncError = error.localizedDescription
         }
     }
 
+    // MARK: - Spulen
+
+    /// Bricht eine neue Spule der Sorte an (aus dem Vorrat) und lädt danach den Stand neu.
+    @discardableResult
+    func openSpool(itemId: String, remainingWeight: Double? = nil, place: SpoolPlace = .storage) async throws -> Spool? {
+        guard let backend else { return nil }
+        let spool = try await backend.openSpool(
+            itemId: itemId, remainingWeight: remainingWeight,
+            printerId: place.printerId, tool: place.tool, containerId: place.containerId
+        )
+        await refresh()
+        return spool
+    }
+
+    func updateSpool(_ spool: Spool) async throws {
+        guard let backend else { return }
+        try await backend.updateSpool(id: spool.id, SpoolUpdate(
+            remainingWeight: spool.remainingWeight, printerId: spool.printerId, tool: spool.tool, containerId: spool.containerId
+        ))
+        await refresh()
+    }
+
+    /// Legt eine angebrochene Spule an einen anderen Platz; was dort im Drucker steckte, wandert ins Lager.
+    func placeSpool(_ spool: Spool, at place: SpoolPlace) async throws {
+        var moved = spool
+        moved.printerId = place.printerId
+        moved.tool = place.tool
+        moved.containerId = place.containerId
+        try await updateSpool(moved)
+    }
+
+    func markSpoolEmpty(id: String) async throws {
+        guard let backend else { return }
+        try await backend.markSpoolEmpty(id: id)
+        await refresh()
+    }
+
+    private func loadPrinters(_ client: BackendClient) async {
+        guard let loaded = try? await client.printers() else { return }
+        printers = loaded
+        save()
+    }
+
     func apply(_ snapshot: BackendSnapshot) {
         containers = snapshot.containers
         items = snapshot.items
+        spools = snapshot.spools ?? []
         standardContainersInitialized = true
         syncError = nil
         lastSyncedAt = Date()
@@ -225,8 +305,8 @@ final class ContainerStore {
     private static func withoutWeights(_ item: Item) -> Item {
         var item = item
         item.netWeight = nil
-        item.remainingWeight = nil
         item.spoolWeight = nil
+        item.spoolsInStock = nil
         return item
     }
 
@@ -247,6 +327,8 @@ final class ContainerStore {
             let snapshot = try Self.decoder.decode(Snapshot.self, from: data)
             containers = snapshot.containers
             items = snapshot.items
+            spools = snapshot.spools ?? []
+            printers = snapshot.printers ?? []
             standardContainersInitialized = snapshot.standardContainersInitialized
         } catch {
             print("ContainerStore: Laden fehlgeschlagen: \(error)")
@@ -257,6 +339,8 @@ final class ContainerStore {
         let snapshot = Snapshot(
             containers: containers,
             items: items,
+            spools: spools,
+            printers: printers,
             standardContainersInitialized: standardContainersInitialized
         )
         do {

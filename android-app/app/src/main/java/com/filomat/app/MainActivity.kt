@@ -8,6 +8,12 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.lifecycleScope
+import androidx.lifecycle.repeatOnLifecycle
+import kotlinx.coroutines.delay
+import com.filomat.app.data.ContainerStore
+import kotlinx.coroutines.launch
 import com.filomat.app.nfc.NFCReader
 import com.filomat.app.ui.theme.FilomatTheme
 import com.filomat.app.ui.navigation.AppNavigation
@@ -18,6 +24,19 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         nfcReader = NFCReader(this)
+
+        // Wie die iOS-App beim Öffnen und danach alle 2 Minuten den gemeinsamen Stand und die Backend-Version
+        // holen, solange die App sichtbar ist (das Backend fragt die Drucker im selben Takt ab)
+        val store = ContainerStore.get(this)
+        lifecycleScope.launch {
+            repeatOnLifecycle(Lifecycle.State.STARTED) {
+                while (true) {
+                    store.refresh()
+                    store.refreshUpdateStatus()
+                    delay(REFRESH_INTERVAL_MS)
+                }
+            }
+        }
         
         setContent {
             FilomatTheme {
@@ -44,5 +63,9 @@ class MainActivity : ComponentActivity() {
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
         nfcReader.handleIntent(intent)
+    }
+
+    private companion object {
+        const val REFRESH_INTERVAL_MS = 120_000L
     }
 }

@@ -23,9 +23,10 @@ struct FilamentFormView: View {
     @State private var bedMinTemp: String
     @State private var bedMaxTemp: String
     @State private var netWeight: String
-    @State private var remainingWeight: String
     @State private var spoolWeight: String
-    @State private var weighed = ""
+    @State private var spoolsInStock: Int
+    @State private var transmissionDistance: String
+    @State private var isOpeningSpool = false
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -39,8 +40,9 @@ struct FilamentFormView: View {
             data = edited.itemData
         }
         _netWeight = State(initialValue: Self.gramText(item?.netWeight))
-        _remainingWeight = State(initialValue: Self.gramText(item?.remainingWeight))
         _spoolWeight = State(initialValue: Self.gramText(item?.spoolWeight))
+        _spoolsInStock = State(initialValue: item?.spoolsInStock ?? 0)
+        _transmissionDistance = State(initialValue: GramText.format(item?.transmissionDistance))
         _type = State(initialValue: data?.type ?? "")
         _brand = State(initialValue: data?.brand ?? "")
         _variant = State(initialValue: data?.variant ?? "")
@@ -90,23 +92,42 @@ struct FilamentFormView: View {
                     TemperatureField(title: "Max. Bett-Temperatur (°C)", text: $bedMaxTemp)
                 }
 
-                if editedItem != nil {
+                if let item = editedItem {
                     Section {
                         GramField(title: "Füllgewicht neue Spule (g)", text: $netWeight)
-                        GramField(title: "Restgewicht (g)", text: $remainingWeight)
+                        GramField(title: "Leere Spule (g)", text: $spoolWeight)
+                        Stepper("Volle Spulen im Vorrat: \(spoolsInStock)", value: $spoolsInStock, in: 0...99)
+                        TransmissionField(text: $transmissionDistance)
                     } header: {
-                        Text("Gewicht")
+                        Text("Sorte")
                     } footer: {
-                        Text("Gedruckter Verbrauch wird automatisch vom Restgewicht abgezogen. Ohne Restgewicht wird vom Füllgewicht ausgegangen.")
+                        Text("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst.")
                     }
 
-                    Section {
-                        GramField(title: "Gewogen mit Spule (g)", text: $weighed)
-                        GramField(title: "Leere Spule (g)", text: $spoolWeight)
-                    } header: {
-                        Text("Angebrochene Spule wiegen")
-                    } footer: {
-                        Text("Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet. Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke.")
+                    if store.backend != nil {
+                        Section {
+                            ForEach(store.spools(of: item.id)) { spool in
+                                NavigationLink {
+                                    SpoolEditView(spool: spool, emptySpoolWeight: Self.grams(spoolWeight))
+                                } label: {
+                                    SpoolRow(spool: spool, location: spool.locationText(printers: store.printers, containers: store.containers))
+                                }
+                            }
+                            Button {
+                                Task { await openSpool(item) }
+                            } label: {
+                                HStack {
+                                    Text("Neue Spule anbrechen")
+                                    Spacer()
+                                    if isOpeningSpool { ProgressView() }
+                                }
+                            }
+                            .disabled(isOpeningSpool)
+                        } header: {
+                            Text("Angebrochene Spulen")
+                        } footer: {
+                            Text("Schreib die Nummer mit Stift auf die Spule. Gedruckter Verbrauch wird von der Spule abgezogen, die im Drucker an diesem Kopf steckt.")
+                        }
                     }
                 }
 
@@ -167,8 +188,6 @@ struct FilamentFormView: View {
                 await loadConsumption()
                 await suggestSpoolWeight()
             }
-            .onChange(of: weighed) { updateRemainingFromScale() }
-            .onChange(of: spoolWeight) { updateRemainingFromScale() }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
         }
@@ -181,13 +200,28 @@ struct FilamentFormView: View {
 
     private func applyWeights(to item: inout Item) {
         item.netWeight = Self.grams(netWeight)
-        item.remainingWeight = Self.grams(remainingWeight)
         item.spoolWeight = Self.grams(spoolWeight)
+        item.spoolsInStock = spoolsInStock
+        item.transmissionDistance = GramText.parse(transmissionDistance)
     }
 
-    private func updateRemainingFromScale() {
-        guard let gross = Self.grams(weighed), let empty = Self.grams(spoolWeight) else { return }
-        remainingWeight = Self.gramText(max(0, gross - empty))
+    /// Bricht eine volle Spule an (Platz: Lager). Gewicht und Platz werden danach an der Spule gesetzt.
+    private func openSpool(_ item: Item) async {
+        isOpeningSpool = true
+        defer { isOpeningSpool = false }
+        do {
+            // Eingetragene Werte zuerst speichern (abwarten, damit der Vorrat danach nicht überschrieben wird)
+            var updated = item
+            updated.itemData = filamentData
+            applyWeights(to: &updated)
+            try await store.backend?.importData(BackendSnapshot(containers: [], items: [updated]))
+            try await store.openSpool(itemId: item.id)
+            if let refreshed = store.items.first(where: { $0.id == item.id }) {
+                spoolsInStock = refreshed.spoolsInStock ?? 0
+            }
+        } catch {
+            errorMessage = error.localizedDescription
+        }
     }
 
     /// Leergewicht der Marke aus der SpoolmanDB vorschlagen, wenn noch keins eingetragen ist.
@@ -201,14 +235,9 @@ struct FilamentFormView: View {
         spoolWeight = Self.gramText(match)
     }
 
-    private static func grams(_ text: String) -> Double? {
-        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
-    }
+    private static func grams(_ text: String) -> Double? { GramText.parse(text) }
 
-    private static func gramText(_ value: Double?) -> String {
-        guard let value else { return "" }
-        return value.rounded() == value ? String(Int(value)) : String(value)
-    }
+    private static func gramText(_ value: Double?) -> String { GramText.format(value) }
 
     /// Temperaturen aus den Presets übernehmen. Beim Bearbeiten werden nur leere Felder gefüllt.
     private func loadTemperatures() {
@@ -291,6 +320,154 @@ struct FilamentFormView: View {
     }
 }
 
+private struct SpoolRow: View {
+    var spool: Spool
+    var location: String
+
+    var body: some View {
+        HStack {
+            Text("#\(spool.number)").font(.headline).monospacedDigit()
+            Text(location).foregroundStyle(.secondary)
+            Spacer()
+            if let grams = spool.remainingWeight {
+                Text("\(Int(grams.rounded())) g").monospacedDigit()
+            }
+        }
+    }
+}
+
+/// Angebrochene Spule wiegen, einlegen oder als leer markieren.
+struct SpoolEditView: View {
+    @Environment(ContainerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+
+    let spool: Spool
+    @State private var remaining: String
+    @State private var weighed = ""
+    @State private var emptySpool: String
+    @State private var location: SpoolPlace
+    @State private var isSaving = false
+    @State private var errorMessage: String?
+    @State private var itemToEdit: Item?
+    /// Aus der Sorte heraus geöffnet, wäre der Weg zurück zur Sorte doppelt
+    let showsItem: Bool
+
+    init(spool: Spool, emptySpoolWeight: Double?, showsItem: Bool = false) {
+        self.showsItem = showsItem
+        self.spool = spool
+        _remaining = State(initialValue: GramText.format(spool.remainingWeight))
+        _emptySpool = State(initialValue: GramText.format(emptySpoolWeight))
+        _location = State(initialValue: spool.place)
+    }
+
+    var body: some View {
+        Form {
+            if showsItem, let item = store.item(id: spool.itemId) {
+                Section("Filament") {
+                    Button {
+                        itemToEdit = item
+                    } label: {
+                        LabeledContent {
+                            Image(systemName: "chevron.right").foregroundStyle(.tertiary)
+                        } label: {
+                            Text(item.displayTitle)
+                            Text("Sorte öffnen: Vorrat, alle Spulen, Verbrauch")
+                        }
+                    }
+                    .foregroundStyle(.primary)
+                    LabeledContent("Farbe") { ColorInfo(data: item.itemData) }
+                    if let min = item.itemData?.minTemp, let max = item.itemData?.maxTemp {
+                        LabeledContent("Temperatur", value: "\(min)°C - \(max)°C")
+                    }
+                    if let min = item.itemData?.bedMinTemp, let max = item.itemData?.bedMaxTemp {
+                        LabeledContent("Bett-Temp", value: "\(min)°C - \(max)°C")
+                    }
+                    if let net = item.netWeight {
+                        LabeledContent("Füllgewicht neue Spule", value: "\(Int(net.rounded())) g")
+                    }
+                    if let transmission = item.transmissionText {
+                        LabeledContent("Lichtdurchlässigkeit", value: transmission)
+                    }
+                    LabeledContent("Platz", value: spool.locationText(printers: store.printers, containers: store.containers))
+                }
+            }
+
+            Section {
+                GramField(title: "Gewogen mit Spule (g)", text: $weighed)
+                GramField(title: "Leere Spule (g)", text: $emptySpool)
+                GramField(title: "Restgewicht (g)", text: $remaining)
+            } header: {
+                Text("Wiegen")
+            } footer: {
+                Text("Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet.")
+            }
+
+            Section("Platz") {
+                SpoolPlacePicker(title: "Steckt in", selection: $location)
+            }
+
+            Section {
+                Button("Speichern") { Task { await save() } }
+                    .disabled(isSaving)
+                Button("Spule ist leer", role: .destructive) { Task { await markEmpty() } }
+                    .disabled(isSaving)
+            } footer: {
+                if let errorMessage { Text(errorMessage).foregroundStyle(.red) }
+            }
+        }
+        .navigationTitle("Spule #\(spool.number)")
+        .sheet(item: $itemToEdit) { item in
+            FilamentFormView(mode: .edit(item))
+        }
+        .onChange(of: weighed) { updateFromScale() }
+        .onChange(of: emptySpool) { updateFromScale() }
+    }
+
+    private func updateFromScale() {
+        guard let gross = GramText.parse(weighed), let empty = GramText.parse(emptySpool) else { return }
+        remaining = GramText.format(max(0, gross - empty))
+    }
+
+    private func save() async {
+        isSaving = true
+        defer { isSaving = false }
+        var updated = spool
+        updated.remainingWeight = GramText.parse(remaining)
+        updated.printerId = location.printerId
+        updated.tool = location.tool
+        updated.containerId = location.containerId
+        do {
+            try await store.updateSpool(updated)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func markEmpty() async {
+        isSaving = true
+        defer { isSaving = false }
+        do {
+            try await store.markSpoolEmpty(id: spool.id)
+            dismiss()
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+}
+
+/// Gramm- und andere Dezimalangaben als Text (Komma oder Punkt als Dezimaltrenner).
+enum GramText {
+    static func parse(_ text: String) -> Double? {
+        Double(text.trimmingCharacters(in: .whitespaces).replacingOccurrences(of: ",", with: "."))
+    }
+
+    static func format(_ value: Double?) -> String {
+        guard let value else { return "" }
+        return value.rounded() == value ? String(Int(value)) : String(value)
+    }
+}
+
 /// Textfeld mit Vorschlagsliste (entspricht dem Autocomplete-Dropdown der Android-App).
 private struct SuggestionField: View {
     var title: String
@@ -338,8 +515,21 @@ private struct TemperatureField: View {
     }
 }
 
+/// Eingabefeld für die Lichtdurchlässigkeit (TD in mm).
+struct TransmissionField: View {
+    @Binding var text: String
+
+    var body: some View {
+        LabeledContent("Lichtdurchlässigkeit (TD, mm)") {
+            TextField("z. B. 3,5", text: $text)
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+        }
+    }
+}
+
 /// Eingabefeld für Gramm.
-private struct GramField: View {
+struct GramField: View {
     var title: String
     @Binding var text: String
 

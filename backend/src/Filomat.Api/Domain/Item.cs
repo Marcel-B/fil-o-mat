@@ -2,7 +2,11 @@ using System.Text.Json.Serialization;
 
 namespace Filomat.Api.Domain;
 
-/// <summary>Filamentspule mit RFID-Tag; gehört über <see cref="ContainerId"/> zu höchstens einem Container.</summary>
+/// <summary>
+/// Filament mit RFID-Tag; gehört über <see cref="ContainerId"/> zu höchstens einem Container.
+/// Das Tag kann auf der Spule oder auf einem Musterplättchen kleben; im zweiten Fall steht es für eine
+/// Filamentsorte mit angebrochenen Spulen (<see cref="Spool"/>) und Vorrat (<see cref="SpoolsInStock"/>).
+/// </summary>
 public class Item
 {
     public required string Id { get; set; }
@@ -16,11 +20,18 @@ public class Item
     /// <summary>Filamentgewicht einer vollen Spule in Gramm (ohne Spule), z. B. 1000.</summary>
     public double? NetWeight { get; set; }
 
-    /// <summary>Verbleibendes Filament in Gramm; sinkt mit jedem gebuchten Druck.</summary>
-    public double? RemainingWeight { get; set; }
-
     /// <summary>Gewicht der leeren Spule in Gramm, um gewogene Spulen umzurechnen.</summary>
     public double? SpoolWeight { get; set; }
+
+    /// <summary>Volle, noch nicht angebrochene Spulen dieser Sorte; <c>null</c>, wenn kein Vorrat geführt wird.</summary>
+    public int? SpoolsInStock { get; set; }
+
+    /// <summary>
+    /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, gemessen z. B. mit einem TD-1;
+    /// je höher, desto mehr Licht lässt das Filament durch. <c>null</c>, wenn nicht gemessen.
+    /// </summary>
+    public double? TransmissionDistance { get; set; }
+
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>

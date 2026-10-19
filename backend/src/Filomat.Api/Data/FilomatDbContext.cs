@@ -10,6 +10,7 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
     public DbSet<Item> Items => Set<Item>();
     public DbSet<Printer> Printers => Set<Printer>();
     public DbSet<Consumption> Consumptions => Set<Consumption>();
+    public DbSet<Spool> Spools => Set<Spool>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -59,6 +60,29 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
             consumption.HasOne<Item>()
                 .WithMany()
                 .HasForeignKey(c => c.ItemId)
+                .OnDelete(DeleteBehavior.SetNull);
+            consumption.HasOne<Spool>()
+                .WithMany()
+                .HasForeignKey(c => c.SpoolId)
+                .OnDelete(DeleteBehavior.SetNull);
+        });
+
+        modelBuilder.Entity<Spool>(spool =>
+        {
+            spool.HasKey(s => s.Id);
+            spool.HasIndex(s => new { s.ItemId, s.Number }).IsUnique();
+            spool.HasIndex(s => new { s.PrinterId, s.Tool });
+            spool.HasOne<Item>()
+                .WithMany()
+                .HasForeignKey(s => s.ItemId)
+                .OnDelete(DeleteBehavior.Cascade);
+            spool.HasOne<Printer>()
+                .WithMany()
+                .HasForeignKey(s => s.PrinterId)
+                .OnDelete(DeleteBehavior.SetNull);
+            spool.HasOne<Container>()
+                .WithMany()
+                .HasForeignKey(s => s.ContainerId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
     }

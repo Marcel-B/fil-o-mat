@@ -20,10 +20,10 @@ public class SnapmakerU1Tests : IDisposable
         _printer.Routes["/printer/objects/query"] = """
             {"result":{"eventtime":731304.1,"status":{
               "filament_detect":{"info":[
-                {"VENDOR":"Sunlu","MAIN_TYPE":"PLA","CARD_UID":[4,161,59,82,203,42,129]},
-                {"VENDOR":"Sunlu","MAIN_TYPE":"PLA","CARD_UID":[4,234,22,84,203,42,129]},
-                {"VENDOR":"Overture","MAIN_TYPE":"TPU","CARD_UID":[4,152,245,83,203,42,129]},
-                {"VENDOR":"NONE","MAIN_TYPE":"NONE","CARD_UID":[4,89,56,81,203,42,129]}],
+                {"VENDOR":"Sunlu","MAIN_TYPE":"PLA","SUB_TYPE":"","RGB_1":16777215,"HOTEND_MIN_TEMP":190,"HOTEND_MAX_TEMP":220,"BED_TEMP":60,"CARD_UID":[4,161,59,82,203,42,129]},
+                {"VENDOR":"Sunlu","MAIN_TYPE":"PLA","SUB_TYPE":"","RGB_1":0,"HOTEND_MIN_TEMP":190,"HOTEND_MAX_TEMP":220,"BED_TEMP":60,"CARD_UID":[4,234,22,84,203,42,129]},
+                {"VENDOR":"Overture","MAIN_TYPE":"TPU","SUB_TYPE":"","RGB_1":0,"HOTEND_MIN_TEMP":210,"HOTEND_MAX_TEMP":230,"BED_TEMP":50,"CARD_UID":[4,152,245,83,203,42,129]},
+                {"VENDOR":"NONE","MAIN_TYPE":"NONE","SUB_TYPE":"NONE","RGB_1":16777215,"HOTEND_MIN_TEMP":0,"CARD_UID":[4,89,56,81,203,42,129]}],
                "state":[0,0,0,0]},
               "print_task_config":{"extruder_map_table":[0,1,2,3,0,0,0,0]}}}}
             """;
@@ -59,29 +59,49 @@ public class SnapmakerU1Tests : IDisposable
     [Fact]
     public async Task BooksEachToolheadOnTheSpoolTheU1Detected()
     {
-        var u1 = await CreateU1Async();
         var black = await CreateSpoolAsync("04EA1654CB2A81", 1000);   // Kopf 2 (Index 1)
         var white = await CreateSpoolAsync("04A13B52CB2A81", 1000);   // Kopf 1, im Druck nicht benutzt
+        var u1 = await CreateU1Async();                               // gleicht beim Anlegen sofort ab
 
-        var result = await (await _client.PostAsync($"/api/printers/{u1.Id}/sync", null)).Content.ReadFromJsonAsync<SyncResponse>();
-        Assert.Null(result!.Error);
-        Assert.Equal(1, result.Recorded);
+        var printer = await _client.GetFromJsonAsync<PrinterResponse>($"/api/printers/{u1.Id}");
+        Assert.Null(printer!.LastSyncError);
 
         // 20,73 g geplant, 7092,2 von 7105,0 mm gedruckt
-        Assert.Equal(979.31, (await _client.GetFromJsonAsync<Item>($"/api/items/{black.Id}"))!.RemainingWeight);
-        Assert.Null((await _client.GetFromJsonAsync<Item>($"/api/items/{white.Id}"))!.RemainingWeight);
+        var blackSpool = Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!);
+        Assert.Equal((979.31, 1), (blackSpool.RemainingWeight!.Value, blackSpool.Tool!.Value));
+        var whiteSpool = Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={white.Id}"))!);
+        Assert.Equal((1000d, 0), (whiteSpool.RemainingWeight!.Value, whiteSpool.Tool!.Value));
 
         var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={u1.Id}");
         Assert.Equal(2, entries!.Count);
-        var unknown = Assert.Single(entries, c => c.ItemId is null);
-        Assert.Equal(3, unknown.Tool);
-        Assert.Equal("04593851CB2A81", unknown.TagUid);
-        Assert.Equal(0.46, unknown.Grams);
-
-        // Erkannte Spulen liegen jetzt im Drucker-Container
-        Assert.Equal(u1.ContainerId, (await _client.GetFromJsonAsync<Item>($"/api/items/{white.Id}"))!.ContainerId);
+        var head4 = Assert.Single(entries, c => c.Tool == 3);
+        Assert.Equal("04593851CB2A81", head4.TagUid);
+        Assert.Equal(0.46, head4.Grams);
 
         var again = await (await _client.PostAsync($"/api/printers/{u1.Id}/sync", null)).Content.ReadFromJsonAsync<SyncResponse>();
         Assert.Equal(0, again!.Recorded);
+    }
+
+    [Fact]
+    public async Task TakesOverAllSpoolsTheU1Detected()
+    {
+        var u1 = await CreateU1Async();
+
+        var loaded = await _client.GetFromJsonAsync<List<Item>>($"/api/containers/{u1.ContainerId}/items");
+        Assert.Equal(4, loaded!.Count);
+
+        var tpu = loaded.Single(i => i.RfidTag == "0498F553CB2A81");
+        Assert.Equal("Overture TPU", tpu.Name);
+        Assert.Equal("TPU", tpu.ItemData!.Type);
+        Assert.Equal("Overture", tpu.ItemData.Brand);
+        Assert.Equal("000000", tpu.ItemData.ColorHex);
+        Assert.Equal("210", tpu.ItemData.MinTemp);
+        Assert.Equal("FFFFFF", loaded.Single(i => i.RfidTag == "04A13B52CB2A81").ItemData!.ColorHex);
+        Assert.Equal("Spule aus Kopf 4", loaded.Single(i => i.RfidTag == "04593851CB2A81").Name);
+
+        // Der Druck auf Kopf 4 hängt jetzt an der neu angelegten Spule
+        var head4 = loaded.Single(i => i.RfidTag == "04593851CB2A81");
+        var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?itemId={head4.Id}");
+        Assert.Single(entries!);
     }
 }

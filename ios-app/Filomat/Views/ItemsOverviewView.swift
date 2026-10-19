@@ -34,7 +34,7 @@ struct ItemsOverviewView: View {
             ForEach(visibleGroups) { group in
                 Section("\(group.type) (\(group.items.count))") {
                     ForEach(group.items) { item in
-                        ItemOverviewRow(item: item, containerName: containerName(for: item))
+                        ItemOverviewRow(item: item, containerName: containerName(for: item), spools: store.spools(of: item.id))
                             .contentShape(Rectangle())
                             .onTapGesture { itemToEdit = item }
                             .swipeActions {
@@ -99,6 +99,7 @@ struct ItemsOverviewView: View {
 private struct ItemOverviewRow: View {
     var item: Item
     var containerName: String
+    var spools: [Spool] = []
 
     var body: some View {
         HStack(spacing: 12) {
@@ -119,9 +120,15 @@ private struct ItemOverviewRow: View {
                     if let type = item.itemData?.type { field("Typ:", type) }
                     if let brand = item.itemData?.brand { field("Marke:", brand) }
                     field("Container:", containerName)
-                    if let grams = item.remainingWeight ?? item.netWeight {
-                        field("Rest:", "\(Int(grams.rounded())) g")
+                    if !spools.isEmpty {
+                        field("Angebrochen:", spools.map { spool in
+                            spool.remainingWeight.map { "#\(spool.number) \(Int($0.rounded())) g" } ?? "#\(spool.number)"
+                        }.joined(separator: ", "))
                     }
+                    if let stock = item.spoolsInStock, stock > 0 {
+                        field("Vorrat:", stock == 1 ? "1 Spule" : "\(stock) Spulen")
+                    }
+                    if let td = item.transmissionText { field("TD:", td) }
                 }
                 .font(.caption)
             }

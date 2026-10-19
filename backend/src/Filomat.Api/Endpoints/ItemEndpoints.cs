@@ -13,16 +13,18 @@ public record ItemRequest(
     string? ContainerId,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null,
-    double? SpoolWeight = null);
+    double? SpoolWeight = null,
+    int? SpoolsInStock = null,
+    double? TransmissionDistance = null);
 
 public record ItemUpdateRequest(
     string Name,
     string? Description,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null,
-    double? SpoolWeight = null);
+    double? SpoolWeight = null,
+    int? SpoolsInStock = null,
+    double? TransmissionDistance = null);
 
 public record MoveItemRequest(string? ContainerId);
 
@@ -70,6 +72,7 @@ public static class ItemEndpoints
         if (name.Length == 0) errors["name"] = ["Name fehlt."];
         if (request.ContainerId is not null && !await db.Containers.AnyAsync(c => c.Id == request.ContainerId))
             errors["containerId"] = ["Container nicht gefunden."];
+        if (request.TransmissionDistance is < 0) errors["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString() : request.Id;
@@ -92,8 +95,9 @@ public static class ItemEndpoints
             ContainerId = request.ContainerId,
             ItemData = request.ItemData,
             NetWeight = request.NetWeight,
-            RemainingWeight = request.RemainingWeight,
             SpoolWeight = request.SpoolWeight,
+            SpoolsInStock = request.SpoolsInStock,
+            TransmissionDistance = request.TransmissionDistance,
             CreatedAt = DateTime.UtcNow,
         };
         db.Items.Add(item);
@@ -107,14 +111,20 @@ public static class ItemEndpoints
         var name = request.Name?.Trim() ?? "";
         if (name.Length == 0)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Name fehlt."] });
+        if (request.TransmissionDistance is < 0)
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]>
+            {
+                ["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."],
+            });
         if (await db.Items.FindAsync(id) is not { } item) return TypedResults.NotFound();
 
         item.Name = name;
         item.Description = request.Description ?? "";
         item.ItemData = request.ItemData;
         item.NetWeight = request.NetWeight;
-        item.RemainingWeight = request.RemainingWeight;
         item.SpoolWeight = request.SpoolWeight;
+        item.SpoolsInStock = request.SpoolsInStock;
+        item.TransmissionDistance = request.TransmissionDistance;
         await db.SaveChangesAsync();
         return TypedResults.Ok(item);
     }

@@ -24,10 +24,22 @@ public record SnapshotItem(
     string? ContainerId,
     FilamentData? ItemData,
     double? NetWeight = null,
-    double? RemainingWeight = null,
-    double? SpoolWeight = null);
+    double? SpoolWeight = null,
+    int? SpoolsInStock = null,
+    double? TransmissionDistance = null);
 
-public record Snapshot(List<SnapshotContainer> Containers, List<SnapshotItem> Items);
+/// <summary>Angebrochene Spule im Datenformat der Apps; wird nur vom Backend gepflegt.</summary>
+public record SnapshotSpool(
+    string Id,
+    string ItemId,
+    int Number,
+    double? RemainingWeight,
+    string? PrinterId,
+    int? Tool,
+    long OpenedAt,
+    string? ContainerId = null);
+
+public record Snapshot(List<SnapshotContainer> Containers, List<SnapshotItem> Items, List<SnapshotSpool>? Spools = null);
 
 public record ImportResult(int Containers, int Items, List<string> Skipped);
 
@@ -40,7 +52,9 @@ public static class SyncEndpoints
                 c.Id, c.RfidTag, c.Name, c.Description, c.Capacity, ToMillis(c.CreatedAt), c.IsStandard)).ToList(),
             (await db.Items.OrderBy(i => i.CreatedAt).ToListAsync()).Select(i => new SnapshotItem(
                 i.Id, i.RfidTag, i.Name, i.Description, ToMillis(i.CreatedAt), i.ContainerId, i.ItemData,
-                i.NetWeight, i.RemainingWeight, i.SpoolWeight)).ToList()))
+                i.NetWeight, i.SpoolWeight, i.SpoolsInStock, i.TransmissionDistance)).ToList(),
+            (await db.Spools.Where(s => s.EmptiedAt == null).OrderBy(s => s.OpenedAt).ToListAsync()).Select(s => new SnapshotSpool(
+                s.Id, s.ItemId, s.Number, s.RemainingWeight, s.PrinterId, s.Tool, ToMillis(s.OpenedAt), s.ContainerId)).ToList()))
             .WithTags("Abgleich");
 
         api.MapPost("/import", ImportAsync).WithTags("Abgleich");
@@ -122,8 +136,10 @@ public static class SyncEndpoints
             existing.ItemData = incoming.ItemData;
             // Gewichte nur übernehmen, wenn die App sie kennt; sonst bleibt der gebuchte Verbrauch erhalten
             if (incoming.NetWeight is not null) existing.NetWeight = incoming.NetWeight;
-            if (incoming.RemainingWeight is not null) existing.RemainingWeight = incoming.RemainingWeight;
             if (incoming.SpoolWeight is not null) existing.SpoolWeight = incoming.SpoolWeight;
+            if (incoming.SpoolsInStock is not null) existing.SpoolsInStock = incoming.SpoolsInStock;
+            // Ältere Apps kennen das Feld nicht und schicken es nie mit; ein Messwert bleibt dann erhalten
+            if (incoming.TransmissionDistance is not null) existing.TransmissionDistance = incoming.TransmissionDistance;
             itemByTag[incoming.RfidTag] = incoming.Id;
             items++;
         }

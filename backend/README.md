@@ -51,11 +51,15 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | DELETE | `/api/items/{id}` | Filament löschen |
 | GET | `/api/printers` · `/api/printers/{id}` | Drucker mit Stand des letzten Abgleichs |
 | POST | `/api/printers` | Drucker anlegen, legt seinen Container mit an |
-| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv |
+| PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv; neue Adresse oder neuer Schlüssel gleicht sofort ab |
 | DELETE | `/api/printers/{id}` | Drucker und Container entfernen; Spulen wandern nach „Lose“ |
 | POST | `/api/printers/{id}/sync` | Sofort abgleichen |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
-| POST | `/api/consumption/{id}/assign` | Offene Buchung einer Spule zuordnen (`{"itemId": "…"}`) und abziehen |
+| POST | `/api/consumption/{id}/assign` | Offene Buchung zuordnen (`{"itemId": "…", "spoolId": "…"}`, Spule optional) und abziehen |
+| GET | `/api/spools?itemId=&printerId=&includeEmpty=true` | Angebrochene Spulen |
+| POST | `/api/items/{id}/spools` | Neue Spule anbrechen (`{"remainingWeight", "printerId", "tool", "containerId"}`, alles optional), Vorrat minus eins |
+| PUT | `/api/spools/{id}` | Restgewicht und Platz setzen (`printerId: null` = Lager, dazu optional `containerId`) |
+| POST | `/api/spools/{id}/empty` | Spule ist leer |
 | GET | `/api/backup` | Stand der Nextcloud-Sicherung: eingerichtet, letzte, nächste |
 | POST | `/api/backup` | Sofort sichern |
 | GET | `/health` | Lebenszeichen (ohne API-Schlüssel) |
@@ -66,7 +70,7 @@ Tags sind eindeutig: ein Tag gehört entweder zu genau einem Container oder zu g
 
 Jeder Drucker bekommt einen eigenen Container. Die Spule, die gerade im Drucker steckt, wird in diesen Container eingelagert (per App wie bei jedem anderen Container; mit `rfidTag` beim Anlegen kann der Drucker einen echten NFC-Tag bekommen).
 
-Der Hintergrund-Abgleich holt beendete Drucke vom Drucker und legt pro Druck eine Buchung an. Liegt genau eine Spule im Drucker-Container, wird der Verbrauch von ihrem Restgewicht (`remainingWeight`, sonst `netWeight`) abgezogen. Bei keiner oder mehreren Spulen bleibt die Buchung offen und kann später zugeordnet werden. Drucke von vor dem Anlegen des Druckers werden ignoriert, jeder Druck wird nur einmal gebucht.
+Der Hintergrund-Abgleich holt beendete Drucke vom Drucker und legt pro Druck eine Buchung an. Liegt genau eine Sorte im Drucker-Container, wird der Verbrauch von der angebrochenen Spule dieser Sorte im Drucker abgezogen (siehe unten). Bei keiner oder mehreren Spulen bleibt die Buchung offen und kann später zugeordnet werden. Drucke von vor dem Anlegen des Druckers werden ignoriert, jeder Druck wird nur einmal gebucht.
 
 Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (stimmt auch bei abgebrochenen Drucken), ohne Slicer-Angaben über die Dichte des Filamenttyps bei 1,75 mm.
 
@@ -74,10 +78,26 @@ Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (
 |---|---|---|
 | `Moonraker` | Klipper, z. B. Voron | `http://<drucker>:7125` (oder über Fluidd/Mainsail-Port); `apiKey` nur bei aktivierter Moonraker-Authentifizierung |
 | `SnapmakerU1` | Snapmaker U1 mit paxx12-Firmware | `http://<drucker>` |
+| `PrusaLink` | Prusa MK4, Core One, Mini, XL | `http://<drucker>`; `apiKey` aus Einstellungen > Netzwerk > PrusaLink am Drucker |
+| `Anycubic` | Anycubic Kobra X, S1, 3, 4 im LAN-Modus | `http://<drucker>` (Port 18910 wird ergänzt); kein Schlüssel |
 
 Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das Backend bucht daher jeden Kopf einzeln auf die Spule mit diesem Tag, verschiebt erkannte Spulen automatisch in den Drucker-Container und verwendet die Spulen, die beim vorigen Abgleich eingelegt waren (also während des Drucks). Grundlage sind die Slicer-Angaben pro Filament (`filament_weight`, z. B. OrcaSlicer), bei abgebrochenen Drucken anteilig.
 
-Weitere Typen (Bambu LAN, PrusaLink, Anycubic) folgen.
+PrusaLink hat keine Druckhistorie. Das Backend merkt sich deshalb bei jedem Abgleich den laufenden Druck und bucht ihn, sobald er beendet ist oder der Drucker keinen Druck mehr meldet (abgebrochene Drucke anteilig nach Fortschritt). Ist ein Druck schon vom Display verschwunden, bevor der nächste Abgleich (alle zwei Minuten) ihn als beendet sieht, wird nach dem zuletzt gesehenen Fortschritt gebucht; ab 99,5 % gilt er als fertig. Mit MMU3 kommen die Slicer-Werte pro Slot; gebucht wird jeweils auf die Spule, die in der App an diesem Slot eingelegt ist.
+
+Anycubic-Drucker werden im LAN-Modus abgefragt (am Drucker Einstellungen > Netzwerk > LAN-Modus; die Anycubic-Cloud und die App sind dann aus, Anycubic Slicer Next druckt weiter im LAN). Der Drucker gibt über `:18910/info` und eine signierte Anfrage Zugangsdaten für seinen MQTT-Broker (TLS, Port 9883) heraus, die bei jedem Abgleich neu geholt werden; Ablauf nach [anycubic-lan](https://github.com/Nino6689/anycubic-lan/blob/main/docs/PROTOCOL.md). Eine Historie gibt es nicht, aber der laufende Druck meldet die tatsächlich geförderte Länge (`supplies_usage`, mm, inklusive Spülen). Das Backend verfolgt den Druck und rechnet jeden Zuwachs zwischen zwei Abgleichen dem ACE-Slot zu, der beim vorigen Abgleich förderte (Slots über alle ACE-Einheiten gezählt, Einheit · 4 + Slot). Bei Mehrfarbdrucken ist die Aufteilung deshalb nur so genau wie das Abgleich-Intervall. Gramm über die Dichte des Materials, das die ACE für den Slot meldet. Gebucht wird auf die Spule, die in der App an diesem Slot eingelegt ist; ohne ACE auf die Spule im Drucker.
+
+Der Kobra X meldet seinen eingebauten Vierer als Einheit -1. Dann zählen die Slots ab ihm: eingebaut 0–3, erste externe ACE 4–7 (in der App Slot 1–4 und 5–8). Der eingebaute Slot, der zur externen ACE durchreicht (`edit_status` 3), fördert nie selbst. Welcher Slot gerade fördert, liest der Adapter aus `loaded_slot`; der Kobra X hat mehrere Slots zugleich im Kopf eingezogen, daher gilt Status 5 nur, wenn es genau ein Slot ist. `last_project` des Kobra X hat kein `print_status`, nur `state` (`finished`).
+
+Bambu LAN folgt.
+
+### Tags auf Musterplättchen
+
+Ein Filament (Item) ist eine Sorte: Das Tag klebt z. B. auf einem Musterplättchen und bleibt, wenn eine Spule leer ist. `spoolsInStock` zählt die vollen Spulen im Vorrat.
+
+Jede angebrochene Spule (`Spool`) hat eine Nummer pro Sorte (mit Stift auf die Spule schreiben), ein eigenes Restgewicht und einen Platz: Drucker und Kopf (`printerId`, `tool`) oder Lager. So können mehrere Spulen derselben Sorte gleichzeitig laufen, etwa als Nachfüllspule am U1 und in einem anderen Drucker.
+
+Gebucht wird auf die Spule, die an diesem Drucker-Kopf steckt. Steckt dort keine Spule der Sorte, wird die einzige Lager-Spule der Sorte eingelegt, sonst eine neue angebrochen. Reicht eine Spule für einen Druck nicht, wird sie als leer markiert und am selben Platz eine aus dem Vorrat angebrochen; ohne Vorrat bleibt das Restgewicht bei 0. Wird eine Spule an einen belegten Platz gelegt, wandert die bisherige ins Lager.
 
 ## Sicherung in die Nextcloud
 

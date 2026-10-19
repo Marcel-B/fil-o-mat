@@ -9,20 +9,19 @@ struct FilomatApp: App {
     }()
     @Environment(\.scenePhase) private var scenePhase
 
+    static let refreshInterval: Duration = .seconds(120)
+
     var body: some Scene {
         WindowGroup {
             ContentView()
                 .environment(store)
-                .task {
-                    await store.refresh()
-                    await store.refreshUpdateStatus()
-                }
-                .onChange(of: scenePhase) { _, phase in
-                    if phase == .active {
-                        Task {
-                            await store.refresh()
-                            await store.refreshUpdateStatus()
-                        }
+                // Beim Öffnen und danach alle 2 Minuten den Stand holen, solange die App im Vordergrund ist
+                // (das Backend fragt die Drucker im selben Takt ab)
+                .task(id: scenePhase) {
+                    while scenePhase == .active, !Task.isCancelled {
+                        await store.refresh()
+                        await store.refreshUpdateStatus()
+                        try? await Task.sleep(for: FilomatApp.refreshInterval)
                     }
                 }
         }

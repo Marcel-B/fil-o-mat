@@ -15,6 +15,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die HTTP-Verbindung zu den Druckern.</summary>
     public HttpMessageHandler? PrinterHandler { get; init; }
 
+    /// <summary>Ersetzt die MQTT-Abfrage von Anycubic-Druckern.</summary>
+    public IAnycubicLan? AnycubicLan { get; init; }
+
     /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
     public HttpMessageHandler? NextcloudHandler { get; init; }
 
@@ -44,7 +47,10 @@ public class ApiFactory : WebApplicationFactory<Program>
             {
                 services.AddHttpClient<MoonrakerAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
                 services.AddHttpClient<SnapmakerU1Adapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
+                services.AddHttpClient<PrusaLinkAdapter>().ConfigurePrimaryHttpMessageHandler(() => handler);
             });
+        if (AnycubicLan is { } lan)
+            builder.ConfigureTestServices(services => services.AddSingleton(lan));
     }
 
     protected override void Dispose(bool disposing)

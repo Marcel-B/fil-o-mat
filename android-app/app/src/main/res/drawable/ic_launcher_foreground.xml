@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- branding/app-icon.svg scaled to 70 % so the print stays inside the adaptive icon's safe zone. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:aapt="http://schemas.android.com/aapt"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="108"
+    android:viewportHeight="108">
+    <group
+        android:scaleX="0.7"
+        android:scaleY="0.7"
+        android:translateX="19"
+        android:translateY="19">
+        <path
+            android:fillColor="#5D6670"
+            android:pathData="M42,10h16a2,2 0,0 1,2 2v12a2,2 0,0 1,-2 2h-16a2,2 0,0 1,-2 -2v-12a2,2 0,0 1,2 -2z" />
+        <path android:pathData="M35,26h30a2,2 0,0 1,2 2v6a2,2 0,0 1,-2 2h-30a2,2 0,0 1,-2 -2v-6a2,2 0,0 1,2 -2zM39,36H61L53,49H47Z">
+            <aapt:attr name="android:fillColor">
+                <gradient
+                    android:type="linear"
+                    android:startX="33"
+                    android:startY="0"
+                    android:endX="67"
+                    android:endY="0"
+                    android:startColor="#F0C66A"
+                    android:endColor="#B9872F" />
+            </aapt:attr>
+        </path>
+        <path
+            android:pathData="M50,49V60"
+            android:strokeColor="#FF7A1A"
+            android:strokeWidth="4.5"
+            android:strokeLineCap="round" />
+        <path
+            android:fillColor="#FF7A1A"
+            android:pathData="M23.5,78h53a3.5,3.5 0,0 1,0 7h-53a3.5,3.5 0,0 1,0 -7z" />
+        <path
+            android:fillColor="#FF8F3D"
+            android:pathData="M23.5,70h53a3.5,3.5 0,0 1,0 7h-53a3.5,3.5 0,0 1,0 -7z" />
+        <path
+            android:pathData="M23.5,65.5H50"
+            android:strokeColor="#FFA660"
+            android:strokeWidth="7"
+            android:strokeLineCap="round" />
+    </group>
+</vector>

@@ -32,8 +32,9 @@ fun ContainerDetailScreen(
     viewModel: ContainerDetailViewModel = viewModel()
 ) {
     val context = LocalContext.current
-    val containerStore = remember { ContainerStore(context) }
+    val containerStore = remember { ContainerStore.get(context) }
     val container by viewModel.container.collectAsState()
+    val storeState by containerStore.state.collectAsState(initial = com.filomat.app.data.sync.StoreState())
     var showingEditContainer by remember { mutableStateOf(false) }
     var showingAddItem by remember { mutableStateOf(false) }
     var showingDeleteDialog by remember { mutableStateOf(false) }
@@ -137,6 +138,7 @@ fun ContainerDetailScreen(
                     items(cont.items) { item ->
                         ItemCard(
                             item = item,
+                            onOpen = { navController.navigate("item/${item.id}") },
                             onRemove = {
                                 itemToRemove = item
                                 showingRemoveItemDialog = true
@@ -144,6 +146,11 @@ fun ContainerDetailScreen(
                             isLoseContainer = cont.id == "standard_lose"
                         )
                     }
+                }
+
+                val spools = storeState.spoolsIn(cont.id)
+                if (spools.isNotEmpty()) {
+                    item { OpenedSpoolsCard(spools, storeState) }
                 }
             }
         } ?: run {
@@ -300,18 +307,25 @@ fun InfoRow(label: String, value: String) {
         )
         Text(
             text = value,
-            style = MaterialTheme.typography.bodyMedium
+            style = MaterialTheme.typography.bodyMedium,
+            textAlign = androidx.compose.ui.text.style.TextAlign.End,
+            modifier = Modifier
+                .padding(start = 16.dp)
+                .weight(1f, fill = false)
         )
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ItemCard(
     item: com.filomat.app.data.Item,
+    onOpen: () -> Unit,
     onRemove: () -> Unit,
     isLoseContainer: Boolean = false
 ) {
-    Card(modifier = Modifier.fillMaxWidth()) {
+    // Antippen öffnet die Sorte mit Gewichten, angebrochenen Spulen und Verbrauch
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier.padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)

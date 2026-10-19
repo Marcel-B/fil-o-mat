@@ -6,7 +6,7 @@ using Microsoft.EntityFrameworkCore;
 namespace Filomat.Api.Printers;
 
 /// <summary>Holt beendete Drucke vom Drucker und bucht den Verbrauch auf die eingelegte Spule.</summary>
-public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> adapters, ILogger<ConsumptionSync> logger)
+public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable<IPrinterAdapter> adapters, ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
     private static readonly TimeSpan Overlap = TimeSpan.FromDays(2);
@@ -21,6 +21,12 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         try
         {
             var currentTools = await adapter.GetToolStateAsync(printer, cancellationToken);
+            if (currentTools is not null)
+            {
+                // Zuerst die erkannten Spulen übernehmen, damit neue Drucke schon auf sie gebucht werden
+                await MoveLoadedSpoolsAsync(printer, currentTools, cancellationToken);
+                await db.SaveChangesAsync(cancellationToken);
+            }
             // Drucke den Spulen zuordnen, die beim letzten Abgleich (also während des Drucks) eingelegt waren
             var toolsDuringPrint = ReadToolState(printer) ?? currentTools;
             var jobs = await adapter.GetFinishedJobsAsync(printer, since, cancellationToken);
@@ -31,7 +37,8 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 if (await db.Consumptions.AnyAsync(c => c.PrinterId == printer.Id && c.JobId == job.JobId, cancellationToken))
                     continue;
 
-                if (toolsDuringPrint is not null && job.SlicedGramsPerFilament is { Count: > 0 })
+                // Pro Kopf buchen, wenn der Drucker die Spulen erkennt oder mehrere Slots meldet (z. B. MMU3)
+                if (job.SlicedGramsPerFilament is { Count: > 0 } perFilament && (toolsDuringPrint is not null || perFilament.Count > 1))
                     await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
                 else
                     await RecordAsync(printer, job, cancellationToken);
@@ -39,14 +46,10 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 if (printer.LastJobEndedAt is null || job.EndedAt > printer.LastJobEndedAt)
                     printer.LastJobEndedAt = job.EndedAt;
             }
-            if (currentTools is not null)
-            {
-                printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
-                await MoveLoadedSpoolsAsync(printer, currentTools, cancellationToken);
-            }
+            if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException)
         {
             logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
             printer.LastSyncError = ex.Message;
@@ -59,11 +62,10 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
 
     private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
     {
-        // Abgebucht wird nur, wenn genau eine Spule im Drucker liegt
-        var loaded = await db.Items.Where(i => i.ContainerId == printer.ContainerId).ToListAsync(cancellationToken);
-        var item = loaded.Count == 1 ? loaded[0] : null;
+        var item = await ItemAtToolAsync(printer, 0, fallbackToContainer: true, cancellationToken);
         var grams = Math.Round(FilamentMath.GramsForJob(job, item?.ItemData?.Type), 2);
 
+        var spool = item is null ? null : await BookAsync(item, printer.Id, 0, grams, cancellationToken);
         db.Consumptions.Add(new Consumption
         {
             Id = Guid.NewGuid().ToString(),
@@ -75,13 +77,40 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
             LengthMm = job.LengthMm,
             Grams = grams,
             ItemId = item?.Id,
+            SpoolId = spool?.Id,
             RecordedAt = DateTime.UtcNow,
         });
-        if (item is not null) Deduct(item, grams);
     }
 
-    /// <summary>Bucht jeden Werkzeugkopf einzeln auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat.</summary>
-    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState tools, CancellationToken cancellationToken)
+    /// <summary>Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde.</summary>
+    private async Task<Spool> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
+    {
+        var spool = await spools.ResolveAsync(item, printerId, tool, cancellationToken);
+        await spools.DeductAsync(spool, item, grams, cancellationToken);
+        return spool;
+    }
+
+    /// <summary>
+    /// Sorte der Spule, die an diesem Kopf des Druckers steckt. Sonst, falls erlaubt, die einzige Sorte im
+    /// Drucker-Container; bei keiner oder mehreren bleibt die Buchung offen.
+    /// </summary>
+    private async Task<Item?> ItemAtToolAsync(Printer printer, int tool, bool fallbackToContainer, CancellationToken cancellationToken)
+    {
+        var placed = await db.Spools
+            .Where(s => s.PrinterId == printer.Id && s.EmptiedAt == null && (s.Tool ?? 0) == tool)
+            .Select(s => s.ItemId)
+            .ToListAsync(cancellationToken);
+        if (placed.Count == 1) return await db.Items.FindAsync([placed[0]], cancellationToken);
+        if (!fallbackToContainer) return null;
+        var loaded = await db.Items.Where(i => i.ContainerId == printer.ContainerId).ToListAsync(cancellationToken);
+        return loaded.Count == 1 ? loaded[0] : null;
+    }
+
+    /// <summary>
+    /// Bucht jeden Werkzeugkopf einzeln: auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat, oder
+    /// (ohne Tag-Erkennung, z. B. MMU3) auf die Spule, die in der App an diesem Kopf eingelegt ist.
+    /// </summary>
+    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
     {
         // Abgebrochene Drucke: anteilig nach tatsächlich verbrauchter Länge
         var ratio = job.SlicedLengthMm is > 0 && job.LengthMm > 0
@@ -94,7 +123,7 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
             var grams = job.SlicedGramsPerFilament[i];
             if (grams <= 0) continue;
             var length = job.SlicedLengthPerFilament is { } lengths && i < lengths.Count ? lengths[i] : 0;
-            var extruder = tools.ExtruderFor(i);
+            var extruder = tools?.ExtruderFor(i) ?? i;
             perExtruder[extruder] = perExtruder.TryGetValue(extruder, out var sum)
                 ? (sum.Grams + grams, sum.Length + length)
                 : (grams, length);
@@ -102,9 +131,12 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
 
         foreach (var (extruder, usage) in perExtruder)
         {
-            var tag = tools.TagFor(extruder);
-            var item = tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            var tag = tools?.TagFor(extruder);
+            var item = tools is null
+                ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: perExtruder.Count == 1, cancellationToken)
+                : tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
+            var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption
             {
                 Id = Guid.NewGuid().ToString(),
@@ -118,20 +150,62 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
                 Tool = extruder,
                 TagUid = tag,
                 ItemId = item?.Id,
+                SpoolId = spool?.Id,
                 RecordedAt = DateTime.UtcNow,
             });
-            if (item is not null) Deduct(item, grams);
         }
     }
 
-    /// <summary>Spulen, die der Drucker erkennt, liegen ab jetzt im Container des Druckers.</summary>
+    /// <summary>
+    /// Spulen, die der Drucker erkennt, liegen ab jetzt im Container des Druckers. Unbekannte Tags werden
+    /// mit den Daten angelegt, die der Drucker vom Tag gelesen hat, und offene Buchungen dieses Tags zugeordnet.
+    /// </summary>
     private async Task MoveLoadedSpoolsAsync(Printer printer, ToolState tools, CancellationToken cancellationToken)
     {
-        var tags = tools.TagUids.OfType<string>().ToList();
-        if (tags.Count == 0) return;
-        var items = await db.Items.Where(i => tags.Contains(i.RfidTag) && i.ContainerId != printer.ContainerId)
-            .ToListAsync(cancellationToken);
-        foreach (var item in items) item.ContainerId = printer.ContainerId;
+        for (var tool = 0; tool < tools.TagUids.Count; tool++)
+        {
+            if (tools.TagUids[tool] is not { } tag) continue;
+            var item = await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            if (item is null)
+            {
+                // Tags von Containern gehören nicht in einen Drucker
+                if (await db.Containers.AnyAsync(c => c.RfidTag == tag, cancellationToken)) continue;
+                var filament = tools.Filaments is { } list && tool < list.Count ? list[tool] : null;
+                item = NewItemFromTag(tag, filament, tool);
+                db.Items.Add(item);
+                var open = await db.Consumptions.Where(c => c.TagUid == tag && c.ItemId == null).ToListAsync(cancellationToken);
+                foreach (var entry in open) entry.ItemId = item.Id;
+            }
+            item.ContainerId = printer.ContainerId;
+            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort
+            await spools.ResolveAsync(item, printer.Id, tool, cancellationToken);
+        }
+    }
+
+    private static Item NewItemFromTag(string tag, DetectedFilament? filament, int tool)
+    {
+        var name = string.Join(" ", new[] { filament?.Vendor, filament?.Type, filament?.SubType }.Where(s => s is not null));
+        return new Item
+        {
+            Id = Guid.NewGuid().ToString(),
+            RfidTag = tag,
+            Name = name.Length > 0 ? name : $"Spule aus Kopf {tool + 1}",
+            Description = "Vom Drucker erkannt",
+            CreatedAt = DateTime.UtcNow,
+            ItemData = filament?.Type is null ? null : new FilamentData
+            {
+                Protocol = "openspool",
+                Version = "1.0",
+                Type = filament.Type,
+                Brand = filament.Vendor,
+                Variant = filament.SubType,
+                ColorHex = filament.ColorHex,
+                MinTemp = filament.MinTemp?.ToString(),
+                MaxTemp = filament.MaxTemp?.ToString(),
+                BedMinTemp = filament.BedTemp?.ToString(),
+                BedMaxTemp = filament.BedTemp?.ToString(),
+            },
+        };
     }
 
     private static ToolState? ReadToolState(Printer printer)
@@ -145,13 +219,5 @@ public class ConsumptionSync(FilomatDbContext db, IEnumerable<IPrinterAdapter> a
         {
             return null;
         }
-    }
-
-    /// <summary>Zieht Gramm vom Restgewicht ab; ohne Restgewicht wird von der vollen Spule ausgegangen.</summary>
-    public static void Deduct(Item item, double grams)
-    {
-        var current = item.RemainingWeight ?? item.NetWeight;
-        if (current is null) return;
-        item.RemainingWeight = Math.Max(0, Math.Round(current.Value - grams, 2));
     }
 }

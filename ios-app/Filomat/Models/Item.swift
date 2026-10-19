@@ -1,6 +1,6 @@
 import Foundation
 
-/// Ein Filament (Item) mit RFID-Tag. Gehört über `containerId` zu höchstens einem Container.
+/// Eine Filament-Sorte (Item) mit RFID-Tag. Gehört über `containerId` zu höchstens einem Container.
 struct Item: Identifiable, Codable, Hashable {
     var id: String = UUID().uuidString
     var rfidTag: String
@@ -10,11 +10,20 @@ struct Item: Identifiable, Codable, Hashable {
     var containerId: String?
     var itemData: ItemJsonData?
     /// Filamentgewicht einer vollen Spule in Gramm; wird vom Backend gepflegt.
+    /// Das Restgewicht steht pro angebrochener Spule in `Spool`.
     var netWeight: Double?
-    /// Verbleibendes Filament in Gramm; das Backend zieht gedruckte Mengen ab.
-    var remainingWeight: Double?
     /// Gewicht der leeren Spule in Gramm, um eine gewogene Spule umzurechnen.
     var spoolWeight: Double?
+    /// Volle Spulen dieser Sorte im Vorrat (bei Tags auf Musterplättchen); `nil`, wenn kein Vorrat geführt wird.
+    var spoolsInStock: Int?
+    /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, z. B. mit einem TD-1 gemessen.
+    /// Steht nur in Fil-o-mat, nicht auf dem Tag.
+    var transmissionDistance: Double?
+
+    /// "3,5 mm", falls die Lichtdurchlässigkeit gemessen ist.
+    var transmissionText: String? {
+        transmissionDistance.map { "\($0.formatted(.number.precision(.fractionLength(0...2)))) mm" }
+    }
 
     /// Titel im Format "<brand> <type> <variant>", Fallback auf den Namen.
     var displayTitle: String {

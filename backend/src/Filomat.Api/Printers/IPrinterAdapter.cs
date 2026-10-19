@@ -21,13 +21,20 @@ public record PrintJob(
 /// <summary>Welche Spule (Tag-UID) in welchem Werkzeugkopf steckt und welcher Slicer-Filament-Slot auf welchen Kopf geht.</summary>
 /// <param name="TagUids">Pro Werkzeugkopf die UID des erkannten Tags (Hex, Großbuchstaben) oder <c>null</c>.</param>
 /// <param name="ExtruderMap">Slicer-Filament-Index → Werkzeugkopf.</param>
-public record ToolState(IReadOnlyList<string?> TagUids, IReadOnlyList<int> ExtruderMap)
+/// <param name="Filaments">Pro Werkzeugkopf die Daten, die der Drucker vom Tag gelesen hat.</param>
+public record ToolState(
+    IReadOnlyList<string?> TagUids,
+    IReadOnlyList<int> ExtruderMap,
+    IReadOnlyList<DetectedFilament?>? Filaments = null)
 {
     public int ExtruderFor(int filamentIndex) =>
         filamentIndex < ExtruderMap.Count ? ExtruderMap[filamentIndex] : filamentIndex;
 
     public string? TagFor(int extruder) => extruder >= 0 && extruder < TagUids.Count ? TagUids[extruder] : null;
 }
+
+/// <summary>Filamentdaten, die ein Drucker selbst von einem Tag gelesen hat.</summary>
+public record DetectedFilament(string? Vendor, string? Type, string? SubType, string? ColorHex, int? MinTemp, int? MaxTemp, int? BedTemp);
 
 /// <summary>Anbindung an einen Druckertyp.</summary>
 public interface IPrinterAdapter
