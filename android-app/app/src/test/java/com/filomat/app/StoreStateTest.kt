@@ -107,4 +107,27 @@ class StoreStateTest {
         assertEquals("Lager", Spool("s", "i", 1).locationText(listOf(u1)))
         assertEquals("U1 Kopf 4", Spool("s", "i", 1, printerId = "p", tool = 3).locationText(listOf(u1)))
     }
+
+    @Test
+    fun filamentCountOfPrinterContainerIncludesLoadedSpools() {
+        val kobra = Printer("k", "Kobra", "Anycubic", "http://kobra", containerId = "kc", tools = 8)
+        val state = StoreState(
+            items = listOf(
+                Item(id = "a", rfidTag = "A", name = "PLA", containerId = "box"),
+                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "kc"),
+                Item(id = "c", rfidTag = "C", name = "ASA", containerId = "kc")
+            ),
+            spools = listOf(
+                Spool("s1", "a", 1, printerId = "k", tool = 0),
+                Spool("s2", "a", 2, printerId = "k", tool = 1),
+                Spool("s3", "b", 1, printerId = "k", tool = 2)
+            ),
+            printers = listOf(kobra)
+        )
+
+        // Drei Spulen in Slots; PETG steckt schon, ASA liegt nur im Container
+        assertEquals(listOf("c"), state.unloadedItemsIn("kc").map { it.id })
+        assertEquals(4, state.filamentCount("kc"))
+        assertEquals(1, state.filamentCount("box"))
+    }
 }

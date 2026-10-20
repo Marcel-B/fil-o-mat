@@ -119,14 +119,22 @@ fun ContainerDetailScreen(
                     }
                 }
                 
+                // Der Container eines Druckers: was in seinen Köpfen oder Slots steckt
+                val printer = storeState.printerOwning(cont.id)
+                if (printer != null) {
+                    item { PrinterContent(printer, storeState) }
+                }
+                // Sorten, deren Spule in einem Kopf steckt, stehen schon oben
+                val shownItems = if (printer != null) storeState.unloadedItemsIn(cont.id) else cont.items
+
                 item {
                     Text(
-                        text = "Filamente (${cont.items.size})",
+                        text = "Filamente (${shownItems.size})",
                         style = MaterialTheme.typography.titleMedium
                     )
                 }
                 
-                if (cont.items.isEmpty()) {
+                if (shownItems.isEmpty()) {
                     item {
                         Text(
                             text = "Keine Filamente in diesem Container",
@@ -135,7 +143,7 @@ fun ContainerDetailScreen(
                         )
                     }
                 } else {
-                    items(cont.items) { item ->
+                    items(shownItems) { item ->
                         ItemCard(
                             item = item,
                             onOpen = { navController.navigate("item/${item.id}") },

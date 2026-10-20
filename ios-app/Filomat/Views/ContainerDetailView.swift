@@ -22,11 +22,8 @@ struct ContainerDetailView: View {
 
     private func content(for container: Container) -> some View {
         let printer = store.printer(owningContainer: container.id)
-        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zeigt "Im Drucker"
-        let items = store.items(in: container.id).filter { item in
-            guard let printer else { return true }
-            return !store.spools(of: item.id).contains { $0.printerId == printer.id }
-        }
+        // Sorten, deren Spule in einem Kopf steckt, zeigt "Im Drucker"
+        let items = store.unloadedItems(in: container.id)
         let isLoose = container.id == Container.looseId
 
         return List {

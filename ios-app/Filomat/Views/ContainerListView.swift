@@ -90,7 +90,7 @@ private struct ContainerRow: View {
                 Text("RFID: \(container.rfidTag)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("\(store.items(in: container.id).count) Filamente")
+                Text("\(store.filamentCount(in: container.id)) Filamente")
                     .font(.caption)
                     .foregroundStyle(.secondary)
             }

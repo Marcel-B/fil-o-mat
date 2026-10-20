@@ -63,6 +63,22 @@ data class StoreState(
     /** Der Drucker, dem dieser Container gehört (jeder Drucker im Backend hat einen). */
     fun printerOwning(containerId: String): Printer? = printers.firstOrNull { it.containerId == containerId }
 
+    /** Sorten in diesem Container; im Container eines Druckers ohne die, deren Spule in einem seiner Köpfe steckt. */
+    fun unloadedItemsIn(containerId: String): List<Item> {
+        val contained = itemsIn(containerId)
+        val printer = printerOwning(containerId) ?: return contained
+        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zählen unter "Im Drucker"
+        return contained.filter { item -> spoolsOf(item.id).none { it.printerId == printer.id } }
+    }
+
+    /** Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt. */
+    fun filamentCount(containerId: String): Int {
+        val loaded = printerOwning(containerId)?.let { printer ->
+            (0 until printer.toolCount).count { spoolIn(printer.id, it) != null }
+        } ?: 0
+        return loaded + unloadedItemsIn(containerId).size
+    }
+
     /** Container, in die man Filament einlagern kann: alle außer denen der Drucker. */
     fun storageContainers(): List<Container> =
         containers.filter { it.id != PRINTER_CONTAINER_ID && printerOwning(it.id) == null }
