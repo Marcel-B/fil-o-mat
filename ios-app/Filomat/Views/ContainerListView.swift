@@ -7,7 +7,12 @@ struct ContainerListView: View {
 
     var body: some View {
         let regular = store.containers.filter { !$0.isStandard }
-        let standard = store.containers.filter { $0.isStandard }
+        let printerContainers = regular.filter { store.printer(owningContainer: $0.id) != nil }
+        let otherContainers = regular.filter { store.printer(owningContainer: $0.id) == nil }
+        // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
+        let standard = store.containers.filter {
+            $0.isStandard && ($0.id != Container.printerId || store.filamentCount(in: $0.id) > 0)
+        }
 
         List {
             if let error = store.syncError {
@@ -33,13 +38,18 @@ struct ContainerListView: View {
                     }
                 }
             }
-            if !regular.isEmpty {
-                Section {
-                    ForEach(regular) { ContainerRow(container: $0) }
+            if !printerContainers.isEmpty {
+                Section("Drucker") {
+                    ForEach(printerContainers) { ContainerRow(container: $0) }
+                }
+            }
+            if !otherContainers.isEmpty {
+                Section("Container") {
+                    ForEach(otherContainers) { ContainerRow(container: $0) }
                 }
             }
             if !standard.isEmpty {
-                Section("Standard-Container") {
+                Section {
                     ForEach(standard) { ContainerRow(container: $0) }
                 }
             }

@@ -153,52 +153,48 @@ private fun ContainerList(containers: List<Container>, storeState: StoreState, n
         }
     } else {
         val regularContainers = containers.filter { !it.isStandard }
-        val standardContainers = containers.filter { it.isStandard }
-        
+        val sections = listOf<Pair<String?, List<Container>>>(
+            "Drucker" to regularContainers.filter { storeState.printerOwning(it.id) != null },
+            "Container" to regularContainers.filter { storeState.printerOwning(it.id) == null },
+            // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
+            null to containers.filter {
+                it.isStandard && (it.id != StoreState.PRINTER_CONTAINER_ID || storeState.filamentCount(it.id) > 0)
+            }
+        ).filter { it.second.isNotEmpty() }
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Normale Container
-            items(regularContainers) { container ->
-                ContainerCard(
-                    container = container,
-                    filamentCount = storeState.filamentCount(container.id),
-                    onClick = {
-                        navController.navigate("container/${container.id}")
+            // Oben die Drucker, dann die übrigen Container, unten die Standard-Container
+            sections.forEachIndexed { index, (title, sectionContainers) ->
+                item(key = "header_$index") {
+                    if (index > 0) {
+                        Divider(
+                            modifier = Modifier.padding(top = 16.dp, bottom = 8.dp),
+                            thickness = 2.dp
+                        )
                     }
-                )
-            }
-            
-            // Trennlinie vor Standard-Containern
-            if (regularContainers.isNotEmpty() && standardContainers.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Divider(
-                        modifier = Modifier.padding(vertical = 8.dp),
-                        thickness = 2.dp
-                    )
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Text(
-                        text = "Standard-Container",
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(vertical = 8.dp)
+                    if (title != null) {
+                        Text(
+                            text = title,
+                            style = MaterialTheme.typography.labelLarge,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            modifier = Modifier.padding(vertical = 8.dp)
+                        )
+                    }
+                }
+                items(sectionContainers, key = { it.id }) { container ->
+                    ContainerCard(
+                        container = container,
+                        filamentCount = storeState.filamentCount(container.id),
+                        onClick = {
+                            navController.navigate("container/${container.id}")
+                        }
                     )
                 }
-            }
-            
-            // Standard-Container
-            items(standardContainers) { container ->
-                ContainerCard(
-                    container = container,
-                    filamentCount = storeState.filamentCount(container.id),
-                    onClick = {
-                        navController.navigate("container/${container.id}")
-                    }
-                )
             }
         }
     }
