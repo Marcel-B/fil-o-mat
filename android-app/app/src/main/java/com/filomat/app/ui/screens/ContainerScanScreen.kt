@@ -84,7 +84,7 @@ fun ContainerScanScreen(navController: NavController) {
 }
 
 @Composable
-private fun PrinterContent(printer: Printer, state: StoreState) {
+fun PrinterContent(printer: Printer, state: StoreState) {
     SectionCard("Drucker ${printer.name}") {
         for (tool in 0 until printer.toolCount) {
             val label = if (printer.toolCount > 1) printer.placeName(tool) else "Eingelegt"

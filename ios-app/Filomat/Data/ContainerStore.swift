@@ -95,6 +95,22 @@ final class ContainerStore {
         printers.first { $0.containerId == containerId }
     }
 
+    /// Sorten in diesem Container; im Container eines Druckers ohne die, deren Spule in einem seiner Köpfe steckt.
+    func unloadedItems(in containerId: String) -> [Item] {
+        let contained = items(in: containerId)
+        guard let printer = printer(owningContainer: containerId) else { return contained }
+        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zählen unter "Im Drucker"
+        return contained.filter { item in !spools(of: item.id).contains { $0.printerId == printer.id } }
+    }
+
+    /// Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt.
+    func filamentCount(in containerId: String) -> Int {
+        let loaded = printer(owningContainer: containerId).map { printer in
+            (0..<printer.toolCount).filter { spool(inPrinter: printer.id, tool: $0) != nil }.count
+        } ?? 0
+        return loaded + unloadedItems(in: containerId).count
+    }
+
     // MARK: - Container
 
     func addContainer(_ container: Container) {
