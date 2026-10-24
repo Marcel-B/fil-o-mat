@@ -333,6 +333,15 @@ public class BambuTests : IDisposable
     }
 
     [Fact]
+    public async Task NamesTheCauseWhenThePrinterRefusesTheConnection()
+    {
+        var error = await Assert.ThrowsAsync<PrinterUnavailableException>(() =>
+            new BambuLan().QueryAsync($"http://127.0.0.1:{FreePort()}", "12345678", null, CancellationToken.None));
+        // Außen nur "Error while connecting host", die Ursache steht darunter
+        Assert.Contains("→", error.Message);
+    }
+
+    [Fact]
     public void NumbersAmsSlotsFirstAndTheExternalSpoolLast()
     {
         var print = JsonDocument.Parse(FakeBambu.Report("RUNNING", 1, trayNow: 254)).RootElement;
