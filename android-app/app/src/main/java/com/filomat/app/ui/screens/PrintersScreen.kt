@@ -8,7 +8,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.ArrowDropDown
+import androidx.compose.material.icons.filled.BarChart
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Edit
+import androidx.compose.material.icons.filled.Notifications
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.*
@@ -22,11 +25,13 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.sync.Printer
+import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.PrinterRequest
 import com.filomat.app.data.sync.PrinterUpdateRequest
 import com.filomat.app.data.sync.PrinterType
 import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 
 /** Drucker im Backend: anlegen, bearbeiten, abgleichen, entfernen. */
@@ -44,6 +49,8 @@ fun PrintersScreen(navController: NavController) {
     var printerToEdit by remember { mutableStateOf<Printer?>(null) }
     var syncingId by remember { mutableStateOf<String?>(null) }
     var isLoading by remember { mutableStateOf(false) }
+    var showingNotifications by remember { mutableStateOf(false) }
+    val liveMap by store.printerLive.collectAsState()
 
     fun load() {
         scope.launch {
@@ -60,12 +67,26 @@ fun PrintersScreen(navController: NavController) {
 
     LaunchedEffect(sync.connected) { if (sync.connected) load() }
 
+    // Solange die Liste offen ist, den Zustand der Drucker alle 15 Sekunden holen
+    LaunchedEffect(sync.connected) {
+        while (sync.connected) {
+            store.refreshPrinterLive()
+            delay(PRINTER_LIVE_INTERVAL_MS)
+        }
+    }
+
     Scaffold(
         topBar = {
             TopAppBar(
                 title = { Text("Drucker") },
                 actions = {
                     if (sync.connected) {
+                        IconButton(onClick = { navController.navigate("stats") }) {
+                            Icon(Icons.Default.BarChart, contentDescription = "Statistik")
+                        }
+                        IconButton(onClick = { showingNotifications = true }) {
+                            Icon(Icons.Default.Notifications, contentDescription = "Meldungen")
+                        }
                         IconButton(onClick = { load() }, enabled = !isLoading) {
                             Icon(Icons.Default.Sync, contentDescription = "Neu laden")
                         }
@@ -107,7 +128,9 @@ fun PrintersScreen(navController: NavController) {
             items(printers, key = { it.id }) { printer ->
                 PrinterCard(
                     printer = printer,
+                    live = liveMap[printer.id],
                     isSyncing = syncingId == printer.id,
+                    onOpen = { navController.navigate("printer/${printer.id}") },
                     onSync = {
                         val client = store.backend ?: return@PrinterCard
                         syncingId = printer.id
@@ -127,6 +150,10 @@ fun PrintersScreen(navController: NavController) {
                 )
             }
         }
+    }
+
+    if (showingNotifications) {
+        NotificationDialog(store = store, onDismiss = { showingNotifications = false })
     }
 
     if (showingAdd) {
@@ -179,8 +206,16 @@ private fun EmptyHint(title: String, text: String) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit, onEdit: () -> Unit, onDelete: () -> Unit) {
-    Card(onClick = onEdit, modifier = Modifier.fillMaxWidth()) {
+private fun PrinterCard(
+    printer: Printer,
+    live: PrinterLive?,
+    isSyncing: Boolean,
+    onOpen: () -> Unit,
+    onSync: () -> Unit,
+    onEdit: () -> Unit,
+    onDelete: () -> Unit
+) {
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
         Row(modifier = Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(printer.name, style = MaterialTheme.typography.titleMedium)
@@ -193,6 +228,7 @@ private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit
                 )
                 val error = printer.lastSyncError
                 val lastSync = printer.lastSyncDate
+                if (live != null && printer.enabled && error == null) PrinterStatusLine(live)
                 if (error != null) {
                     Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                         Icon(Icons.Default.Warning, contentDescription = null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
@@ -213,6 +249,9 @@ private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit
                     Icon(Icons.Default.Sync, contentDescription = "Abgleichen", tint = MaterialTheme.colorScheme.primary)
                 }
             }
+            IconButton(onClick = onEdit) {
+                Icon(Icons.Default.Edit, contentDescription = "Bearbeiten")
+            }
             IconButton(onClick = onDelete) {
                 Icon(Icons.Default.Delete, contentDescription = "Entfernen", tint = MaterialTheme.colorScheme.error)
             }
@@ -223,7 +262,7 @@ private fun PrinterCard(printer: Printer, isSyncing: Boolean, onSync: () -> Unit
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 /** Neuer Drucker ([printer] ist `null`) oder Änderungen an einem vorhandenen, z. B. eine neue IP nach DHCP. */
-private fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: () -> Unit) {
+internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var name by remember { mutableStateOf(printer?.name ?: "") }
     var type by remember { mutableStateOf(printer?.printerType ?: PrinterType.SNAPMAKER_U1) }

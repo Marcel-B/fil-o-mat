@@ -14,6 +14,7 @@ import com.filomat.app.data.sync.ContainerData
 import com.filomat.app.data.sync.ImportResult
 import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
+import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.Snapshot
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.data.sync.SpoolPlace
@@ -72,6 +73,10 @@ class ContainerStore private constructor(context: Context) {
 
     private val _sync = MutableStateFlow(SyncState())
     val sync: StateFlow<SyncState> = _sync.asStateFlow()
+
+    private val _printerLive = MutableStateFlow<Map<String, PrinterLive>>(emptyMap())
+    /** Zustand der Drucker pro Drucker-ID; leer bei einem Backend ohne `/api/printers/status`. */
+    val printerLive: StateFlow<Map<String, PrinterLive>> = _printerLive.asStateFlow()
 
     /** Verbundenes Backend; `null`, solange nicht verbunden. */
     @Volatile
@@ -222,6 +227,14 @@ class ContainerStore private constructor(context: Context) {
         backend = null
         prefs.edit().putBoolean("connected", false).remove("server_url").remove("api_key").apply()
         _sync.update { SyncState(lastSyncedAt = null) }
+        _printerLive.value = emptyMap()
+    }
+
+    /** Zustand der Drucker; Fehler (z. B. ein älteres Backend) zählen nicht als Sync-Fehler. */
+    suspend fun refreshPrinterLive() {
+        val client = backend ?: return
+        val live = runCatching { client.printerStatus() }.getOrNull() ?: return
+        _printerLive.value = live.associateBy { it.printerId }
     }
 
     /** Übernimmt den Stand des Backends (z. B. Container, die auf einem anderen Gerät angelegt wurden). */
@@ -233,6 +246,7 @@ class ContainerStore private constructor(context: Context) {
             try {
                 applySnapshot(client.snapshot(), loadPrinters(client))
                 _sync.update { it.copy(error = null) }
+                refreshPrinterLive()
             } catch (e: Exception) {
                 _sync.update { it.copy(error = describe(e)) }
             } finally {
