@@ -104,7 +104,14 @@ data class SpoolUpdate(
     val containerId: String? = null
 )
 
-enum class PrinterType(val raw: String, val title: String, val addressHint: String, val setupHint: String) {
+enum class PrinterType(
+    val raw: String,
+    val title: String,
+    val addressHint: String,
+    val setupHint: String,
+    /** Bambu verlangt den Zugangscode, die anderen einen optionalen API-Schlüssel. */
+    val requiresKey: Boolean = false
+) {
     MOONRAKER(
         "Moonraker", "Klipper / Moonraker", "http://voron.local:7125",
         "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist."
@@ -116,7 +123,18 @@ enum class PrinterType(val raw: String, val title: String, val addressHint: Stri
     PRUSA_LINK(
         "PrusaLink", "Prusa (PrusaLink)", "http://prusa-core-one.local",
         "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+    ),
+    ANYCUBIC(
+        "Anycubic", "Anycubic Kobra (LAN-Modus)", "http://192.168.2.160",
+        "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+    ),
+    BAMBU(
+        "Bambu", "Bambu Lab P1S, X1, A1 (LAN)", "http://192.168.2.170",
+        "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist.",
+        requiresKey = true
     );
+
+    val keyLabel: String get() = if (requiresKey) "Zugangscode" else "API-Schlüssel (optional)"
 
     companion object {
         fun of(raw: String): PrinterType? = entries.firstOrNull { it.raw == raw }
@@ -146,7 +164,7 @@ data class Printer(
     /** "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf. */
     fun placeName(tool: Int?): String {
         if (toolCount <= 1 || tool == null) return name
-        val word = if (printerType == PrinterType.PRUSA_LINK) "Slot" else "Kopf"
+        val word = if (printerType in listOf(PrinterType.PRUSA_LINK, PrinterType.ANYCUBIC, PrinterType.BAMBU)) "Slot" else "Kopf"
         return "$name $word ${tool + 1}"
     }
 }

@@ -104,6 +104,7 @@ class StoreStateTest {
         assertEquals("U1 Kopf 2", u1.placeName(1))
         assertEquals("Core One Slot 3", prusa.placeName(2))
         assertEquals("Mini", mini.placeName(0))
+        assertEquals("P1S Slot 5", Printer("b", "P1S", "Bambu", "http://p1s", tools = 5).placeName(4))
         assertEquals("Lager", Spool("s", "i", 1).locationText(listOf(u1)))
         assertEquals("U1 Kopf 4", Spool("s", "i", 1, printerId = "p", tool = 3).locationText(listOf(u1)))
     }

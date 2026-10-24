@@ -80,6 +80,7 @@ Gramm werden aus dem Verhältnis von Slicer-Gewicht zu Slicer-Länge berechnet (
 | `SnapmakerU1` | Snapmaker U1 mit paxx12-Firmware | `http://<drucker>` |
 | `PrusaLink` | Prusa MK4, Core One, Mini, XL | `http://<drucker>`; `apiKey` aus Einstellungen > Netzwerk > PrusaLink am Drucker |
 | `Anycubic` | Anycubic Kobra X, S1, 3, 4 im LAN-Modus | `http://<drucker>` (Port 18910 wird ergänzt); kein Schlüssel |
+| `Bambu` | Bambu Lab P1S, P1P, X1, A1 | `http://<drucker>`; `apiKey` = Zugangscode (Einstellungen > WLAN am Drucker), optional `Seriennummer:Zugangscode` |
 
 Der U1 erkennt die NFC-Tags (OpenSpool) in jedem seiner vier Köpfe selbst. Das Backend bucht daher jeden Kopf einzeln auf die Spule mit diesem Tag, verschiebt erkannte Spulen automatisch in den Drucker-Container und verwendet die Spulen, die beim vorigen Abgleich eingelegt waren (also während des Drucks). Grundlage sind die Slicer-Angaben pro Filament (`filament_weight`, z. B. OrcaSlicer), bei abgebrochenen Drucken anteilig.
 
@@ -89,7 +90,9 @@ Anycubic-Drucker werden im LAN-Modus abgefragt (am Drucker Einstellungen > Netzw
 
 Der Kobra X meldet seinen eingebauten Vierer als Einheit -1. Dann zählen die Slots ab ihm: eingebaut 0–3, erste externe ACE 4–7 (in der App Slot 1–4 und 5–8). Der eingebaute Slot, der zur externen ACE durchreicht (`edit_status` 3), fördert nie selbst. Welcher Slot gerade fördert, liest der Adapter aus `loaded_slot`; der Kobra X hat mehrere Slots zugleich im Kopf eingezogen, daher gilt Status 5 nur, wenn es genau ein Slot ist. `last_project` des Kobra X hat kein `print_status`, nur `state` (`finished`).
 
-Bambu LAN folgt.
+Bambu-Drucker werden über ihren MQTT-Broker im LAN abgefragt (TLS, Port 8883, Benutzer `bblp`, Passwort = Zugangscode, Thema `device/<seriennummer>/report`). Die Seriennummer steht im Zertifikat des Druckers, das Backend liest sie dort; nur falls das nicht klappt, gehört sie mit Doppelpunkt vor den Zugangscode. Die P1-Serie schickt nur Änderungen, daher fragt das Backend bei jedem Abgleich mit `pushall` den ganzen Zustand ab und trennt wieder. Eine Historie und die geförderte Länge kennt der Drucker nicht. Das Backend verfolgt deshalb den laufenden Druck (`gcode_state`, `mc_percent`) und holt bei dessen Beginn die Druckdatei per FTPS von der SD-Karte (implizites TLS, Port 990, gleiche Zugangsdaten; im LAN gesendete Drucke liegen als `<name>.gcode.3mf` im Wurzelverzeichnis, Cloud-Drucke in `/cache`). Aus `Metadata/slice_info.config` kommen Gramm und Meter pro Filament der gedruckten Platte. Bei jedem Abgleich notiert der Adapter, welches AMS-Fach gerade fördert (`tray_now`). Am Ende gehört jedes Filament zum Fach mit derselben Farbe, bevorzugt unter den Fächern, die gefördert haben; ein einfarbiger Druck zu dem Fach, das förderte (beim Nachfüllen aus einem zweiten Fach anteilig). Abgebrochene Drucke (`FAILED`) werden anteilig nach Fortschritt gebucht. Fehlt die Druckdatei, bleibt die Restmenge, die das AMS für Bambu-Spulen mit Chip meldet (`remain` in Prozent des Nenngewichts); sonst wird der Druck mit 0 g gebucht.
+
+Slots: AMS-Einheit · 4 + Fach (Slot 1–4 erstes AMS), danach die externe Spule als letzter Slot (mit einem AMS Slot 5); ohne AMS ein Slot. AMS HT (ab ID 128) wird nicht berücksichtigt. Gebucht wird auf die Spule, die in der App an diesem Slot eingelegt ist. Neuere Firmware lässt Fremdprogramme womöglich nur im LAN-Modus mit eingeschaltetem Entwicklermodus zu (Einstellungen > WLAN am Drucker); zeigt der Drucker in der App einen MQTT-Fehler, dort nachsehen.
 
 ### Tags auf Musterplättchen
 

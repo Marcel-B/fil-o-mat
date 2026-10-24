@@ -18,6 +18,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die MQTT-Abfrage von Anycubic-Druckern.</summary>
     public IAnycubicLan? AnycubicLan { get; init; }
 
+    /// <summary>Ersetzt MQTT und FTPS zu Bambu-Druckern.</summary>
+    public IBambuLan? BambuLan { get; init; }
+
     /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
     public HttpMessageHandler? NextcloudHandler { get; init; }
 
@@ -51,6 +54,8 @@ public class ApiFactory : WebApplicationFactory<Program>
             });
         if (AnycubicLan is { } lan)
             builder.ConfigureTestServices(services => services.AddSingleton(lan));
+        if (BambuLan is { } bambu)
+            builder.ConfigureTestServices(services => services.AddSingleton(bambu));
     }
 
     protected override void Dispose(bool disposing)

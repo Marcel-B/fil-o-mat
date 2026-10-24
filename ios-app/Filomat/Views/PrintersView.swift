@@ -190,6 +190,7 @@ private struct PrinterFormView: View {
     private var isValid: Bool {
         !name.trimmingCharacters(in: .whitespaces).isEmpty
             && (trimmedUrl.hasPrefix("http://") || trimmedUrl.hasPrefix("https://"))
+            && (printer != nil || !type.requiresKey || !apiKey.trimmingCharacters(in: .whitespaces).isEmpty)
     }
 
     var body: some View {
@@ -209,11 +210,13 @@ private struct PrinterFormView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if printer?.hasApiKey == true {
-                        SecureField("Neuer API-Schlüssel (leer = unverändert)", text: $apiKey)
+                        SecureField("Neuer \(type.requiresKey ? "Zugangscode" : "API-Schlüssel") (leer = unverändert)", text: $apiKey)
                             .disabled(removeApiKey)
-                        Toggle("API-Schlüssel entfernen", isOn: $removeApiKey)
+                        if !type.requiresKey {
+                            Toggle("API-Schlüssel entfernen", isOn: $removeApiKey)
+                        }
                     } else {
-                        SecureField("API-Schlüssel (optional)", text: $apiKey)
+                        SecureField(type.keyLabel, text: $apiKey)
                     }
                 } footer: {
                     Text(type.setupHint)

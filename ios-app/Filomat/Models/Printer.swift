@@ -20,7 +20,7 @@ struct Printer: Identifiable, Codable, Hashable {
     /// "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf.
     func placeName(tool: Int?) -> String {
         guard toolCount > 1, let tool else { return name }
-        return "\(name) \(type == .prusaLink || type == .anycubic ? "Slot" : "Kopf") \(tool + 1)"
+        return "\(name) \(type == .prusaLink || type == .anycubic || type == .bambu ? "Slot" : "Kopf") \(tool + 1)"
     }
 }
 
@@ -29,6 +29,7 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
     case snapmakerU1 = "SnapmakerU1"
     case prusaLink = "PrusaLink"
     case anycubic = "Anycubic"
+    case bambu = "Bambu"
 
     var id: String { rawValue }
 
@@ -38,6 +39,7 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         case .snapmakerU1: "Snapmaker U1 (paxx12)"
         case .prusaLink: "Prusa (PrusaLink)"
         case .anycubic: "Anycubic Kobra (LAN-Modus)"
+        case .bambu: "Bambu Lab P1S, X1, A1 (LAN)"
         }
     }
 
@@ -47,8 +49,16 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         case .snapmakerU1: "http://192.168.2.155"
         case .prusaLink: "http://prusa-core-one.local"
         case .anycubic: "http://192.168.2.160"
+        case .bambu: "http://192.168.2.170"
         }
     }
+
+    /// Bambu verlangt den Zugangscode, die anderen einen optionalen API-Schlüssel.
+    var keyLabel: String {
+        self == .bambu ? "Zugangscode" : "API-Schlüssel (optional)"
+    }
+
+    var requiresKey: Bool { self == .bambu }
 
     /// Erklärung unter dem Formular beim Anlegen.
     var setupHint: String {
@@ -61,6 +71,8 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
             "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
         case .anycubic:
             "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+        case .bambu:
+            "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist."
         }
     }
 }

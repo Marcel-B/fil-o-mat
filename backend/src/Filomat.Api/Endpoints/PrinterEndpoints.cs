@@ -110,6 +110,8 @@ public static class PrinterEndpoints
         if (name.Length == 0) errors["name"] = ["Name fehlt."];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
             errors["baseUrl"] = ["Adresse muss mit http:// oder https:// beginnen."];
+        if (request.Type == PrinterType.Bambu && string.IsNullOrWhiteSpace(request.ApiKey))
+            errors["apiKey"] = ["Zugangscode fehlt (am Drucker unter Einstellungen > WLAN)."];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = Guid.NewGuid().ToString();
