@@ -9,6 +9,7 @@ struct PrintersView: View {
     @State private var printerToDelete: Printer?
     @State private var printerToEdit: Printer?
     @State private var syncingId: String?
+    @State private var showingNotifications = false
 
     var body: some View {
         List {
@@ -23,12 +24,11 @@ struct PrintersView: View {
                 Text(errorMessage).foregroundStyle(.red)
             }
             ForEach(printers) { printer in
-                Button {
-                    printerToEdit = printer
+                NavigationLink {
+                    PrinterDetailView(printer: printer) { await load() }
                 } label: {
-                    PrinterRow(printer: printer, isSyncing: syncingId == printer.id)
+                    PrinterRow(printer: printer, live: store.printerLive[printer.id], isSyncing: syncingId == printer.id)
                 }
-                .tint(.primary)
                 .swipeActions {
                     Button(role: .destructive) {
                         printerToDelete = printer
@@ -41,6 +41,11 @@ struct PrintersView: View {
                         Label("Abgleichen", systemImage: "arrow.triangle.2.circlepath")
                     }
                     .tint(.accentColor)
+                    Button {
+                        printerToEdit = printer
+                    } label: {
+                        Label("Bearbeiten", systemImage: "pencil")
+                    }
                 }
             }
         }
@@ -52,15 +57,41 @@ struct PrintersView: View {
         }
         .navigationTitle("Drucker")
         .toolbar {
-            Button {
-                showingAdd = true
-            } label: {
-                Label("Drucker hinzufügen", systemImage: "plus")
+            ToolbarItemGroup(placement: .topBarLeading) {
+                NavigationLink {
+                    StatsView()
+                } label: {
+                    Label("Statistik", systemImage: "chart.bar")
+                }
+                .disabled(store.backend == nil)
+                Button {
+                    showingNotifications = true
+                } label: {
+                    Label("Meldungen", systemImage: "bell")
+                }
+                .disabled(store.backend == nil)
             }
-            .disabled(store.backend == nil)
+            ToolbarItem(placement: .primaryAction) {
+                Button {
+                    showingAdd = true
+                } label: {
+                    Label("Drucker hinzufügen", systemImage: "plus")
+                }
+                .disabled(store.backend == nil)
+            }
         }
         .refreshable { await syncAll() }
-        .task { await load() }
+        // Solange die Liste offen ist, den Zustand alle 15 Sekunden holen
+        .task {
+            await load()
+            while !Task.isCancelled {
+                await store.refreshPrinterLive()
+                try? await Task.sleep(for: .seconds(15))
+            }
+        }
+        .sheet(isPresented: $showingNotifications) {
+            NotificationSettingsView()
+        }
         .sheet(isPresented: $showingAdd) {
             PrinterFormView(printer: nil) { await load() }
         }
@@ -132,6 +163,7 @@ struct PrintersView: View {
 
 private struct PrinterRow: View {
     var printer: Printer
+    var live: PrinterLive?
     var isSyncing: Bool
 
     var body: some View {
@@ -146,6 +178,9 @@ private struct PrinterRow: View {
                  : "\(printer.type.title) · \(printer.baseUrl)"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
+            if let live, printer.enabled, printer.lastSyncError == nil {
+                PrinterStatusLine(live: live)
+            }
             if let error = printer.lastSyncError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
@@ -161,7 +196,7 @@ private struct PrinterRow: View {
 }
 
 /// Neuer Drucker (`printer` ist `nil`) oder Änderungen an einem vorhandenen, z. B. eine neue IP nach DHCP.
-private struct PrinterFormView: View {
+struct PrinterFormView: View {
     @Environment(ContainerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     var printer: Printer?

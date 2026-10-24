@@ -166,6 +166,46 @@ struct BackendClient {
         return try Self.decoder.decode([ConsumptionEntry].self, from: try await send(request))
     }
 
+    /// Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist.
+    func printerStatus() async throws -> [PrinterLive] {
+        try Self.decoder.decode([PrinterLive].self, from: try await send(request("api/printers/status", method: "GET"), timeout: 30))
+    }
+
+    /// Vorschaubild des laufenden Drucks; `nil`, wenn der Drucker keins liefert.
+    func printerThumbnail(id: String) async throws -> Data? {
+        var request = request("api/printers/\(id)/thumbnail", method: "GET")
+        // Bei Bambu lädt das Backend dafür die ganze Druckdatei
+        request.timeoutInterval = 60
+        let data = try await send(request, allowNotFound: true)
+        return data.isEmpty ? nil : data
+    }
+
+    func stats(months: Int) async throws -> StatsResponse {
+        var components = URLComponents(url: baseURL.appendingPathComponent("api/stats"), resolvingAgainstBaseURL: false)!
+        components.queryItems = [URLQueryItem(name: "months", value: String(months))]
+        var request = request("api/stats", method: "GET")
+        request.url = components.url
+        return try Self.decoder.decode(StatsResponse.self, from: try await send(request))
+    }
+
+    // MARK: - Meldungen
+
+    func notificationSettings() async throws -> NotificationSettings {
+        try Self.decoder.decode(NotificationSettings.self, from: try await send(request("api/settings/notifications", method: "GET")))
+    }
+
+    @discardableResult
+    func saveNotificationSettings(_ settings: NotificationSettingsRequest) async throws -> NotificationSettings {
+        var request = request("api/settings/notifications", method: "PUT")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(settings)
+        return try Self.decoder.decode(NotificationSettings.self, from: try await send(request))
+    }
+
+    func sendTestNotification() async throws {
+        try await send(request("api/settings/notifications/test", method: "POST"))
+    }
+
     // MARK: - Aktualisierung
 
     func updateStatus() async throws -> BackendUpdateStatus {
@@ -201,11 +241,13 @@ struct BackendClient {
     }
 
     @discardableResult
-    private func send(_ request: URLRequest, allowNotFound: Bool = false) async throws -> Data {
+    private func send(_ request: URLRequest, allowNotFound: Bool = false, timeout: TimeInterval? = nil) async throws -> Data {
+        var request = request
+        if let timeout { request.timeoutInterval = timeout }
         let (data, response) = try await session.data(for: request)
         let status = (response as? HTTPURLResponse)?.statusCode ?? 0
         if status == 401 { throw BackendError.unauthorized }
-        if status == 404 && allowNotFound { return data }
+        if status == 404 && allowNotFound { return Data() }
         guard (200..<300).contains(status) else { throw BackendError.status(status) }
         return data
     }
