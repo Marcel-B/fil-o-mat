@@ -103,6 +103,10 @@ private struct ContainerRow: View {
                 Text("\(store.filamentCount(in: container.id)) Filamente")
                     .font(.caption)
                     .foregroundStyle(.secondary)
+                if let printer = store.printer(owningContainer: container.id), printer.enabled,
+                   let live = store.printerLive[printer.id] {
+                    PrinterStatusLine(live: live)
+                }
             }
             .padding(.vertical, 4)
         }

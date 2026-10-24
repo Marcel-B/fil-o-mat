@@ -15,7 +15,9 @@ import com.filomat.app.ui.screens.ContainerDetailScreen
 import com.filomat.app.ui.screens.ContainerListScreen
 import com.filomat.app.ui.screens.ItemDetailScreen
 import com.filomat.app.ui.screens.ItemsOverviewScreen
+import com.filomat.app.ui.screens.PrinterDetailScreen
 import com.filomat.app.ui.screens.PrintersScreen
+import com.filomat.app.ui.screens.StatsScreen
 import com.filomat.app.ui.screens.ScanScreen
 import com.filomat.app.ui.screens.TagReadScreen
 
@@ -65,6 +67,15 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
         composable("printers") {
             PrintersScreen(navController = navController)
+        }
+        composable("printer/{printerId}") { backStackEntry ->
+            PrinterDetailScreen(
+                printerId = backStackEntry.arguments?.getString("printerId") ?: "",
+                navController = navController
+            )
+        }
+        composable("stats") {
+            StatsScreen(navController = navController)
         }
         composable("backend") {
             BackendScreen(navController = navController)

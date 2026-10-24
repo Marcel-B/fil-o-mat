@@ -46,6 +46,35 @@ public static class PrinterEndpoints
         printers.MapGet("/", async (FilomatDbContext db) =>
             (await db.Printers.OrderBy(p => p.CreatedAt).ToListAsync()).Select(PrinterResponse.From));
 
+        // Älter als das wird beim Drucker neu abgefragt; die Apps fragen etwa alle 15 s, solange sie offen sind
+        var maxAge = TimeSpan.FromSeconds(10);
+
+        printers.MapGet("/status", (PrinterLive live, CancellationToken cancellationToken) => live.GetAllAsync(maxAge, cancellationToken))
+            .WithSummary("Zustand aller Drucker mit Spulen pro Kopf und Hinweisen");
+
+        printers.MapGet("/{id}/status", async Task<Results<Ok<PrinterLiveResponse>, NotFound>> (
+            string id, FilomatDbContext db, PrinterLive live, CancellationToken cancellationToken) =>
+            await db.Printers.FindAsync([id], cancellationToken) is { } printer
+                ? TypedResults.Ok(await live.GetAsync(printer, maxAge, cancellationToken))
+                : TypedResults.NotFound());
+
+        printers.MapGet("/{id}/thumbnail", async Task<Results<FileContentHttpResult, NotFound>> (
+            string id, FilomatDbContext db, PrinterLive live, CancellationToken cancellationToken) =>
+        {
+            if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
+            try
+            {
+                return await live.GetThumbnailAsync(printer, cancellationToken) is { } image
+                    ? TypedResults.File(image.Data, image.ContentType)
+                    : TypedResults.NotFound();
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or System.Text.Json.JsonException
+                                       or PrinterUnavailableException or IOException && !cancellationToken.IsCancellationRequested)
+            {
+                return TypedResults.NotFound();
+            }
+        }).WithSummary("Vorschaubild des laufenden Drucks");
+
         printers.MapGet("/{id}", async Task<Results<Ok<PrinterResponse>, NotFound>> (string id, FilomatDbContext db) =>
             await db.Printers.FindAsync(id) is { } printer
                 ? TypedResults.Ok(PrinterResponse.From(printer))
@@ -173,9 +202,10 @@ public static class PrinterEndpoints
     }
 
     /// <summary>Entfernt den Drucker samt Container; eingelegte Spulen wandern nach "Lose", der Verbrauchsverlauf der Spulen bleibt.</summary>
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db)
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db, PrinterStatusCache cache)
     {
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
+        cache.Remove(printer.Id);
 
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == printer.ContainerId)

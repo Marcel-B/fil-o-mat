@@ -22,6 +22,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<string>("Id")
                         .HasColumnType("TEXT");
 
+                    b.Property<int?>("DurationSeconds")
+                        .HasColumnType("INTEGER");
+
                     b.Property<DateTime>("EndedAt")
                         .HasColumnType("TEXT");
 
@@ -205,6 +208,19 @@ namespace Filomat.Api.Data.Migrations
                     b.HasIndex("ContainerId");
 
                     b.ToTable("Printers");
+                });
+
+            modelBuilder.Entity("Filomat.Api.Domain.Setting", b =>
+                {
+                    b.Property<string>("Key")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("Value")
+                        .HasColumnType("TEXT");
+
+                    b.HasKey("Key");
+
+                    b.ToTable("Settings");
                 });
 
             modelBuilder.Entity("Filomat.Api.Domain.Spool", b =>

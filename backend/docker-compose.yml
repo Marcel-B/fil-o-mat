@@ -12,6 +12,9 @@ services:
       NEXTCLOUD_WEBDAV_URL: "${NEXTCLOUD_WEBDAV_URL:-}"
       NEXTCLOUD_USERNAME: "${NEXTCLOUD_USERNAME:-}"
       NEXTCLOUD_APP_PASSWORD: "${NEXTCLOUD_APP_PASSWORD:-}"
+      # Optional: Meldungen über ntfy, falls in der App keine Adresse eingestellt ist
+      Ntfy__Url: "${NTFY_URL:-}"
+      Ntfy__Token: "${NTFY_TOKEN:-}"
       TZ: Europe/Berlin
     restart: unless-stopped
 

@@ -18,7 +18,13 @@ public class SnapmakerU1Adapter(HttpClient http) : MoonrakerAdapter(http)
         if (!json.RootElement.TryGetProperty("result", out var result)
             || !result.TryGetProperty("status", out var status))
             return null;
+        return ReadToolState(status);
+    }
 
+    protected override string ExtraStatusObjects => "&filament_detect&print_task_config";
+
+    protected override ToolState? ReadToolState(JsonElement status)
+    {
         var tags = new List<string?>();
         var filaments = new List<DetectedFilament?>();
         if (status.TryGetProperty("filament_detect", out var detect)

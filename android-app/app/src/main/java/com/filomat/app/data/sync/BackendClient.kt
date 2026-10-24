@@ -63,6 +63,27 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
         decode(send("GET", "api/consumption?itemId=${URLEncoder.encode(itemId, "UTF-8")}"))
     }
 
+    /** Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist. */
+    suspend fun printerStatus(): List<PrinterLive> = io { decode(send("GET", "api/printers/status")) }
+
+    /** Vorschaubild des laufenden Drucks; `null`, wenn der Drucker keins liefert. */
+    suspend fun printerThumbnail(id: String): ByteArray? = io {
+        // Bei Bambu lädt das Backend dafür die ganze Druckdatei
+        sendBytes("GET", "api/printers/${path(id)}/thumbnail", readTimeout = 60_000)
+    }
+
+    suspend fun stats(months: Int): StatsResponse = io { decode(send("GET", "api/stats?months=$months")) }
+
+    // Meldungen
+
+    suspend fun notificationSettings(): NotificationSettings = io { decode(send("GET", "api/settings/notifications")) }
+
+    suspend fun saveNotificationSettings(request: NotificationSettingsRequest): NotificationSettings = io {
+        decode(send("PUT", "api/settings/notifications", json.encodeToString(request)))
+    }
+
+    suspend fun sendTestNotification() = io { send("POST", "api/settings/notifications/test"); Unit }
+
     // Aktualisierung des Backends
 
     suspend fun updateStatus(): BackendUpdateStatus = io { decode(send("GET", "api/update")) }
@@ -79,13 +100,23 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
 
     private fun path(id: String): String = URLEncoder.encode(id, "UTF-8").replace("+", "%20")
 
-    private fun send(method: String, path: String, body: String? = null, allowNotFound: Boolean = false): String {
+    private fun send(method: String, path: String, body: String? = null, allowNotFound: Boolean = false): String =
+        sendBytes(method, path, body, allowNotFound)?.toString(Charsets.UTF_8) ?: ""
+
+    /** Antwort als Bytes; `null` bei 404 mit [allowNotFound]. */
+    private fun sendBytes(
+        method: String,
+        path: String,
+        body: String? = null,
+        allowNotFound: Boolean = true,
+        readTimeout: Int = 30_000
+    ): ByteArray? {
         val connection = URL("$baseUrl/$path").openConnection() as HttpURLConnection
         try {
             connection.requestMethod = method
             connection.connectTimeout = 10_000
-            connection.readTimeout = 30_000
-            connection.setRequestProperty("Accept", "application/json")
+            connection.readTimeout = readTimeout
+            connection.setRequestProperty("Accept", "application/json, image/*")
             if (!apiKey.isNullOrEmpty()) connection.setRequestProperty("X-Api-Key", apiKey)
             if (body != null) {
                 connection.doOutput = true
@@ -93,13 +124,13 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
                 connection.outputStream.use { it.write(body.toByteArray(Charsets.UTF_8)) }
             }
             val status = connection.responseCode
-            if (status == 404 && allowNotFound) return ""
+            if (status == 404 && allowNotFound) return null
             if (status == 401) throw BackendException("Der Server lehnt den API-Schlüssel ab.", status)
             if (status !in 200..299) {
                 connection.errorStream?.close()
                 throw BackendException("Der Server antwortet mit Fehler $status.", status)
             }
-            return connection.inputStream.bufferedReader(Charsets.UTF_8).use { it.readText() }
+            return connection.inputStream.use { it.readBytes() }
         } finally {
             connection.disconnect()
         }

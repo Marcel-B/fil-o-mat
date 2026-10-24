@@ -14,6 +14,7 @@ import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.filomat.app.data.sync.BackendUpdateStatus
+import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.StoreState
 import kotlinx.coroutines.launch
 import androidx.compose.material.icons.filled.QrCodeScanner
@@ -43,6 +44,7 @@ fun ContainerListScreen(
     var showingAddContainer by remember { mutableStateOf(false) }
     val sync by containerStore.sync.collectAsState()
     val storeState by containerStore.state.collectAsState(initial = StoreState())
+    val liveMap by containerStore.printerLive.collectAsState()
     val scope = rememberCoroutineScope()
     
     LaunchedEffect(Unit) {
@@ -92,7 +94,7 @@ fun ContainerListScreen(
                 update = sync.updateStatus,
                 onClick = { navController.navigate("backend") }
             )
-            ContainerList(containers, storeState, navController)
+            ContainerList(containers, storeState, navController, liveMap)
         }
 
         if (showingAddContainer) {
@@ -142,7 +144,12 @@ private fun Banner(icon: ImageVector, text: String, isError: Boolean = false, on
 }
 
 @Composable
-private fun ContainerList(containers: List<Container>, storeState: StoreState, navController: androidx.navigation.NavController) {
+private fun ContainerList(
+    containers: List<Container>,
+    storeState: StoreState,
+    navController: androidx.navigation.NavController,
+    liveMap: Map<String, PrinterLive> = emptyMap()
+) {
     if (containers.isEmpty()) {
         Box(
             modifier = Modifier
@@ -190,6 +197,7 @@ private fun ContainerList(containers: List<Container>, storeState: StoreState, n
                     ContainerCard(
                         container = container,
                         filamentCount = storeState.filamentCount(container.id),
+                        live = storeState.printerOwning(container.id)?.takeIf { it.enabled }?.let { liveMap[it.id] },
                         onClick = {
                             navController.navigate("container/${container.id}")
                         }
@@ -205,6 +213,7 @@ private fun ContainerList(containers: List<Container>, storeState: StoreState, n
 fun ContainerCard(
     container: Container,
     filamentCount: Int,
+    live: PrinterLive? = null,
     onClick: () -> Unit
 ) {
     Card(
@@ -229,6 +238,7 @@ fun ContainerCard(
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
+            live?.let { PrinterStatusLine(it) }
         }
     }
 }

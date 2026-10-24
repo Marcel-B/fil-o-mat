@@ -24,6 +24,8 @@ final class ContainerStore {
     private(set) var updateStatus: BackendUpdateStatus?
     /// Stand der Nextcloud-Sicherung; `nil`, solange unbekannt oder bei einem Backend ohne `/api/backup`.
     private(set) var backupStatus: BackupStatus?
+    /// Zustand der Drucker pro Drucker-ID; leer bei einem Backend ohne `/api/printers/status`.
+    private(set) var printerLive: [String: PrinterLive] = [:]
 
     @ObservationIgnored var backend: BackendClient?
 
@@ -212,6 +214,14 @@ final class ContainerStore {
         lastSyncedAt = nil
         updateStatus = nil
         backupStatus = nil
+        printerLive = [:]
+    }
+
+    /// Zustand der Drucker; Fehler (z. B. ein älteres Backend) zählen nicht als Sync-Fehler.
+    func refreshPrinterLive() async {
+        guard let backend else { return }
+        guard let live = try? await backend.printerStatus() else { return }
+        printerLive = Dictionary(live.map { ($0.printerId, $0) }, uniquingKeysWith: { first, _ in first })
     }
 
     /// Fehler (z. B. ein älteres Backend ohne `/api/backup`) zählen nicht als Sync-Fehler.
@@ -263,7 +273,9 @@ final class ContainerStore {
             await loadPrinters(backend)
         } catch {
             syncError = error.localizedDescription
+            return
         }
+        await refreshPrinterLive()
     }
 
     // MARK: - Spulen

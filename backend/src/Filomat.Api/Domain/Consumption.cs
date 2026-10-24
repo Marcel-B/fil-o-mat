@@ -32,4 +32,7 @@ public class Consumption
     public string? ItemId { get; set; }
 
     public DateTime RecordedAt { get; set; }
+
+    /// <summary>Reine Druckzeit des ganzen Drucks, falls der Drucker sie meldet (bei mehreren Köpfen in jeder Zeile gleich).</summary>
+    public int? DurationSeconds { get; set; }
 }

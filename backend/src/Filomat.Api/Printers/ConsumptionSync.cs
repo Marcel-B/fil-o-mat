@@ -1,12 +1,19 @@
 using Filomat.Api.Data;
 using Filomat.Api.Domain;
+using Filomat.Api.Notifications;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
 namespace Filomat.Api.Printers;
 
 /// <summary>Holt beendete Drucke vom Drucker und bucht den Verbrauch auf die eingelegte Spule.</summary>
-public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable<IPrinterAdapter> adapters, ILogger<ConsumptionSync> logger)
+public class ConsumptionSync(
+    FilomatDbContext db,
+    SpoolStock spools,
+    IEnumerable<IPrinterAdapter> adapters,
+    PrinterLive live,
+    Notifier notifier,
+    ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
     private static readonly TimeSpan Overlap = TimeSpan.FromDays(2);
@@ -17,7 +24,8 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
             ?? throw new InvalidOperationException($"Kein Adapter für Druckertyp {printer.Type}.");
 
         var since = (printer.LastJobEndedAt ?? printer.CreatedAt) - Overlap;
-        int recorded = 0;
+        var recorded = new List<PrintJob>();
+        var reachable = false;
         try
         {
             var currentTools = await adapter.GetToolStateAsync(printer, cancellationToken);
@@ -42,22 +50,75 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
                     await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
                 else
                     await RecordAsync(printer, job, cancellationToken);
-                recorded++;
+                recorded.Add(job);
                 if (printer.LastJobEndedAt is null || job.EndedAt > printer.LastJobEndedAt)
                     printer.LastJobEndedAt = job.EndedAt;
             }
             if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
+            reachable = true;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException)
         {
             logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
             printer.LastSyncError = ex.Message;
+            live.SetOffline(printer, ex.Message);
         }
 
         printer.LastSyncAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
-        return recorded;
+
+        foreach (var job in recorded) await NotifyFinishedAsync(printer, job, cancellationToken);
+        // Zustand nach dem Abgleich, damit die Restgewichte schon stimmen; Anycubic und Bambu antworten aus dem Abgleich
+        if (reachable) await live.RefreshAsync(printer, adapter, cancellationToken);
+        return recorded.Count;
+    }
+
+    /// <summary>Meldet einen beendeten Druck mit Verbrauch und Restgewicht der Spulen.</summary>
+    private async Task NotifyFinishedAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
+    {
+        var entries = await db.Consumptions.Where(c => c.PrinterId == printer.Id && c.JobId == job.JobId)
+            .OrderBy(c => c.Tool).ToListAsync(cancellationToken);
+        var tools = PrinterLive.ToolCount(printer);
+        var lines = new List<string>();
+        var low = false;
+        foreach (var entry in entries.Where(e => e.Grams > 0))
+        {
+            var place = PrinterInsights.PlaceName(printer.Type, tools, entry.Tool);
+            var prefix = place.Length > 0 ? $"{place}: " : "";
+            var item = entry.ItemId is null ? null : await db.Items.FindAsync([entry.ItemId], cancellationToken);
+            var spool = entry.SpoolId is null ? null : await db.Spools.FindAsync([entry.SpoolId], cancellationToken);
+            if (item is null || spool is null)
+            {
+                lines.Add($"{prefix}{entry.Grams:0} g ohne Zuordnung");
+                continue;
+            }
+            var line = $"{prefix}{item.Name} #{spool.Number} −{entry.Grams:0} g";
+            if (spool.EmptiedAt is not null) line += ", leer";
+            else if (spool.RemainingWeight is { } remaining)
+            {
+                line += $", noch {remaining:0} g";
+                // Fast leer: unter 10 % der vollen Spule oder unter 50 g
+                if (remaining < Math.Max(50, (item.NetWeight ?? 0) * 0.1))
+                {
+                    line += " (fast leer)";
+                    low = true;
+                }
+            }
+            lines.Add(line);
+        }
+        if (job.DurationSeconds is int seconds and > 0)
+            lines.Add(seconds >= 3600 ? $"Druckzeit {seconds / 3600}:{seconds % 3600 / 60:00} h" : $"Druckzeit {seconds / 60} min");
+
+        var (verb, tags) = job.Status switch
+        {
+            "completed" => ("fertig", "white_check_mark"),
+            "cancelled" => ("abgebrochen", "x"),
+            _ => ("mit Fehler beendet", "warning"),
+        };
+        var name = job.Name.Length > 0 ? job.Name : "Druck";
+        await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : $"{name} ist {verb}.",
+            low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken);
     }
 
     private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
@@ -79,6 +140,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
             ItemId = item?.Id,
             SpoolId = spool?.Id,
             RecordedAt = DateTime.UtcNow,
+            DurationSeconds = job.DurationSeconds,
         });
     }
 
@@ -154,6 +216,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
                 ItemId = item?.Id,
                 SpoolId = spool?.Id,
                 RecordedAt = DateTime.UtcNow,
+                DurationSeconds = job.DurationSeconds,
             });
         }
     }

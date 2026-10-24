@@ -27,7 +27,8 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         double? SlicedLengthMm,
         string? FilamentType,
         IReadOnlyList<double>? GramsPerTool,
-        IReadOnlyList<double>? LengthPerTool);
+        IReadOnlyList<double>? LengthPerTool,
+        double? TimePrinting = null);
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
@@ -71,6 +72,68 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         return finished;
     }
 
+    public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        using var status = await GetJsonAsync(printer, "api/v1/status", cancellationToken);
+        if (status is null || !status.RootElement.TryGetProperty("printer", out var state)) return null;
+
+        var heaters = new List<Heater>
+        {
+            new("Düse", 0, state.GetDoubleOrNull("temp_nozzle"), state.GetDoubleOrNull("target_nozzle")),
+            new("Bett", null, state.GetDoubleOrNull("temp_bed"), state.GetDoubleOrNull("target_bed")),
+        };
+        var printState = state.GetStringOrNull("state") switch
+        {
+            "PRINTING" or "BUSY" => PrintState.Printing,
+            "PAUSED" => PrintState.Paused,
+            "FINISHED" => PrintState.Finished,
+            "STOPPED" => PrintState.Cancelled,
+            "ERROR" or "ATTENTION" => PrintState.Error,
+            _ => PrintState.Idle,
+        };
+        status.RootElement.TryGetProperty("job", out var progress);
+        if (progress.ValueKind != JsonValueKind.Object)
+            return new PrinterStatus(printState == PrintState.Printing ? PrintState.Idle : printState, Heaters: heaters);
+
+        using var job = await GetJsonAsync(printer, "api/v1/job", cancellationToken);
+        var root = job?.RootElement;
+        JsonElement file = default;
+        root?.TryGetProperty("file", out file);
+        var tracked = ReadTracked(printer);
+        var gramsPerTool = tracked?.GramsPerTool is { Count: > 0 } perTool && perTool.Any(g => g > 0)
+            ? perTool
+            : tracked?.SlicedGrams is > 0 ? [tracked.SlicedGrams.Value] : null;
+
+        return new PrinterStatus(
+            printState,
+            JobName: file.GetStringOrNull("display_name") ?? file.GetStringOrNull("name") ?? tracked?.Name,
+            JobKey: progress.GetStringOrNull("id") is { } id ? $"{id}-{file.GetStringOrNull("m_timestamp")}" : null,
+            Progress: printState == PrintState.Finished ? 100 : progress.GetDoubleOrNull("progress"),
+            RemainingSeconds: (int?)progress.GetDoubleOrNull("time_remaining"),
+            ElapsedSeconds: (int?)progress.GetDoubleOrNull("time_printing"),
+            Heaters: heaters,
+            JobGramsPerTool: gramsPerTool,
+            HasThumbnail: ThumbnailPath(file) is not null);
+    }
+
+    private static string? ThumbnailPath(JsonElement file) =>
+        file.ValueKind == JsonValueKind.Object && file.TryGetProperty("refs", out var refs)
+            ? refs.GetStringOrNull("thumbnail") ?? refs.GetStringOrNull("icon")
+            : null;
+
+    public async Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        using var job = await GetJsonAsync(printer, "api/v1/job", cancellationToken);
+        if (job is null || !job.RootElement.TryGetProperty("file", out var file) || ThumbnailPath(file) is not { } path) return null;
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"{printer.BaseUrl.TrimEnd('/')}/{path.TrimStart('/')}");
+        if (!string.IsNullOrEmpty(printer.ApiKey)) request.Headers.Add("X-Api-Key", printer.ApiKey);
+        using var response = await http.SendAsync(request, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        return new Thumbnail(await response.Content.ReadAsByteArrayAsync(cancellationToken),
+            response.Content.Headers.ContentType?.MediaType ?? "image/png");
+    }
+
     private async Task<TrackedJob> ReadJobAsync(Printer printer, JsonElement job, TrackedJob? tracked, CancellationToken cancellationToken)
     {
         job.TryGetProperty("file", out var file);
@@ -79,8 +142,9 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         var jobId = $"{job.GetStringOrNull("id")}-{file.GetStringOrNull("m_timestamp")}";
         var progress = job.GetDoubleOrNull("progress") ?? 0;
 
+        var timePrinting = job.GetDoubleOrNull("time_printing");
         if (tracked is not null && tracked.JobId == jobId)
-            return tracked with { Progress = Math.Max(tracked.Progress, progress) };
+            return tracked with { Progress = Math.Max(tracked.Progress, progress), TimePrinting = timePrinting ?? tracked.TimePrinting };
 
         // Slicer-Angaben stehen je nach Firmware direkt im Job oder nur bei der Datei
         file.TryGetProperty("meta", out var meta);
@@ -98,7 +162,8 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             meta.GetDoubleOrNull("filament used [mm]"),
             meta.GetStringOrNull("filament_type"),
             PerTool(meta, "filament used [g] per tool"),
-            PerTool(meta, "filament used [mm] per tool"));
+            PerTool(meta, "filament used [mm] per tool"),
+            timePrinting);
     }
 
     private static PrintJob Finish(TrackedJob job, string status, double progress)
@@ -116,7 +181,8 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             FilamentType: job.FilamentType,
             // Nur bei mehreren Slots pro Slot buchen
             SlicedGramsPerFilament: job.GramsPerTool is { Count: > 1 } ? job.GramsPerTool : null,
-            SlicedLengthPerFilament: job.GramsPerTool is { Count: > 1 } ? job.LengthPerTool : null);
+            SlicedLengthPerFilament: job.GramsPerTool is { Count: > 1 } ? job.LengthPerTool : null,
+            DurationSeconds: job.TimePrinting is { } seconds ? (int)seconds : null);
     }
 
     /// <summary>Werte pro Slot als Liste oder als Text "1.2, 3.4".</summary>
