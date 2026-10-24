@@ -24,6 +24,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
     public HttpMessageHandler? NextcloudHandler { get; init; }
 
+    /// <summary>Ersetzt ntfy; ohne ist keine Adresse für Meldungen eingestellt.</summary>
+    public HttpMessageHandler? NtfyHandler { get; init; }
+
     /// <summary>Ordner, den sich API und Updater teilen (status.json, request).</summary>
     public string? UpdateDirectory { get; init; }
 
@@ -44,6 +47,12 @@ public class ApiFactory : WebApplicationFactory<Program>
             builder.UseSetting("Backup:AppPassword", "geheim");
             builder.ConfigureTestServices(services =>
                 services.AddHttpClient(Filomat.Api.Backup.WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => nextcloud));
+        }
+        if (NtfyHandler is { } ntfy)
+        {
+            builder.UseSetting("Ntfy:Url", "https://ntfy.test/filomat");
+            builder.ConfigureTestServices(services =>
+                services.AddHttpClient(Filomat.Api.Notifications.Notifier.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => ntfy));
         }
         if (PrinterHandler is { } handler)
             builder.ConfigureTestServices(services =>

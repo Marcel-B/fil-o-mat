@@ -210,6 +210,19 @@ public class BambuLan : IBambuLan
             Number(f, "used_m"))).ToList();
     }
 
+    /// <summary>Vorschaubild der Platte (<c>Metadata/plate_N.png</c>), ohne Angabe der ersten vorhandenen.</summary>
+    public static byte[]? ReadPlateImage(byte[] threeMf, int? plate)
+    {
+        using var zip = new ZipArchive(new MemoryStream(threeMf), ZipArchiveMode.Read);
+        var entry = (plate is not null ? zip.GetEntry($"Metadata/plate_{plate}.png") : null)
+                    ?? zip.Entries.Where(e => Regex.IsMatch(e.FullName, @"^Metadata/plate_\d+\.png$")).OrderBy(e => e.FullName).FirstOrDefault();
+        if (entry is null) return null;
+        using var stream = entry.Open();
+        using var copy = new MemoryStream();
+        stream.CopyTo(copy);
+        return copy.ToArray();
+    }
+
     private static double Number(XElement element, string name) =>
         double.TryParse((string?)element.Attribute(name), NumberStyles.Float, CultureInfo.InvariantCulture, out var value) ? value : 0;
 }

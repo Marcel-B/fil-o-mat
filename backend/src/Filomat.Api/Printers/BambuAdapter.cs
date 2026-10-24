@@ -45,15 +45,112 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         Dictionary<int, Tray> Trays,
         Dictionary<int, double> RemainAtStart,
         IReadOnlyList<SlicedFilament>? Filaments,
-        int FileAttempts);
+        int FileAttempts,
+        DateTime? StartedAt = null);
 
     /// <summary>AMS-Einheiten, Fächer (Schlüssel wie <c>tray_now</c>) und das fördernde Fach.</summary>
     public record AmsState(int Units, Dictionary<int, Tray> Trays, int? Now);
+
+    /// <summary>Meldung aus dem letzten Abgleich pro Drucker, damit der Zustand danach keine zweite MQTT-Verbindung braucht.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BambuReport> _reports = new();
+
+    public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        if (!_reports.TryRemove(printer.Id, out var report))
+        {
+            var (serial, accessCode) = Credentials(printer.ApiKey);
+            report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+        }
+        var print = report.Print;
+        var ams = ReadAms(print);
+        var slotCount = SlotCount(ams.Units);
+
+        var heaters = new List<Heater>();
+        if (print.GetDoubleOrNull("nozzle_temper") is { } nozzle)
+            heaters.Add(new Heater("Düse", 0, nozzle, print.GetDoubleOrNull("nozzle_target_temper")));
+        if (print.GetDoubleOrNull("bed_temper") is { } bed)
+            heaters.Add(new Heater("Bett", null, bed, print.GetDoubleOrNull("bed_target_temper")));
+
+        var slots = new List<SlotReport>();
+        for (var slot = 0; slot < slotCount; slot++)
+        {
+            var tray = slotCount <= 1 ? ExternalTray : slot == slotCount - 1 ? ExternalTray : slot;
+            var info = ams.Trays.GetValueOrDefault(tray);
+            slots.Add(new SlotReport(slot, info is not null, info?.Type, info?.Color, info is { Remain: >= 0 } ? info.Remain : null));
+        }
+
+        var dryers = new List<DryerReport>();
+        if (print.TryGetProperty("ams", out var amsRoot) && amsRoot.TryGetProperty("ams", out var units) && units.ValueKind == JsonValueKind.Array)
+        {
+            foreach (var unit in units.EnumerateArray())
+            {
+                if (unit.GetDoubleOrNull("id") is not { } id || id is < 0 or >= 4) continue;
+                var raw = unit.GetDoubleOrNull("humidity_raw");
+                var level = unit.GetDoubleOrNull("humidity");
+                var temperature = unit.GetDoubleOrNull("temp");
+                if (raw is null && level is not (>= 1 and <= 5)) continue;
+                dryers.Add(new DryerReport($"AMS {(int)id + 1}", raw, level is >= 1 and <= 5 ? (int)level : null,
+                    temperature is > 0 ? temperature : null, Enumerable.Range((int)id * SlotsPerAms, SlotsPerAms).ToList()));
+            }
+        }
+
+        var gcodeState = print.GetStringOrNull("gcode_state");
+        var state = gcodeState switch
+        {
+            "PREPARE" or "SLICING" or "RUNNING" => PrintState.Printing,
+            "PAUSE" => PrintState.Paused,
+            "FINISH" => PrintState.Finished,
+            "FAILED" => PrintState.Cancelled,
+            _ => PrintState.Idle,
+        };
+        var error = print.GetDoubleOrNull("print_error") is { } code && code != 0 ? $"Fehlercode {code:X8}" : null;
+        if (error is not null && state is PrintState.Paused or PrintState.Cancelled) state = PrintState.Error;
+        int? active = ams.Now is { } now ? SlotOf(now, slotCount) : null;
+        if (state == PrintState.Idle)
+            return new PrinterStatus(state, Heaters: heaters, Slots: slots, Dryers: dryers);
+
+        var tracked = ReadTracked(printer);
+        var name = print.GetStringOrNull("subtask_name") ?? Path.GetFileNameWithoutExtension(print.GetStringOrNull("gcode_file") ?? "");
+        IReadOnlyList<double>? grams = null;
+        if (tracked?.Filaments is { Count: > 0 })
+        {
+            var planned = Finish(printer, tracked, "completed");
+            grams = planned.SlicedGramsPerFilament ?? (planned.SlicedGrams is { } total ? [total] : null);
+        }
+
+        return new PrinterStatus(
+            state,
+            JobName: name,
+            JobKey: $"{print.GetStringOrNull("gcode_file")}|{name}",
+            Progress: state == PrintState.Finished ? 100 : print.GetDoubleOrNull("mc_percent"),
+            // Minuten
+            RemainingSeconds: print.GetDoubleOrNull("mc_remaining_time") is { } remain ? (int)(remain * 60) : null,
+            Layer: (int?)print.GetDoubleOrNull("layer_num"),
+            TotalLayers: (int?)print.GetDoubleOrNull("total_layer_num"),
+            ActiveTool: active,
+            Heaters: heaters,
+            Slots: slots,
+            Dryers: dryers,
+            JobGramsPerTool: grams,
+            Message: error,
+            HasThumbnail: tracked?.Filaments is not null);
+    }
+
+    public async Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        var (serial, accessCode) = Credentials(printer.ApiKey);
+        var print = (await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken)).Print;
+        var gcodeFile = print.GetStringOrNull("gcode_file");
+        // Die 3MF ist mehrere MB groß; PrinterLive merkt sich das Bild pro Druck
+        var file = await lan.DownloadAsync(printer.BaseUrl, accessCode, BambuLan.FileCandidates(gcodeFile, print.GetStringOrNull("subtask_name")), cancellationToken);
+        return file is not null && BambuLan.ReadPlateImage(file, BambuLan.PlateOf(gcodeFile)) is { } png ? new Thumbnail(png, "image/png") : null;
+    }
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
         var (serial, accessCode) = Credentials(printer.ApiKey);
         var report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+        _reports[printer.Id] = report;
         var print = report.Print;
         var ams = ReadAms(print);
         printer.ToolCount = SlotCount(ams.Units);
@@ -78,7 +175,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         switch (state)
         {
             case "PREPARE" or "SLICING" or "RUNNING" or "PAUSE":
-                tracked ??= new TrackedJob(taskId ?? $"local-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..29], key, taskId, name, 0, null, [], [], [], null, 0);
+                tracked ??= new TrackedJob(taskId ?? $"local-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..29], key, taskId, name, 0, null, [], [], [], null, 0, DateTime.UtcNow);
                 tracked = Advance(tracked, progress, taskId, ams);
                 if (tracked.Filaments is null && tracked.FileAttempts < FileAttempts)
                     tracked = await LoadFileAsync(printer, accessCode, print, tracked, cancellationToken);
@@ -158,9 +255,10 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         return job with { FileAttempts = job.FileAttempts + 1 };
     }
 
-    private static PrintJob Finish(Printer printer, TrackedJob job, string status)
+    internal static PrintJob Finish(Printer printer, TrackedJob job, string status)
     {
         var slots = printer.ToolCount ?? 1;
+        int? duration = job.StartedAt is { } started ? (int)(DateTime.UtcNow - started).TotalSeconds : null;
         var ratio = status == "completed" ? 1 : Math.Clamp(job.Progress / 100, 0, 1);
         var grams = new double[slots];
         var lengths = new double[slots];
@@ -191,7 +289,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
             string? type = used.Select(f => f.Type).Distinct().Count() == 1 ? used[0].Type : null;
             // Ohne AMS oder ohne jede Zuordnung: alles auf die Spule im Drucker
             if (slots <= 1 || unassigned.Count == used.Count)
-                return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, slicedLength * ratio, slicedLength, slicedGrams, type);
+                return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, slicedLength * ratio, slicedLength, slicedGrams, type, DurationSeconds: duration);
 
             // Nicht zugeordnete Filamente anteilig auf die übrigen Slots
             var assigned = grams.Sum();
@@ -204,7 +302,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
                 grams[slot] += restGrams * part;
                 lengths[slot] += assignedLength > 0 ? restLength * lengths[slot] / assignedLength : 0;
             }
-            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, slicedLength * ratio, slicedLength, slicedGrams, type, grams, lengths);
+            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, slicedLength * ratio, slicedLength, slicedGrams, type, grams, lengths, DurationSeconds: duration);
         }
 
         // Ohne Druckdatei: was das AMS bei Bambu-Spulen weniger meldet
@@ -217,8 +315,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         }
         var length = lengths.Sum();
         if (slots <= 1 || length <= 0)
-            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, length, length > 0 ? length : null, length > 0 ? grams.Sum() : null);
-        return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, length, length, grams.Sum(), null, grams, lengths);
+            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, length, length > 0 ? length : null, length > 0 ? grams.Sum() : null, DurationSeconds: duration);
+        return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, length, length, grams.Sum(), null, grams, lengths, DurationSeconds: duration);
     }
 
     /// <summary>

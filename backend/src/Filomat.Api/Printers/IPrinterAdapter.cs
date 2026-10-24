@@ -6,6 +6,7 @@ namespace Filomat.Api.Printers;
 /// <param name="LengthMm">Tatsächlich verbrauchte Filamentlänge.</param>
 /// <param name="SlicedLengthMm">Vom Slicer geplante Gesamtlänge, falls bekannt.</param>
 /// <param name="SlicedGrams">Vom Slicer geplantes Gesamtgewicht, falls bekannt.</param>
+/// <param name="DurationSeconds">Reine Druckzeit, falls bekannt.</param>
 public record PrintJob(
     string JobId,
     string Name,
@@ -16,7 +17,8 @@ public record PrintJob(
     double? SlicedGrams = null,
     string? FilamentType = null,
     IReadOnlyList<double>? SlicedGramsPerFilament = null,
-    IReadOnlyList<double>? SlicedLengthPerFilament = null);
+    IReadOnlyList<double>? SlicedLengthPerFilament = null,
+    int? DurationSeconds = null);
 
 /// <summary>Welche Spule (Tag-UID) in welchem Werkzeugkopf steckt und welcher Slicer-Filament-Slot auf welchen Kopf geht.</summary>
 /// <param name="TagUids">Pro Werkzeugkopf die UID des erkannten Tags (Hex, Großbuchstaben) oder <c>null</c>.</param>
@@ -47,4 +49,15 @@ public interface IPrinterAdapter
     /// <summary>Spulen pro Werkzeugkopf, falls der Drucker sie selbst erkennt; sonst <c>null</c>.</summary>
     Task<ToolState?> GetToolStateAsync(Printer printer, CancellationToken cancellationToken) =>
         Task.FromResult<ToolState?>(null);
+
+    /// <summary>
+    /// Aktueller Zustand (Druck, Temperaturen, Slots); <c>null</c>, wenn der Adapter keinen kennt. Adapter, die beim
+    /// Abgleich ohnehin alles abfragen, antworten direkt danach aus diesem Abgleich.
+    /// </summary>
+    Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken) =>
+        Task.FromResult<PrinterStatus?>(null);
+
+    /// <summary>Vorschaubild des laufenden bzw. zuletzt gezeigten Drucks, falls der Drucker eines liefert.</summary>
+    Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken) =>
+        Task.FromResult<Thumbnail?>(null);
 }

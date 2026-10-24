@@ -35,11 +35,16 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         Dictionary<int, double> MmPerSlot,
         Dictionary<int, string> SlotTypes,
         bool Provisional = false,
-        string? State = null);
+        string? State = null,
+        double? PrintMinutes = null);
+
+    /// <summary>Meldung aus dem letzten Abgleich pro Drucker, damit der Zustand danach keine zweite MQTT-Abfrage braucht.</summary>
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, AnycubicReport> _reports = new();
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
         var report = await lan.QueryAsync(printer.BaseUrl, cancellationToken);
+        _reports[printer.Id] = report;
         var ace = ReadAce(report.Boxes);
         printer.ToolCount = ace.SlotCount > 0 ? ace.SlotCount : 1;
 
@@ -100,6 +105,133 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         return finished;
     }
 
+    public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        if (!_reports.TryRemove(printer.Id, out var report)) report = await lan.QueryAsync(printer.BaseUrl, cancellationToken);
+        var info = report.Info;
+        var (slots, dryers) = ReadSlots(report.Boxes);
+        var ace = ReadAce(report.Boxes);
+        info.TryGetProperty("project", out var project);
+        var heaters = ReadHeaters(info, project);
+
+        if (project.ValueKind != JsonValueKind.Object)
+            return new PrinterStatus(PrintState.Idle, Heaters: heaters, Slots: slots, Dryers: dryers);
+
+        var state = project.GetStringOrNull("state");
+        var printState = StatusOf(project) switch
+        {
+            "completed" => PrintState.Finished,
+            "cancelled" => PrintState.Cancelled,
+            _ when project.GetDoubleOrNull("pause") is > 0 || state is "paused" or "pausing" => PrintState.Paused,
+            _ when state is "failed" or "error" => PrintState.Error,
+            _ => PrintState.Printing,
+        };
+        var progress = Math.Clamp(project.GetDoubleOrNull("progress") ?? 0, 0, 100);
+        var tracked = ReadTracked(printer);
+        var name = NameOf(project);
+
+        return new PrinterStatus(
+            printState,
+            JobName: name.Length > 0 ? name : tracked?.Name,
+            JobKey: JobIdOf(project) ?? tracked?.JobId,
+            Progress: printState == PrintState.Finished ? 100 : progress,
+            // Minuten
+            RemainingSeconds: project.GetDoubleOrNull("remain_time") is { } remain ? (int)(remain * 60) : null,
+            ElapsedSeconds: project.GetDoubleOrNull("print_time") is { } elapsed ? (int)(elapsed * 60) : null,
+            Layer: (int?)project.GetDoubleOrNull("curr_layer"),
+            TotalLayers: (int?)project.GetDoubleOrNull("total_layers"),
+            ActiveTool: ace.LoadedSlot,
+            Heaters: heaters,
+            Slots: slots,
+            Dryers: dryers,
+            JobGramsPerTool: tracked is null ? null : EstimateGrams(tracked, progress, ace.SlotCount),
+            JobGramsEstimated: true);
+    }
+
+    /// <summary>
+    /// Der Drucker kennt das Slicer-Gewicht nicht. Hochgerechnet aus der bisher geförderten Länge und dem Fortschritt,
+    /// verteilt wie bisher auf die Slots; erst ab 3 % einigermaßen verlässlich.
+    /// </summary>
+    internal static IReadOnlyList<double>? EstimateGrams(TrackedJob job, double progress, int slotCount)
+    {
+        if (progress < 3 || job.UsageMm <= 0) return null;
+        var scale = 100 / progress;
+        var perSlot = new double[Math.Max(slotCount, 1)];
+        var known = job.MmPerSlot.Where(p => p.Key >= 0 && p.Key < perSlot.Length && p.Value > 0).ToDictionary();
+        var knownSum = known.Values.Sum();
+        if (knownSum <= 0)
+        {
+            perSlot[Math.Clamp(job.Slot ?? 0, 0, perSlot.Length - 1)] = FilamentMath.GramsFromLength(job.UsageMm * scale, null);
+            return perSlot;
+        }
+        foreach (var (slot, mm) in known)
+            perSlot[slot] = FilamentMath.GramsFromLength(job.UsageMm * mm / knownSum * scale, job.SlotTypes.GetValueOrDefault(slot));
+        return perSlot;
+    }
+
+    /// <summary>Temperaturen; je nach Firmware in <c>temp</c> der Info-Meldung oder im Projekt.</summary>
+    private static List<Heater> ReadHeaters(JsonElement info, JsonElement project)
+    {
+        JsonElement source = default;
+        foreach (var candidate in new[] { info, project })
+        {
+            if (candidate.ValueKind != JsonValueKind.Object) continue;
+            if (candidate.TryGetProperty("temp", out var temp) && temp.ValueKind == JsonValueKind.Object) { source = temp; break; }
+            if (candidate.GetDoubleOrNull("curr_nozzle_temp") is not null) { source = candidate; break; }
+        }
+        var heaters = new List<Heater>();
+        if (source.ValueKind != JsonValueKind.Object) return heaters;
+        if (source.GetDoubleOrNull("curr_nozzle_temp") is { } nozzle)
+            heaters.Add(new Heater("Düse", 0, nozzle, source.GetDoubleOrNull("target_nozzle_temp")));
+        if (source.GetDoubleOrNull("curr_hotbed_temp") is { } bed)
+            heaters.Add(new Heater("Bett", null, bed, source.GetDoubleOrNull("target_hotbed_temp")));
+        return heaters;
+    }
+
+    /// <summary>Slots mit Material und Farbe sowie Feuchte pro Einheit; Zählung wie <see cref="ReadAce"/>.</summary>
+    public static (List<SlotReport> Slots, List<DryerReport> Dryers) ReadSlots(JsonElement? boxes)
+    {
+        var slots = new List<SlotReport>();
+        var dryers = new List<DryerReport>();
+        if (boxes is not { ValueKind: JsonValueKind.Array } list) return (slots, dryers);
+        var all = list.EnumerateArray().Where(b => b.ValueKind == JsonValueKind.Object).ToList();
+        if (all.Count == 0) return (slots, dryers);
+        var ids = all.Select(b => (int)(b.GetDoubleOrNull("id") ?? 0)).ToList();
+        var offset = -Math.Min(0, ids.Min());
+
+        for (var b = 0; b < all.Count; b++)
+        {
+            var box = all[b];
+            var first = (ids[b] + offset) * SlotsPerBox;
+            var tools = new List<int>();
+            if (box.TryGetProperty("slots", out var boxSlots) && boxSlots.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var s in boxSlots.EnumerateArray())
+                {
+                    if (s.GetDoubleOrNull("edit_status") == LinkedSlot) continue;
+                    var index = first + (int)(s.GetDoubleOrNull("index") ?? 0);
+                    tools.Add(index);
+                    var type = s.GetStringOrNull("type") is { Length: > 0 } t ? t : null;
+                    var status = s.GetDoubleOrNull("status");
+                    bool? loaded = type is null || status == 0 ? false : status is 4 or 5 ? true : null;
+                    slots.Add(new SlotReport(index, loaded, type, loaded == false ? null : ColorOf(s)));
+                }
+            }
+            var humidity = box.GetDoubleOrNull("humidity");
+            var temperature = box.GetDoubleOrNull("temp");
+            if (humidity is > 0 || temperature is > 0)
+                dryers.Add(new DryerReport(ids[b] < 0 ? "Rack" : $"ACE {ids[b] + 1}", humidity is > 0 ? humidity : null, null, temperature, tools));
+        }
+        return (slots.OrderBy(s => s.Tool).ToList(), dryers);
+    }
+
+    private static string? ColorOf(JsonElement slot)
+    {
+        if (!slot.TryGetProperty("color", out var color) || color.ValueKind != JsonValueKind.Array) return null;
+        var rgb = color.EnumerateArray().Select(c => c.TryGetInt32(out var v) ? Math.Clamp(v, 0, 255) : 0).ToList();
+        return rgb.Count >= 3 ? $"{rgb[0]:X2}{rgb[1]:X2}{rgb[2]:X2}" : null;
+    }
+
     /// <summary>Rechnet den Zuwachs seit dem letzten Abgleich dem Slot zu, der beim letzten Abgleich förderte.</summary>
     private static TrackedJob Advance(TrackedJob job, JsonElement project, AceState ace)
     {
@@ -119,6 +251,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         return job with
         {
             State = project.GetStringOrNull("state") ?? job.State,
+            PrintMinutes = project.GetDoubleOrNull("print_time") ?? job.PrintMinutes,
             Progress = Math.Max(job.Progress, project.GetDoubleOrNull("progress") ?? 0),
             UsageMm = Math.Max(usage, job.UsageMm),
             Slot = ace.LoadedSlot ?? job.Slot,
@@ -137,7 +270,7 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         // Ohne ACE oder ohne jeden bekannten Slot: alles auf Kopf 0
         var slots = printer.ToolCount ?? 1;
         if (slots <= 1 || known.Count == 0 || known.Keys.Max() >= slots)
-            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, total, FilamentType: type);
+            return new PrintJob(job.JobId, job.Name, status, DateTime.UtcNow, total, FilamentType: type, DurationSeconds: Duration(job));
 
         // Länge ohne Slot anteilig auf die bekannten Slots
         var knownSum = known.Values.Sum();
@@ -158,8 +291,11 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
             SlicedGrams: grams.Sum(),
             FilamentType: type,
             SlicedGramsPerFilament: grams,
-            SlicedLengthPerFilament: lengths);
+            SlicedLengthPerFilament: lengths,
+            DurationSeconds: Duration(job));
     }
+
+    private static int? Duration(TrackedJob job) => job.PrintMinutes is double minutes and > 0 ? (int)(minutes * 60) : null;
 
     /// <summary>
     /// <c>print_status</c> 2 = fertig, 3 = abgebrochen; alles andere (auch die 0 des Kobra X) läuft noch.

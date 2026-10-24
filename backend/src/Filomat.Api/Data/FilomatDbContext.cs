@@ -11,6 +11,7 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
     public DbSet<Printer> Printers => Set<Printer>();
     public DbSet<Consumption> Consumptions => Set<Consumption>();
     public DbSet<Spool> Spools => Set<Spool>();
+    public DbSet<Setting> Settings => Set<Setting>();
 
     protected override void ConfigureConventions(ModelConfigurationBuilder configurationBuilder)
     {
@@ -66,6 +67,8 @@ public class FilomatDbContext(DbContextOptions<FilomatDbContext> options) : DbCo
                 .HasForeignKey(c => c.SpoolId)
                 .OnDelete(DeleteBehavior.SetNull);
         });
+
+        modelBuilder.Entity<Setting>().HasKey(s => s.Key);
 
         modelBuilder.Entity<Spool>(spool =>
         {
