@@ -235,7 +235,8 @@ private fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: (
     var isSaving by remember { mutableStateOf(false) }
     var errorMessage by remember { mutableStateOf<String?>(null) }
 
-    val isValid = name.isNotBlank() && (baseUrl.trim().startsWith("http://") || baseUrl.trim().startsWith("https://"))
+    val isValid = name.isNotBlank() && (baseUrl.trim().startsWith("http://") || baseUrl.trim().startsWith("https://")) &&
+        (printer != null || !type.requiresKey || apiKey.isNotBlank())
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
@@ -292,14 +293,18 @@ private fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: (
                     value = apiKey,
                     onValueChange = { apiKey = it },
                     label = {
-                        Text(if (printer?.hasApiKey == true) "Neuer API-Schlüssel (leer = unverändert)" else "API-Schlüssel (optional)")
+                        Text(
+                            if (printer?.hasApiKey == true) {
+                                "Neuer ${if (type.requiresKey) "Zugangscode" else "API-Schlüssel"} (leer = unverändert)"
+                            } else type.keyLabel
+                        )
                     },
                     singleLine = true,
                     enabled = !removeApiKey,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
-                if (printer?.hasApiKey == true) {
+                if (printer?.hasApiKey == true && !type.requiresKey) {
                     SwitchRow("API-Schlüssel entfernen", removeApiKey) { removeApiKey = it }
                 }
                 if (printer != null) {

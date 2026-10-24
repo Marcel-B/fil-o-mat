@@ -14,6 +14,9 @@ public enum PrinterType
 
     /// <summary>Anycubic Kobra X, S1, 3, 4 im LAN-Modus (MQTT); mit ACE pro Slot.</summary>
     Anycubic,
+
+    /// <summary>Bambu Lab P1S, P1P, X1, A1 im LAN (MQTT, Zugangscode); mit AMS pro Slot.</summary>
+    Bambu,
 }
 
 /// <summary>Konfigurierter Drucker. Jeder Drucker hat einen eigenen Container für die eingelegten Spulen.</summary>

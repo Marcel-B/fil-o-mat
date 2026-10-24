@@ -18,6 +18,8 @@ builder.Services.AddHttpClient<PrusaLinkAdapter>(client => client.Timeout = Time
 builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<PrusaLinkAdapter>());
 builder.Services.AddHttpClient<IAnycubicLan, AnycubicLan>(client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddTransient<IPrinterAdapter, AnycubicAdapter>();
+builder.Services.AddSingleton<IBambuLan, BambuLan>();
+builder.Services.AddTransient<IPrinterAdapter, BambuAdapter>();
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddScoped<SpoolStock>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
