@@ -2,7 +2,8 @@ name: iOS TestFlight
 
 # Baut die iOS-App und lädt sie zu TestFlight hoch, wie testflight.yml in Marcel-B/tonwerk-ai: Archiv unsigniert,
 # signiert wird beim Export mit dem Cloud-Zertifikat über den App-Store-Connect-API-Schlüssel (Rolle Admin).
-# Secrets (dieselben Werte wie in tonwerk-ai): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8, optional APPLE_TEAM_ID.
+# Secrets (dieselben Werte wie in tonwerk-ai): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (oder ASC_PRIVATE_KEY),
+# optional APPLE_TEAM_ID.
 # Einrichtung: ios-app/TESTFLIGHT.md
 
 on:
@@ -28,7 +29,7 @@ jobs:
       APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '6GGU8ET2C4' }}
       ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
       ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
-      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 || secrets.ASC_PRIVATE_KEY }}
     steps:
       - uses: actions/checkout@v4
 

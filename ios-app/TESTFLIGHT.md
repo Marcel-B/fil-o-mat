@@ -18,7 +18,7 @@ Build-Nummer: 1000 + Laufnummer des Workflows (von Hand in Xcode archivierte Bui
    gh secret set ASC_KEY_P8 < AuthKey_ABC123XYZ.p8
    ```
 
-   `APPLE_TEAM_ID` ist optional; ohne das Secret nimmt der Workflow `6GGU8ET2C4`.
+   Statt `ASC_KEY_P8` geht auch `ASC_PRIVATE_KEY`. `APPLE_TEAM_ID` ist optional; ohne das Secret nimmt der Workflow `6GGU8ET2C4`.
 4. In App Store Connect unter *TestFlight → Interne Tests* eine Gruppe anlegen und sich selbst hinzufügen. Auf dem iPhone die App „TestFlight“ installieren, dort erscheint Fil-o-mat nach dem ersten Upload (Verarbeitung meist 5–15 Minuten). Interne Tester brauchen keine Prüfung durch Apple.
 
 Weil die Bundle-ID gleich bleibt, ersetzt der TestFlight-Build die per Xcode installierte App; die lokalen Daten bleiben dabei normalerweise erhalten und liegen ohnehin auch im Backend.
