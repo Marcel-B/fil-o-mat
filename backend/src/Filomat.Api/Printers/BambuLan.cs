@@ -127,8 +127,17 @@ public class BambuLan : IBambuLan
         catch (Exception ex) when (ex is not OperationCanceledException and not PrinterUnavailableException)
         {
             // Verbindungsfehler, falscher Zugangscode, TLS
-            throw new PrinterUnavailableException($"MQTT-Verbindung zum Drucker fehlgeschlagen: {ex.Message}", ex);
+            throw new PrinterUnavailableException($"MQTT-Verbindung zum Drucker fehlgeschlagen: {Describe(ex)}", ex);
         }
+    }
+
+    /// <summary>Meldung samt Ursachen; MQTTnet meldet außen nur "Error while connecting host".</summary>
+    public static string Describe(Exception ex)
+    {
+        var messages = new List<string>();
+        for (Exception? e = ex; e is not null; e = e.InnerException)
+            if (!messages.Contains(e.Message)) messages.Add(e.Message.TrimEnd('.'));
+        return string.Join(" → ", messages) + ".";
     }
 
     public async Task<byte[]?> DownloadAsync(string baseUrl, string accessCode, IReadOnlyList<string> paths, CancellationToken cancellationToken)
