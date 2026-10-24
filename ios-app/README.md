@@ -17,6 +17,10 @@ Native iPhone-App (SwiftUI + CoreNFC) mit demselben Funktionsumfang wie die Andr
    Xcode legt die passende App-ID beim ersten Build automatisch an.
 4. iPhone anschließen, als Ziel wählen und starten (⌘R).
 
+## Über TestFlight
+
+Ohne Xcode und Kabel: GitHub Actions baut die App signiert und lädt sie zu TestFlight hoch. Einrichtung in [TESTFLIGHT.md](TESTFLIGHT.md).
+
 ## Abgleich mit dem Backend
 
 Über das Wolken-Symbol in der Container-Liste lässt sich das [Backend](../backend/README.md) verbinden (z. B. `http://nas.local:8080`). Beim Verbinden werden die Daten des iPhones hochgeladen, ohne etwas zu löschen, und danach der gemeinsame Stand übernommen. Danach geht jede Änderung sofort ans Backend; beim Öffnen der App, alle 2 Minuten im Vordergrund und per Herunterziehen der Liste wird neu abgeglichen.

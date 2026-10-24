@@ -1,0 +1,128 @@
+name: iOS TestFlight
+
+# Baut die iOS-App und lädt sie zu TestFlight hoch, wie testflight.yml in Marcel-B/tonwerk-ai: Archiv unsigniert,
+# signiert wird beim Export mit dem Cloud-Zertifikat über den App-Store-Connect-API-Schlüssel (Rolle Admin).
+# Secrets (dieselben Werte wie in tonwerk-ai): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (oder ASC_PRIVATE_KEY),
+# optional APPLE_TEAM_ID.
+# Einrichtung: ios-app/TESTFLIGHT.md
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "ios-app/**"
+      - ".github/workflows/ios-testflight.yml"
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  testflight:
+    runs-on: macos-15
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: ios-app
+    env:
+      APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID || '6GGU8ET2C4' }}
+      ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 || secrets.ASC_PRIVATE_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Secrets prüfen
+        id: secrets
+        run: |
+          missing=""
+          for name in ASC_KEY_ID ASC_ISSUER_ID ASC_KEY_P8; do
+            [ -n "${!name}" ] || missing="$missing $name"
+          done
+          if [ -n "$missing" ]; then
+            echo "::warning::TestFlight übersprungen, es fehlen Secrets:$missing (siehe ios-app/TESTFLIGHT.md)"
+            echo "ok=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "ok=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      # App Store Connect nimmt nur Builds mit dem iOS-26-SDK oder neuer an.
+      - name: Xcode 26
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
+          version=$(basename "$xcode" .app); version=${version#Xcode_}
+          (( ${version%%.*} >= 26 )) || { echo "::error::kein Xcode 26 auf dem Runner"; ls -d /Applications/Xcode*; exit 1; }
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+
+      # Von Hand in Xcode archivierte Builds haben kleine Nummern, die des Workflows liegen weit darüber.
+      - name: Build-Nummer
+        if: steps.secrets.outputs.ok == 'true'
+        run: echo "BUILD_NUMBER=$((1000 + ${{ github.run_number }}))" >> "$GITHUB_ENV"
+
+      - name: API-Schlüssel ablegen
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          mkdir -p "$HOME/.appstoreconnect/private_keys"
+          key="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          printf '%s\n' "$ASC_KEY_P8" > "$key"
+          chmod 600 "$key"
+          echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+
+      # Unsigniert, damit nicht jeder Runner ein eigenes Development-Zertifikat anlegt.
+      - name: Archiv bauen
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          xcodebuild archive -project Filomat.xcodeproj -scheme Filomat -configuration Release \
+            -destination 'generic/platform=iOS' -archivePath "$RUNNER_TEMP/Filomat.xcarchive" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO \
+            CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
+            > "$RUNNER_TEMP/archive.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/archive.log" | sort -u | head -50; tail -100 "$RUNNER_TEMP/archive.log"; exit 1; }
+          grep -E "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
+
+      - name: Signieren und IPA exportieren
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          options="$RUNNER_TEMP/ExportOptions.plist"
+          cat > "$options" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+              <key>method</key><string>app-store-connect</string>
+              <key>destination</key><string>export</string>
+              <key>teamID</key><string>$APPLE_TEAM_ID</string>
+              <key>signingStyle</key><string>automatic</string>
+              <key>manageAppVersionAndBuildNumber</key><false/>
+              <key>uploadSymbols</key><true/>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive -archivePath "$RUNNER_TEMP/Filomat.xcarchive" -exportOptionsPlist "$options" \
+            -exportPath "$RUNNER_TEMP/export" -allowProvisioningUpdates -authenticationKeyPath "$ASC_KEY_PATH" \
+            -authenticationKeyID "$ASC_KEY_ID" -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      # Ohne die NFC-Berechtigung startet die App zwar, kann aber keine Tags lesen. Lieber hier abbrechen.
+      - name: NFC-Berechtigung prüfen
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          ipa=$(ls "$RUNNER_TEMP"/export/*.ipa)
+          mkdir -p "$RUNNER_TEMP/ipa" && unzip -q "$ipa" -d "$RUNNER_TEMP/ipa"
+          codesign -d --entitlements - --xml "$RUNNER_TEMP"/ipa/Payload/*.app > "$RUNNER_TEMP/entitlements.plist"
+          plutil -p "$RUNNER_TEMP/entitlements.plist"
+          grep -q "com.apple.developer.nfc.readersession.formats" "$RUNNER_TEMP/entitlements.plist" \
+            || { echo "::error::Die signierte App hat keine NFC-Berechtigung"; exit 1; }
+          echo "IPA_PATH=$ipa" >> "$GITHUB_ENV"
+
+      - name: Zu TestFlight hochladen
+        if: steps.secrets.outputs.ok == 'true'
+        run: |
+          xcrun altool --upload-app --type ios --file "$IPA_PATH" \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+          echo "Build $BUILD_NUMBER hochgeladen. Nach der Verarbeitung (meist 5–15 Minuten) erscheint er in TestFlight." >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Schlüssel entfernen
+        if: always()
+        run: rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
