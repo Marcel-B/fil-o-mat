@@ -2,7 +2,7 @@
 
 Der Workflow [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml) baut die App und lädt sie zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
 
-Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht unsigniert, beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
+Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht nur ad hoc signiert (damit die NFC-Entitlements drinstecken), beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
 
 Build-Nummer: 1000 + Laufnummer des Workflows (von Hand in Xcode archivierte Builds bleiben darunter). Die Version (`MARKETING_VERSION`, derzeit 1.0) steht im Xcode-Projekt.
 
