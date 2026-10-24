@@ -108,7 +108,7 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
 
     /// <summary>
     /// Bucht jeden Werkzeugkopf einzeln: auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat, oder
-    /// (ohne Tag-Erkennung, z. B. MMU3) auf die Spule, die in der App an diesem Kopf eingelegt ist.
+    /// (ohne Tag, z. B. MMU3 oder U1-Kopf ohne Plättchen) auf die Spule, die in der App an diesem Kopf eingelegt ist.
     /// </summary>
     private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
     {
@@ -132,9 +132,11 @@ public class ConsumptionSync(FilomatDbContext db, SpoolStock spools, IEnumerable
         foreach (var (extruder, usage) in perExtruder)
         {
             var tag = tools?.TagFor(extruder);
+            // Ohne erkanntes Tag (z. B. Musterplättchen nicht am Kopf) zählt die Spule, die in der App dort steckt
             var item = tools is null
                 ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: perExtruder.Count == 1, cancellationToken)
-                : tag is null ? null : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+                : tag is null ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: false, cancellationToken)
+                : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
             var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption

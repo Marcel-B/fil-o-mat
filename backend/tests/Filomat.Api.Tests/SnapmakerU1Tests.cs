@@ -83,6 +83,32 @@ public class SnapmakerU1Tests : IDisposable
     }
 
     [Fact]
+    public async Task BooksOnTheSpoolPlacedInTheAppWhenTheHeadHasNoTag()
+    {
+        // Kopf 2 erkennt kein Tag (Plättchen nicht eingelegt); die Spule wurde in der App dorthin gelegt
+        _printer.Routes["/printer/objects/query"] = _printer.Routes["/printer/objects/query"]
+            .Replace("[4,234,22,84,203,42,129]", "[0,0,0,0,0,0,0]");
+        var history = _printer.Routes["/server/history/list"];
+        _printer.Routes["/server/history/list"] = """{"result":{"count":0,"jobs":[]}}""";
+        var u1 = await CreateU1Async();
+
+        var jayo = await CreateSpoolAsync("04BEEF00CB2A81", 1000);
+        var opened = await _client.PostAsJsonAsync($"/api/items/{jayo.Id}/spools", new OpenSpoolRequest(1100, u1.Id, 1));
+        Assert.Equal(HttpStatusCode.Created, opened.StatusCode);
+
+        _printer.Routes["/server/history/list"] = history;
+        var sync = await (await _client.PostAsync($"/api/printers/{u1.Id}/sync", null)).Content.ReadFromJsonAsync<SyncResponse>();
+        Assert.Equal(1, sync!.Recorded);
+
+        var spool = Assert.Single((await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={jayo.Id}"))!);
+        Assert.Equal((1079.31, 1), (spool.RemainingWeight!.Value, spool.Tool!.Value));
+        var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={u1.Id}");
+        var head2 = Assert.Single(entries!, c => c.Tool == 1);
+        Assert.Equal((jayo.Id, spool.Id), (head2.ItemId, head2.SpoolId));
+        Assert.Null(head2.TagUid);
+    }
+
+    [Fact]
     public async Task TakesOverAllSpoolsTheU1Detected()
     {
         var u1 = await CreateU1Async();
