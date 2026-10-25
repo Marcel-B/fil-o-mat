@@ -103,11 +103,11 @@ private fun ItemDetailContent(
     // Gescanntes Tag, das noch einem anderen Filament gehört; wartet auf Bestätigung
     var pendingTag by remember { mutableStateOf<Pair<String, Item>?>(null) }
 
-    fun assignTag(tag: String) {
+    fun changeTags(operation: suspend () -> Unit) {
         isAssigningTag = true
         scope.launch {
             try {
-                store.assignTag(tag, item.id)
+                operation()
             } catch (e: Exception) {
                 tagError = ContainerStore.describe(e)
             }
@@ -115,17 +115,19 @@ private fun ItemDetailContent(
         }
     }
 
+    fun addTag(tag: String) = changeTags { store.addTag(tag, item.id) }
+
     fun prepareTagAssignment(scanned: String) {
         val tag = scanned.trim()
         tagError = null
         val previous = state.findItemByTag(tag)
         when {
             tag.isEmpty() -> tagError = "Ungültiger Tag."
-            tag == item.rfidTag -> tagError = "Das ist schon das Tag dieses Filaments."
+            item.hasTag(tag) -> tagError = "Dieses Tag gehört schon zu diesem Filament."
             state.findContainerByTag(tag) != null ->
                 tagError = "Dieses Tag gehört zum Container '${state.findContainerByTag(tag)?.name}'."
-            previous == null -> assignTag(tag)
-            state.spoolsOf(previous.id).isNotEmpty() ->
+            previous == null -> addTag(tag)
+            previous.allTags.size <= 1 && state.spoolsOf(previous.id).isNotEmpty() ->
                 tagError = "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
             else -> pendingTag = tag to previous
         }
@@ -181,14 +183,24 @@ private fun ItemDetailContent(
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Tag", style = MaterialTheme.typography.titleMedium)
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(item.rfidTag.ifBlank { "keins" }, modifier = Modifier.weight(1f))
+                        Text("Tags", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                         if (isAssigningTag) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     }
-                    ScanButton(reader, "Tag zuordnen") { tag -> prepareTagAssignment(tag.tagId) }
+                    if (item.allTags.isEmpty()) Text("Noch kein Tag", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    item.allTags.forEach { tag ->
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Text(tag, modifier = Modifier.weight(1f))
+                            if (item.allTags.size > 1) {
+                                TextButton(enabled = !isAssigningTag, onClick = { changeTags { store.removeTag(tag, item.id) } }) {
+                                    Text("Entfernen")
+                                }
+                            }
+                        }
+                    }
+                    ScanButton(reader, "Plättchen hinzufügen") { tag -> prepareTagAssignment(tag.tagId) }
                     Text(
-                        "Über dieses Tag findet die App das Filament beim Scannen. Gehört das gescannte Tag noch einem anderen Eintrag ohne angebrochene Spulen, wird dieser gelöscht.",
+                        "Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht.",
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -308,15 +320,18 @@ private fun ItemDetailContent(
     pendingTag?.let { (tag, previous) ->
         AlertDialog(
             onDismissRequest = { pendingTag = null },
-            title = { Text("Tag übernehmen?") },
+            title = { Text("Plättchen übernehmen?") },
             text = {
-                Text("Das Tag $tag gehört zu „${previous.getDisplayTitle()}“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht.")
+                Text(
+                    if (previous.allTags.size > 1) "Das Tag $tag gehört zu „${previous.getDisplayTitle()}“ und wird dort entfernt."
+                    else "Das Tag $tag gehört zu „${previous.getDisplayTitle()}“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht."
+                )
             },
             confirmButton = {
                 TextButton(onClick = {
                     pendingTag = null
-                    assignTag(tag)
-                }) { Text("Löschen und übernehmen") }
+                    addTag(tag)
+                }) { Text(if (previous.allTags.size > 1) "Übernehmen" else "Löschen und übernehmen") }
             },
             dismissButton = {
                 TextButton(onClick = { pendingTag = null }) { Text("Abbrechen") }

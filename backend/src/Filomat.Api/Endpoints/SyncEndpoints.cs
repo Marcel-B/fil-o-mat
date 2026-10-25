@@ -26,7 +26,8 @@ public record SnapshotItem(
     double? NetWeight = null,
     double? SpoolWeight = null,
     int? SpoolsInStock = null,
-    double? TransmissionDistance = null);
+    double? TransmissionDistance = null,
+    List<string>? ExtraTags = null);
 
 /// <summary>Angebrochene Spule im Datenformat der Apps; wird nur vom Backend gepflegt.</summary>
 public record SnapshotSpool(
@@ -52,7 +53,7 @@ public static class SyncEndpoints
                 c.Id, c.RfidTag, c.Name, c.Description, c.Capacity, ToMillis(c.CreatedAt), c.IsStandard)).ToList(),
             (await db.Items.OrderBy(i => i.CreatedAt).ToListAsync()).Select(i => new SnapshotItem(
                 i.Id, i.RfidTag, i.Name, i.Description, ToMillis(i.CreatedAt), i.ContainerId, i.ItemData,
-                i.NetWeight, i.SpoolWeight, i.SpoolsInStock, i.TransmissionDistance)).ToList(),
+                i.NetWeight, i.SpoolWeight, i.SpoolsInStock, i.TransmissionDistance, i.ExtraTags)).ToList(),
             (await db.Spools.Where(s => s.EmptiedAt == null).OrderBy(s => s.OpenedAt).ToListAsync()).Select(s => new SnapshotSpool(
                 s.Id, s.ItemId, s.Number, s.RemainingWeight, s.PrinterId, s.Tool, ToMillis(s.OpenedAt), s.ContainerId)).ToList()))
             .WithTags("Abgleich");
@@ -71,7 +72,9 @@ public static class SyncEndpoints
         int containers = 0, items = 0;
 
         var containerByTag = await db.Containers.ToDictionaryAsync(c => c.RfidTag, c => c.Id);
-        var itemByTag = await db.Items.ToDictionaryAsync(i => i.RfidTag, i => i.Id);
+        var itemByTag = new Dictionary<string, string>();
+        foreach (var item in await db.Items.ToListAsync())
+            foreach (var tag in item.AllTags) itemByTag.TryAdd(tag, item.Id);
 
         foreach (var incoming in snapshot.Containers ?? [])
         {
@@ -140,7 +143,25 @@ public static class SyncEndpoints
             if (incoming.SpoolsInStock is not null) existing.SpoolsInStock = incoming.SpoolsInStock;
             // Ältere Apps kennen das Feld nicht und schicken es nie mit; ein Messwert bleibt dann erhalten
             if (incoming.TransmissionDistance is not null) existing.TransmissionDistance = incoming.TransmissionDistance;
-            itemByTag[incoming.RfidTag] = incoming.Id;
+            // Weitere Tags ebenso nur, wenn die App sie kennt; vergebene Tags werden übersprungen
+            if (incoming.ExtraTags is not null)
+            {
+                var extra = new List<string>();
+                foreach (var tag in incoming.ExtraTags.Select(t => t.Trim()).Distinct())
+                {
+                    if (tag.Length == 0 || tag == incoming.RfidTag) continue;
+                    if ((itemByTag.TryGetValue(tag, out var tagOwner) && tagOwner != incoming.Id) || containerByTag.ContainsKey(tag))
+                    {
+                        skipped.Add($"Filament '{incoming.Name}': Tag {tag} ist bereits vergeben.");
+                        continue;
+                    }
+                    extra.Add(tag);
+                }
+                existing.ExtraTags = extra;
+            }
+            foreach (var stale in itemByTag.Where(e => e.Value == incoming.Id).Select(e => e.Key).ToList())
+                itemByTag.Remove(stale);
+            foreach (var tag in existing.AllTags) itemByTag[tag] = incoming.Id;
             items++;
         }
         await db.SaveChangesAsync();

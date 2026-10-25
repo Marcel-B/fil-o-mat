@@ -35,18 +35,34 @@ final class ContainerStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.name), ["A"])
     }
 
-    func testAssignTagTakesOverTagOfItemWithoutSpools() async throws {
+    func testAddTagTakesOverTagOfItemWithoutSpools() async throws {
         let store = ContainerStore(fileURL: fileURL)
         let old = Item(rfidTag: "04378F53CB2A81", name: "Alt")
-        let new = Item(rfidTag: "", name: "Neu")
+        let new = Item(rfidTag: "04000001", name: "Neu")
         store.addItem(old)
         store.addItem(new)
 
-        try await store.assignTag("04378F53CB2A81", toItem: new.id)
+        try await store.addTag("04378F53CB2A81", toItem: new.id)
 
         XCTAssertNil(store.item(id: old.id))
         XCTAssertEqual(store.findItem(byTag: "04378F53CB2A81")?.id, new.id)
+        XCTAssertEqual(store.findItem(byTag: "04000001")?.id, new.id)
         XCTAssertEqual(ContainerStore(fileURL: fileURL).findItem(byTag: "04378F53CB2A81")?.id, new.id)
+    }
+
+    func testRemoveTagKeepsLastTagAndPromotesExtraTag() async throws {
+        let store = ContainerStore(fileURL: fileURL)
+        let item = Item(rfidTag: "04000001", name: "FiloFa", extraTags: ["04000002"])
+        store.addItem(item)
+
+        try await store.removeTag("04000001", fromItem: item.id)
+        XCTAssertEqual(store.item(id: item.id)?.allTags, ["04000002"])
+        XCTAssertNil(store.findItem(byTag: "04000001"))
+
+        do {
+            try await store.removeTag("04000002", fromItem: item.id)
+            XCTFail("Das letzte Tag darf nicht entfernt werden")
+        } catch {}
     }
 
     func testRemovingContainerMovesItemsToLoose() {

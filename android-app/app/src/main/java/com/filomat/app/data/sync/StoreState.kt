@@ -31,7 +31,8 @@ data class ItemData(
     val netWeight: Double? = null,
     val spoolWeight: Double? = null,
     val spoolsInStock: Int? = null,
-    val transmissionDistance: Double? = null
+    val transmissionDistance: Double? = null,
+    val extraTags: List<String>? = null
 )
 
 /**
@@ -49,7 +50,7 @@ data class StoreState(
     fun itemsIn(containerId: String): List<Item> = items.filter { it.containerId == containerId }
     fun spoolsOf(itemId: String): List<Spool> = spools.filter { it.itemId == itemId }.sortedBy { it.number }
     fun spool(id: String): Spool? = spools.firstOrNull { it.id == id }
-    fun findItemByTag(tag: String): Item? = items.firstOrNull { it.rfidTag == tag }
+    fun findItemByTag(tag: String): Item? = items.firstOrNull { it.hasTag(tag) }
     fun findContainerByTag(tag: String): Container? = containers.firstOrNull { it.rfidTag == tag }
 
     /** Angebrochene Spulen, die im Lager in diesem Container liegen. */
@@ -124,7 +125,7 @@ data class StoreState(
             },
             items = snapshot.items.map {
                 Item(it.id, it.rfidTag, it.name, it.description, it.createdAt, it.containerId, it.itemData,
-                    it.netWeight, it.spoolWeight, it.spoolsInStock, it.transmissionDistance)
+                    it.netWeight, it.spoolWeight, it.spoolsInStock, it.transmissionDistance, it.extraTags)
             },
             spools = snapshot.spools ?: emptyList(),
             printers = printers
@@ -158,14 +159,15 @@ fun Item.toSnapshot(sendWeights: Boolean) = SnapshotItem(
     netWeight = if (sendWeights) netWeight else null,
     spoolWeight = if (sendWeights) spoolWeight else null,
     spoolsInStock = if (sendWeights) spoolsInStock else null,
-    transmissionDistance = transmissionDistance
+    transmissionDistance = transmissionDistance,
+    extraTags = extraTags
 )
 
 private fun ContainerData.toContainer() =
     Container(id, rfidTag, name, description, capacity, createdAt, isStandard = isStandard)
 
 private fun ItemData.toItem() =
-    Item(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance)
+    Item(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance, extraTags)
 
 private fun Item.toData() =
-    ItemData(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance)
+    ItemData(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance, extraTags)

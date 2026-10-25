@@ -19,6 +19,17 @@ struct Item: Identifiable, Codable, Hashable {
     /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, z. B. mit einem TD-1 gemessen.
     /// Steht nur in Fil-o-mat, nicht auf dem Tag.
     var transmissionDistance: Double?
+    /// Weitere Tags derselben Sorte, z. B. Musterplättchen an Boxen und Druckern; `nil` bei älteren Daten.
+    var extraTags: [String]?
+
+    /// Haupt-Tag und weitere Tags.
+    var allTags: [String] {
+        ([rfidTag] + (extraTags ?? [])).filter { !$0.isEmpty }
+    }
+
+    func hasTag(_ tag: String) -> Bool {
+        !tag.isEmpty && allTags.contains(tag)
+    }
 
     /// "3,5 mm", falls die Lichtdurchlässigkeit gemessen ist.
     var transmissionText: String? {

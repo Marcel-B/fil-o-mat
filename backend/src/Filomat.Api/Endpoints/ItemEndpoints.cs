@@ -45,7 +45,7 @@ public static class ItemEndpoints
             await db.Items.FindAsync(id) is { } item ? TypedResults.Ok(item) : TypedResults.NotFound());
 
         group.MapGet("/by-tag/{rfidTag}", async Task<Results<Ok<Item>, NotFound>> (string rfidTag, FilomatDbContext db) =>
-            await db.Items.FirstOrDefaultAsync(i => i.RfidTag == rfidTag) is { } item
+            await db.Items.WithTag(rfidTag).FirstOrDefaultAsync() is { } item
                 ? TypedResults.Ok(item)
                 : TypedResults.NotFound());
 
@@ -80,7 +80,7 @@ public static class ItemEndpoints
             return TypedResults.Conflict($"Filament mit ID '{id}' existiert bereits.");
         if (tag.Length > 0)
         {
-            if (await db.Items.AnyAsync(i => i.RfidTag == tag))
+            if (await db.Items.WithTag(tag).AnyAsync())
                 return TypedResults.Conflict("Dieses Tag gehört bereits zu einem Filament.");
             if (await db.Containers.FirstOrDefaultAsync(c => c.RfidTag == tag) is { } container)
                 return TypedResults.Conflict($"Dieses Tag gehört zum Container '{container.Name}'.");

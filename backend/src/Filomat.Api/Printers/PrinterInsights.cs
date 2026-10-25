@@ -106,7 +106,7 @@ public static class PrinterInsights
 
             if (reported is not null)
             {
-                if (reported.TagUid is { } tag && spool is not null && !string.Equals(tag, spool.Item.RfidTag, StringComparison.OrdinalIgnoreCase))
+                if (reported.TagUid is { } tag && spool is not null && !spool.Item.AllTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
                     hints.Add(new Hint(HintKind.TagMismatch, true, tool, $"{Prefix(place)}Der Drucker erkennt ein anderes Tag als {label}."));
                 else if (reported.Loaded == false && spool is not null)
                     hints.Add(new Hint(HintKind.SlotEmpty, true, tool, $"{Prefix(place)}Laut Drucker leer, in der App steckt dort {label}."));

@@ -35,7 +35,9 @@ data class SnapshotItem(
     val spoolWeight: Double? = null,
     val spoolsInStock: Int? = null,
     /** Lichtdurchlässigkeit (TD) in mm; ältere Backends kennen sie nicht. */
-    val transmissionDistance: Double? = null
+    val transmissionDistance: Double? = null,
+    /** Weitere Tags derselben Sorte; ältere Backends kennen sie nicht. */
+    val extraTags: List<String>? = null
 )
 
 /** Alle Container und Filamente; `spools` liefert nur das Backend, beim Import wird es ignoriert. */

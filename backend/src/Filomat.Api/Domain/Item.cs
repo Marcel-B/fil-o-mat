@@ -1,3 +1,4 @@
+using System.ComponentModel.DataAnnotations.Schema;
 using System.Text.Json.Serialization;
 
 namespace Filomat.Api.Domain;
@@ -11,6 +12,12 @@ public class Item
 {
     public required string Id { get; set; }
     public required string RfidTag { get; set; }
+
+    /// <summary>
+    /// Weitere Tags derselben Sorte, z. B. Musterplättchen an Boxen und Druckern. Ein Tag gehört immer
+    /// zu höchstens einem Filament oder Container.
+    /// </summary>
+    public List<string> ExtraTags { get; set; } = [];
     public required string Name { get; set; }
     public string Description { get; set; } = "";
     public DateTime CreatedAt { get; set; }
@@ -32,6 +39,16 @@ public class Item
     /// </summary>
     public double? TransmissionDistance { get; set; }
 
+    /// <summary>Alle Tags dieser Sorte: das Haupt-Tag und die weiteren.</summary>
+    [NotMapped, JsonIgnore]
+    public IEnumerable<string> AllTags => ExtraTags.Prepend(RfidTag);
+}
+
+public static class ItemQueries
+{
+    /// <summary>Filamente, zu denen das Tag gehört (als Haupt- oder weiteres Tag).</summary>
+    public static IQueryable<Item> WithTag(this IQueryable<Item> items, string tag) =>
+        items.Where(i => i.RfidTag == tag || i.ExtraTags.Contains(tag));
 }
 
 /// <summary>Filament-Daten im OpenSpool-Format, wie sie auf dem NFC-Tag stehen (daher snake_case).</summary>

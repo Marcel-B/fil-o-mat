@@ -198,7 +198,7 @@ public class ConsumptionSync(
             var item = tools is null
                 ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: perExtruder.Count == 1, cancellationToken)
                 : tag is null ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: false, cancellationToken)
-                : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+                : await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
             var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption
@@ -230,7 +230,7 @@ public class ConsumptionSync(
         for (var tool = 0; tool < tools.TagUids.Count; tool++)
         {
             if (tools.TagUids[tool] is not { } tag) continue;
-            var item = await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            var item = await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken);
             if (item is null)
             {
                 // Tags von Containern gehören nicht in einen Drucker

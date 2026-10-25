@@ -146,7 +146,7 @@ class ContainerStore private constructor(context: Context) {
     suspend fun addItem(item: Item) {
         var added = false
         edit { s ->
-            if (item.rfidTag.isNotBlank() && s.items.any { it.rfidTag == item.rfidTag }) return@edit s
+            if (item.rfidTag.isNotBlank() && s.findItemByTag(item.rfidTag) != null) return@edit s
             added = true
             s.copy(items = s.items + item)
         }
@@ -164,24 +164,51 @@ class ContainerStore private constructor(context: Context) {
         remote { it.deleteItem(itemId) }
     }
 
-    suspend fun findItemByTag(rfidTag: String): Item? = current().items.firstOrNull { it.rfidTag == rfidTag }
+    suspend fun findItemByTag(rfidTag: String): Item? = current().findItemByTag(rfidTag)
 
     /**
-     * Gibt einem Filament ein anderes Tag, z. B. das Musterplättchen. Gehört das Tag bisher einem anderen
-     * Filament ohne angebrochene Spulen, wird dieser Eintrag gelöscht.
+     * Fügt einem Filament ein weiteres Tag hinzu, z. B. ein Musterplättchen an einer Box oder einem Drucker.
+     * Gehört das Tag bisher einem anderen Filament, wird es dort entfernt; war es dessen einziges Tag,
+     * wird der Eintrag gelöscht (nur ohne angebrochene Spulen).
      */
-    suspend fun assignTag(tag: String, itemId: String) {
+    suspend fun addTag(tag: String, itemId: String) {
         val state = current()
         val previous = state.findItemByTag(tag)
         if (previous != null && previous.id != itemId) {
-            check(state.spoolsOf(previous.id).isEmpty()) {
-                "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+            if (previous.allTags.size > 1) {
+                removeTag(tag, previous.id)
+            } else {
+                check(state.spoolsOf(previous.id).isEmpty()) {
+                    "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+                }
+                backend?.deleteItem(previous.id)
+                edit { s -> s.copy(items = s.items.filter { it.id != previous.id }) }
             }
-            backend?.deleteItem(previous.id)
-            edit { s -> s.copy(items = s.items.filter { it.id != previous.id }) }
         }
-        val item = current().item(itemId)?.copy(rfidTag = tag) ?: return
-        edit { s -> s.copy(items = s.items.map { if (it.id == itemId) item else it }) }
+        val item = current().item(itemId) ?: return
+        if (item.hasTag(tag)) return
+        saveTags(
+            if (item.rfidTag.isBlank()) item.copy(rfidTag = tag)
+            else item.copy(extraTags = item.extraTags.orEmpty() + tag)
+        )
+    }
+
+    /** Entfernt ein Tag von einem Filament. Ist es das Haupt-Tag, rückt das erste weitere Tag nach; das letzte Tag bleibt. */
+    suspend fun removeTag(tag: String, itemId: String) {
+        val item = current().item(itemId) ?: return
+        val extra = item.extraTags.orEmpty()
+        saveTags(
+            if (item.rfidTag == tag) {
+                check(extra.isNotEmpty()) { "Das letzte Tag eines Filaments bleibt." }
+                item.copy(rfidTag = extra.first(), extraTags = extra.drop(1))
+            } else {
+                item.copy(extraTags = extra - tag)
+            }
+        )
+    }
+
+    private suspend fun saveTags(item: Item) {
+        edit { s -> s.copy(items = s.items.map { if (it.id == item.id) item else it }) }
         val client = backend ?: return
         val result = client.importData(Snapshot(emptyList(), listOf(item.toSnapshot(sendWeights = false))))
         result.skipped.firstOrNull()?.let { throw IllegalStateException(it) }
