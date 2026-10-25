@@ -86,14 +86,14 @@ fun TagReadScreen(navController: NavController) {
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
-                TagReadingContent(current, state)
+                TagReadingContent(current, state, onOpenItem = { navController.navigate("item/$it") })
             }
         }
     }
 }
 
 @Composable
-private fun TagReadingContent(reading: TagReading, state: StoreState) {
+private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem: (String) -> Unit) {
     val contents = reading.contents
     val item = reading.ids.firstNotNullOfOrNull { state.findItemByTag(it) }
     val container = reading.ids.firstNotNullOfOrNull { state.findContainerByTag(it) }
@@ -126,6 +126,9 @@ private fun TagReadingContent(reading: TagReading, state: StoreState) {
                 item.transmissionText()?.let { InfoRow("Lichtdurchlässigkeit (TD)", it) }
                 state.spoolsOf(item.id).forEach { spool ->
                     InfoRow("Spule #${spool.number}", listOfNotNull(spool.locationText(state.printers, state.containers), spool.remainingWeight?.let(GramText::label)).joinToString(" · "))
+                }
+                OutlinedButton(onClick = { onOpenItem(item.id) }, modifier = Modifier.fillMaxWidth()) {
+                    Text("Filament bearbeiten")
                 }
             }
             container != null -> {

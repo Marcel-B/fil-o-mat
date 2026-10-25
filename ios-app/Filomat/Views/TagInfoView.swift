@@ -6,6 +6,7 @@ struct TagInfoView: View {
     @State private var tag: ScannedTag?
     @State private var errorMessage: String?
     @State private var isScanning = false
+    @State private var itemToEdit: Item?
 
     var body: some View {
         List {
@@ -41,6 +42,9 @@ struct TagInfoView: View {
             }
         }
         .navigationTitle("Tag lesen")
+        .sheet(item: $itemToEdit) { item in
+            FilamentFormView(mode: .edit(item))
+        }
     }
 
     // MARK: Abschnitte
@@ -90,6 +94,11 @@ struct TagInfoView: View {
                             }
                         }
                     }
+                }
+                Button {
+                    itemToEdit = item
+                } label: {
+                    Label("Filament bearbeiten", systemImage: "pencil")
                 }
             }
         } else {
