@@ -1,0 +1,24 @@
+# Gemeinsamer Teil aller Leser: WLAN, Updates per WLAN, Log und die Meldung ans Backend.
+# Wird von den Geräte-Dateien per "packages" eingebunden.
+
+substitutions:
+  filomat_url: !secret filomat_url
+  filomat_api_key: !secret filomat_api_key
+
+wifi:
+  ssid: !secret wifi_ssid
+  password: !secret wifi_password
+  ap:
+    ssid: "${name} Setup"
+
+captive_portal:
+
+ota:
+  - platform: esphome
+    password: !secret ota_password
+
+logger:
+
+http_request:
+  timeout: 5s
+  verify_ssl: false

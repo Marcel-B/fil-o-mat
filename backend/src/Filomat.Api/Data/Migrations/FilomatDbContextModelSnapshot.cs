@@ -197,6 +197,12 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("ReaderSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReaderSlotsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("ToolCount")
                         .HasColumnType("INTEGER");
 

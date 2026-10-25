@@ -24,12 +24,13 @@ public record PrinterResponse(
     DateTime CreatedAt,
     DateTime? LastJobEndedAt,
     DateTime? LastSyncAt,
-    string? LastSyncError)
+    string? LastSyncError,
+    DateTime? ReaderSeenAt = null)
 {
     public static PrinterResponse From(Printer p) => new(
         p.Id, p.Name, p.Type, p.BaseUrl, !string.IsNullOrEmpty(p.ApiKey), p.Enabled, p.ContainerId,
         p.ToolCount ?? (p.Type == PrinterType.SnapmakerU1 ? 4 : 1),
-        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError);
+        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError, p.ReaderSeenAt);
 }
 
 public record SyncResponse(int Recorded, string? Error);
@@ -91,6 +92,26 @@ public static class PrinterEndpoints
             var recorded = await sync.SyncAsync(printer, cancellationToken);
             return TypedResults.Ok(new SyncResponse(recorded, printer.LastSyncError));
         });
+
+        printers.MapPut("/{id}/reader", async Task<Results<Ok<ReaderResponse>, NotFound, ValidationProblem>> (
+            string id, ReaderReport report, FilomatDbContext db, PrinterReader reader, CancellationToken cancellationToken) =>
+        {
+            if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
+            if (report.Slots is null)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["slots"] = ["Slots fehlen."] });
+            return TypedResults.Ok(await reader.ReportAsync(printer, report.Slots, cancellationToken));
+        }).WithSummary("NFC-Leser am Drucker meldet, welches Musterplättchen in welchem Slot steckt (ganzer Stand, ab Slot 0)");
+
+        printers.MapPost("/{id}/reader/tap", async Task<Results<Ok<ReaderSlot>, NotFound, ValidationProblem>> (
+            string id, ReaderTap tap, FilomatDbContext db, PrinterReader reader, CancellationToken cancellationToken) =>
+        {
+            if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
+            var errors = new Dictionary<string, string[]>();
+            if (PrinterReader.NormalizeUid(tap.Tag) is null) errors["tag"] = ["Tag fehlt."];
+            if (tap.Slot < 0 || tap.Slot >= PrinterReader.MaxSlots) errors["slot"] = ["Slot ungültig."];
+            if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
+            return TypedResults.Ok(await reader.TapAsync(printer, tap.Slot, tap.Tag, cancellationToken));
+        }).WithSummary("Tipp-Modus: Plättchen am Leser angetippt und Slot gewählt, die Spule kommt in diesen Slot");
 
         var consumption = api.MapGroup("/consumption").WithTags("Verbrauch");
 
