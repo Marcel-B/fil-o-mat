@@ -35,6 +35,20 @@ final class ContainerStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.name), ["A"])
     }
 
+    func testAssignTagTakesOverTagOfItemWithoutSpools() async throws {
+        let store = ContainerStore(fileURL: fileURL)
+        let old = Item(rfidTag: "04378F53CB2A81", name: "Alt")
+        let new = Item(rfidTag: "", name: "Neu")
+        store.addItem(old)
+        store.addItem(new)
+
+        try await store.assignTag("04378F53CB2A81", toItem: new.id)
+
+        XCTAssertNil(store.item(id: old.id))
+        XCTAssertEqual(store.findItem(byTag: "04378F53CB2A81")?.id, new.id)
+        XCTAssertEqual(ContainerStore(fileURL: fileURL).findItem(byTag: "04378F53CB2A81")?.id, new.id)
+    }
+
     func testRemovingContainerMovesItemsToLoose() {
         let store = ContainerStore(fileURL: fileURL)
         let box = Container(rfidTag: "AA", name: "Box")

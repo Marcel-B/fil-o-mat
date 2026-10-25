@@ -166,6 +166,25 @@ final class ContainerStore {
         remote { try await $0.deleteItem(id: id) }
     }
 
+    /// Gibt einem Filament ein anderes Tag, z. B. das Musterplättchen. Gehört das Tag bisher einem anderen
+    /// Filament ohne angebrochene Spulen, wird dieser Eintrag gelöscht.
+    func assignTag(_ tag: String, toItem itemId: String) async throws {
+        if let previous = findItem(byTag: tag), previous.id != itemId {
+            guard spools(of: previous.id).isEmpty else {
+                throw StoreError.tagInUse("Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat.")
+            }
+            try await backend?.deleteItem(id: previous.id)
+            items.removeAll { $0.id == previous.id }
+        }
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        items[index].rfidTag = tag
+        save()
+        guard let backend else { return }
+        let result = try await backend.importData(BackendSnapshot(containers: [], items: [Self.withoutWeights(items[index])]))
+        if let reason = result.skipped.first { throw StoreError.tagInUse(reason) }
+        await refresh()
+    }
+
     /// Lagert ein Item in einen Container ein (verschiebt es ggf. aus seinem bisherigen Container).
     func moveItem(id: String, toContainer containerId: String) {
         guard let index = items.firstIndex(where: { $0.id == id }) else { return }
@@ -414,4 +433,14 @@ final class ContainerStore {
         decoder.dateDecodingStrategy = .millisecondsSince1970
         return decoder
     }()
+}
+
+enum StoreError: LocalizedError {
+    case tagInUse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tagInUse(let message): message
+        }
+    }
 }
