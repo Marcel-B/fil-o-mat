@@ -72,10 +72,10 @@ struct PlaceFlowView: View {
                 ItemHeader(item: item, detail: stockText(for: item))
             } else {
                 Text(model.target == .container
-                     ? "Scanne das Musterplättchen des Filaments, das eingelagert wird."
-                     : "Scanne das Musterplättchen des Filaments, das in den Drucker kommt.")
+                     ? "\(NFCService.isAvailable ? "Scanne das Musterplättchen" : "Wähle die Sorte") des Filaments, das eingelagert wird."
+                     : "\(NFCService.isAvailable ? "Scanne das Musterplättchen" : "Wähle die Sorte") des Filaments, das in den Drucker kommt.")
                     .foregroundStyle(.secondary)
-                ScanButton(title: "Filament scannen", prompt: "Halten Sie das iPhone an den Filament-Tag.") { tag in
+                ScanButton(title: "Filament scannen", prompt: "Halten Sie das iPhone an den Filament-Tag.", pick: .item) { tag in
                     model.handleFilamentTag(tag, store: store)
                 }
                 .listRowInsets(EdgeInsets())

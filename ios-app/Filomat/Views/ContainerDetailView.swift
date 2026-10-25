@@ -11,6 +11,7 @@ struct ContainerDetailView: View {
     @State private var itemToEdit: Item?
     @State private var isScanning = false
     @State private var scanMessage: String?
+    @State private var showingItemPicker = false
 
     var body: some View {
         if let container = store.container(id: containerId) {
@@ -105,11 +106,16 @@ struct ContainerDetailView: View {
         .toolbar {
             ToolbarItemGroup(placement: .primaryAction) {
                 Button {
-                    Task { await scanItem(into: container) }
+                    // Ohne NFC (iPad, Mac) eine bekannte Sorte aus der Liste wählen
+                    if NFCService.isAvailable {
+                        Task { await scanItem(into: container) }
+                    } else {
+                        showingItemPicker = true
+                    }
                 } label: {
                     Label("Filament hinzufügen", systemImage: "plus")
                 }
-                .disabled(isScanning || !NFCService.isAvailable)
+                .disabled(isScanning)
 
                 Menu {
                     Button {
@@ -135,6 +141,11 @@ struct ContainerDetailView: View {
         }
         .sheet(item: $itemToEdit) { item in
             FilamentFormView(mode: .edit(item))
+        }
+        .sheet(isPresented: $showingItemPicker) {
+            TagPickerView(kind: .item, excludedItemIds: Set(store.items(in: container.id).map(\.id))) { tag in
+                add(tag, to: container)
+            }
         }
         .alert("Container löschen", isPresented: $showingDelete) {
             Button("Löschen", role: .destructive) {
@@ -188,7 +199,11 @@ struct ContainerDetailView: View {
             scanMessage = error.localizedDescription
             return
         }
+        add(tag, to: container)
+    }
 
+    /// Legt das Filament eines gescannten oder gewählten Tags in diesen Container.
+    private func add(_ tag: ScannedTag, to container: Container) {
         guard !tag.tagId.trimmingCharacters(in: .whitespaces).isEmpty else {
             scanMessage = "Ungültiger RFID-Tag."
             return

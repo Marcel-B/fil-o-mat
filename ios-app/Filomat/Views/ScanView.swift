@@ -1,17 +1,23 @@
 import SwiftUI
 
 /// Scannen-Tab: eine Liste der Dinge, die man mit einem Tag tun kann. Jede führt in einen eigenen Ablauf.
+/// Ohne NFC (iPad, Mac) heißt er "Abläufe", und statt zu scannen wählt man aus der Liste.
 struct ScanView: View {
+    static var title: String { NFCService.isAvailable ? "Scannen" : "Abläufe" }
+    static var systemImage: String { NFCService.isAvailable ? "wave.3.right" : "list.bullet" }
+
     @Environment(ContainerStore.self) private var store
 
     var body: some View {
         List {
             Section("Nachsehen") {
-                NavigationLink {
-                    TagInfoView()
-                } label: {
-                    ScanActionRow(title: "Filament-Tag lesen", detail: "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß",
-                                  systemImage: "info.circle")
+                if NFCService.isAvailable {
+                    NavigationLink {
+                        TagInfoView()
+                    } label: {
+                        ScanActionRow(title: "Filament-Tag lesen", detail: "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß",
+                                      systemImage: "info.circle")
+                    }
                 }
                 NavigationLink {
                     ContainerScanView()
@@ -58,7 +64,7 @@ struct ScanView: View {
                 }
             }
         }
-        .navigationTitle("Scannen")
+        .navigationTitle(ScanView.title)
     }
 }
 

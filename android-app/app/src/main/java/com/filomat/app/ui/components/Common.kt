@@ -31,6 +31,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.material3.AlertDialog
+import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.Item
 import com.filomat.app.data.sync.SpoolPlace
 import com.filomat.app.data.sync.StoreState
@@ -149,14 +155,31 @@ fun ItemHeader(item: Item, detail: String? = null, modifier: Modifier = Modifier
     }
 }
 
-/** Knopf, der einen Tag scannt und das Ergebnis weiterreicht; während des Scans lässt er sich abbrechen. */
+/**
+ * Knopf, der einen Tag scannt und das Ergebnis weiterreicht; während des Scans lässt er sich abbrechen.
+ * Ohne NFC wählt man stattdessen aus der Liste, falls [pick] gesetzt ist.
+ */
 @Composable
-fun ScanButton(reader: NFCReader, title: String, modifier: Modifier = Modifier, onTag: (ScannedTag) -> Unit) {
+fun ScanButton(
+    reader: NFCReader,
+    title: String,
+    modifier: Modifier = Modifier,
+    pick: TagPick? = null,
+    onTag: (ScannedTag) -> Unit
+) {
     val isScanning by reader.isScanning.collectAsState()
     val error by reader.errorMessage.collectAsState()
+    var showingPicker by remember { mutableStateOf(false) }
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!reader.isAvailable) {
-            Text("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.", color = MaterialTheme.colorScheme.error)
+            if (pick != null) {
+                Button(onClick = { showingPicker = true }, modifier = Modifier.fillMaxWidth()) { Text(pick.buttonTitle) }
+                Text(
+                    "NFC ist aus oder fehlt, deshalb aus der Liste.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
         } else {
             Button(onClick = { reader.scanTag(onTag) }, enabled = !isScanning, modifier = Modifier.fillMaxWidth()) {
                 if (isScanning) {
@@ -175,6 +198,86 @@ fun ScanButton(reader: NFCReader, title: String, modifier: Modifier = Modifier, 
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
     }
+    if (showingPicker && pick != null) {
+        TagPickerDialog(pick, onDismiss = { showingPicker = false }) {
+            showingPicker = false
+            onTag(it)
+        }
+    }
+}
+
+/** Was auf Geräten ohne NFC statt eines Scans aus der Liste gewählt wird. */
+enum class TagPick(val buttonTitle: String) {
+    ITEM("Filament wählen"),
+    CONTAINER("Container wählen")
+}
+
+/**
+ * Ersatz für einen Scan ohne NFC: Sorte oder Container aus der Liste wählen. Liefert dasselbe wie ein Scan
+ * des zugehörigen Tags, damit die Abläufe unverändert bleiben.
+ */
+@Composable
+fun TagPickerDialog(
+    kind: TagPick,
+    excludedItemIds: Set<String> = emptySet(),
+    onDismiss: () -> Unit,
+    onPick: (ScannedTag) -> Unit
+) {
+    val context = LocalContext.current
+    val store = remember { ContainerStore.get(context) }
+    val state by store.state.collectAsState(initial = StoreState())
+    var search by remember { mutableStateOf("") }
+    fun matches(text: String) = search.isBlank() || text.contains(search.trim(), ignoreCase = true)
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text(kind.buttonTitle) },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(
+                    value = search,
+                    onValueChange = { search = it },
+                    placeholder = { Text("Suchen") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                LazyColumn(Modifier.heightIn(max = 400.dp)) {
+                    when (kind) {
+                        TagPick.ITEM -> {
+                            val items = state.items
+                                .filter { it.id !in excludedItemIds && matches(it.getDisplayTitle()) }
+                                .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.getDisplayTitle() })
+                            items(items, key = { it.id }) { item ->
+                                ItemHeader(
+                                    item,
+                                    item.containerId?.let { state.container(it)?.name },
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPick(ScannedTag(item.rfidTag, item.itemData)) }
+                                        .padding(vertical = 8.dp)
+                                )
+                            }
+                        }
+                        TagPick.CONTAINER -> {
+                            items(state.containers.filter { matches(it.name) }, key = { it.id }) { container ->
+                                Row(
+                                    Modifier
+                                        .fillMaxWidth()
+                                        .clickable { onPick(ScannedTag(container.rfidTag)) }
+                                        .padding(vertical = 12.dp)
+                                ) {
+                                    Text(container.name, Modifier.weight(1f))
+                                    Text("${state.filamentCount(container.id)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } }
+    )
 }
 
 /** NFC-Leser für einen Bildschirm; der Scan endet, wenn der Bildschirm verlassen wird. */

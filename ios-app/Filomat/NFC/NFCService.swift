@@ -1,5 +1,5 @@
 import Foundation
-#if canImport(CoreNFC) && !targetEnvironment(simulator)
+#if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
 import CoreNFC
 #endif
 
@@ -36,20 +36,20 @@ final class NFCService {
     static let shared = NFCService()
 
     static var isAvailable: Bool {
-        #if canImport(CoreNFC) && !targetEnvironment(simulator)
+        #if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
         return NFCTagReaderSession.readingAvailable
         #else
         return false
         #endif
     }
 
-    #if canImport(CoreNFC) && !targetEnvironment(simulator)
+    #if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
     private var activeSession: TagSession?
     #endif
 
     /// Liest einen Tag: UID und – falls vorhanden – die Filament-Daten.
     func scan(prompt: String) async throws -> ScannedTag {
-        #if canImport(CoreNFC) && !targetEnvironment(simulator)
+        #if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
         let result: TagSession.Outcome = try await run(prompt: prompt, operation: .read)
         guard case .read(let tag) = result else { throw NFCError.failed("Unerwartetes Ergebnis") }
         return tag
@@ -65,7 +65,7 @@ final class NFCService {
         prompt: String,
         validate: @escaping @MainActor (String) -> String? = { _ in nil }
     ) async throws -> String {
-        #if canImport(CoreNFC) && !targetEnvironment(simulator)
+        #if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
         let result: TagSession.Outcome = try await run(prompt: prompt, operation: .writeJSON(json, validate: validate))
         guard case .written(let tagId) = result else { throw NFCError.failed("Unerwartetes Ergebnis") }
         return tagId
@@ -74,7 +74,7 @@ final class NFCService {
         #endif
     }
 
-    #if canImport(CoreNFC) && !targetEnvironment(simulator)
+    #if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
     private func run(prompt: String, operation: TagSession.Operation) async throws -> TagSession.Outcome {
         guard Self.isAvailable else { throw NFCError.unavailable }
         activeSession?.cancel()
@@ -86,7 +86,7 @@ final class NFCService {
     #endif
 }
 
-#if canImport(CoreNFC) && !targetEnvironment(simulator)
+#if canImport(CoreNFC) && !targetEnvironment(simulator) && !targetEnvironment(macCatalyst)
 
 /// Kapselt eine `NFCTagReaderSession` und übersetzt die Delegate-Callbacks in `async`/`await`.
 private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
