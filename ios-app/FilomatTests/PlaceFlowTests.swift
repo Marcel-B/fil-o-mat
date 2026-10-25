@@ -36,6 +36,12 @@ final class PlaceFlowTests: XCTestCase {
         let model = PlaceFlowModel(target: .container)
 
         model.handleFilamentTag(ScannedTag(tagId: "NEW", itemData: ItemJsonData(type: "PETG", brand: "Sunlu")), store: store)
+        // Unbekanntes Plättchen: erst fragen, nichts still anlegen
+        XCTAssertEqual(model.unknownTag?.tagId, "NEW")
+        XCTAssertNil(model.item)
+        XCTAssertNil(store.findItem(byTag: "NEW"))
+
+        model.createItemForUnknownTag(store: store)
         // Ohne angebrochene Spulen gibt es nur die Sorte, der Ablauf springt direkt zum Container
         XCTAssertEqual(model.item?.name, "Sunlu PETG")
         XCTAssertEqual(model.choice, .stock)
@@ -49,6 +55,34 @@ final class PlaceFlowTests: XCTestCase {
         XCTAssertEqual(store.items(in: box.id).map(\.rfidTag), ["NEW"])
         XCTAssertEqual(model.step, .scanFilament)
         XCTAssertNotNil(model.doneMessage)
+    }
+
+    func testUnknownPlateCanJoinAnExistingSort() async {
+        let (store, item, _) = storeWithSpool()
+        let model = PlaceFlowModel(target: .container)
+        model.handleFilamentTag(ScannedTag(tagId: "PLATE2"), store: store)
+
+        await model.addUnknownTag(to: item, store: store)
+
+        XCTAssertEqual(store.findItem(byTag: "PLATE2")?.id, item.id)
+        XCTAssertEqual(model.item?.id, item.id)
+        XCTAssertNil(model.unknownTag)
+        XCTAssertEqual(model.step, .chooseSpool)
+    }
+
+    func testStoringOffersNewSpoolWithBackend() {
+        let (store, _, box) = storeWithSpool()
+        store.backend = stubClient
+        let model = PlaceFlowModel(target: .container)
+        model.handleFilamentTag(ScannedTag(tagId: "PLA"), store: store)
+        XCTAssertEqual(model.choices(store: store), [.stock, .spool("s1"), .newSpool])
+
+        model.choose(.newSpool, store: store)
+        XCTAssertEqual(model.actionTitle, "Anbrechen und einlagern")
+        XCTAssertTrue(model.asksForWeight)
+        XCTAssertFalse(model.canPerform(store: store))
+        model.selectContainer(box, store: store)
+        XCTAssertTrue(model.canPerform(store: store))
     }
 
     func testContainerTagFirstIsRejected() {

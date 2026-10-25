@@ -30,6 +30,10 @@ struct FilamentFormView: View {
     @State private var isAssigningTag = false
     /// Gescanntes Tag, das noch einem anderen Filament gehört; wartet auf Bestätigung.
     @State private var pendingTag: PendingTag?
+    /// Doppelter Eintrag, der nach Bestätigung hierher zusammengeführt wird.
+    @State private var itemToMerge: Item?
+    @State private var isMerging = false
+    @State private var mergeMessage: String?
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -143,6 +147,31 @@ struct FilamentFormView: View {
                         Text("Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Zum Entfernen nach links wischen. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht.")
                     }
 
+                    let duplicates = store.possibleDuplicates(of: item)
+                    if !duplicates.isEmpty || mergeMessage != nil {
+                        Section {
+                            ForEach(duplicates) { duplicate in
+                                Button {
+                                    itemToMerge = duplicate
+                                } label: {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text("„\(duplicate.displayTitle)“ hierher übernehmen")
+                                        Text(duplicateDetail(duplicate)).font(.caption).foregroundStyle(.secondary)
+                                    }
+                                }
+                                .disabled(isMerging || store.backend == nil)
+                            }
+                            if isMerging { ProgressView() }
+                            if let mergeMessage {
+                                Text(mergeMessage).foregroundStyle(.green)
+                            }
+                        } header: {
+                            Text("Möglicherweise doppelt")
+                        } footer: {
+                            Text("Gleiche Marke, Typ, Variante und Farbe. Beim Zusammenführen wandern Spulen, Vorrat, Verbrauch und Tags hierher, der andere Eintrag wird gelöscht.")
+                        }
+                    }
+
                     if store.backend != nil {
                         Section {
                             ForEach(store.spools(of: item.id)) { spool in
@@ -242,6 +271,18 @@ struct FilamentFormView: View {
                      ? "Das Tag \(pending.tag) gehört zu „\(pending.previous.displayTitle)“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht."
                      : "Das Tag \(pending.tag) gehört zu „\(pending.previous.displayTitle)“ und wird dort entfernt.")
             }
+            .confirmationDialog(
+                "Zusammenführen?",
+                isPresented: Binding(get: { itemToMerge != nil }, set: { if !$0 { itemToMerge = nil } }),
+                titleVisibility: .visible,
+                presenting: itemToMerge
+            ) { duplicate in
+                Button("Übernehmen und „\(duplicate.displayTitle)“ löschen", role: .destructive) {
+                    Task { await merge(duplicate) }
+                }
+            } message: { duplicate in
+                Text("\(duplicateDetail(duplicate)). Alles davon kommt zu diesem Eintrag. Spulennummern, die es hier schon gibt, bekommen eine neue Nummer.")
+            }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
         }
@@ -266,6 +307,31 @@ struct FilamentFormView: View {
             }
         } else {
             Task { await addTag(tag) }
+        }
+    }
+
+    private func duplicateDetail(_ duplicate: Item) -> String {
+        var parts = [duplicate.containerId.flatMap { store.container(id: $0)?.name } ?? "Lose"]
+        let spools = store.spools(of: duplicate.id)
+        if !spools.isEmpty { parts.append(spools.map { "#\($0.number)" }.joined(separator: ", ")) }
+        if let stock = duplicate.spoolsInStock, stock > 0 { parts.append("Vorrat \(stock)") }
+        return parts.joined(separator: " · ")
+    }
+
+    private func merge(_ duplicate: Item) async {
+        guard let item = currentItem else { return }
+        isMerging = true
+        defer { isMerging = false }
+        errorMessage = nil
+        do {
+            let renumbered = try await store.mergeItem(duplicate.id, into: item.id)
+            spoolsInStock = store.item(id: item.id)?.spoolsInStock ?? spoolsInStock
+            mergeMessage = renumbered.isEmpty
+                ? "Zusammengeführt."
+                : "Zusammengeführt. Neue Nummern: " + renumbered.map { "#\($0.oldNumber) → #\($0.newNumber)" }.joined(separator: ", ")
+                    + ". Bitte auf den Spulen ändern."
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 

@@ -43,6 +43,18 @@ struct Item: Identifiable, Codable, Hashable {
         return parts.isEmpty ? name : parts.joined(separator: " ")
     }
 
+    /// Gleiche Marke, Typ, Variante und Farbe ergeben denselben Schlüssel; `nil` ohne Marke oder Typ.
+    var duplicateKey: String? {
+        func normalized(_ value: String?) -> String {
+            (value ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        let brand = normalized(itemData?.brand), type = normalized(itemData?.type)
+        guard !brand.isEmpty, !type.isEmpty else { return nil }
+        let color = normalized(itemData?.colorHex).replacingOccurrences(of: "#", with: "")
+        return [brand, type, normalized(itemData?.variant), color.isEmpty ? normalized(itemData?.color) : color]
+            .joined(separator: "|")
+    }
+
     /// Name für neu gescannte Items, wie in der Android-App: "<brand> <type>".
     static func defaultName(for data: ItemJsonData?, fallback: String) -> String {
         let name = "\(data?.brand ?? "") \(data?.type ?? "")".trimmingCharacters(in: .whitespaces)

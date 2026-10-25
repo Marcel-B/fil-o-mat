@@ -31,18 +31,36 @@ class PlaceFlowTest {
 
     @Test
     fun storingTheStockGoesToTheScannedContainer() {
-        val (scanned, created) = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLA", null, state, connected = true)
-        assertNull(created)
+        val scanned = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLA", null, state, connected = true)
         assertEquals(PlaceStep.CHOOSE_SPOOL, scanned.step)
-        assertEquals(listOf(SpoolChoice.Stock, SpoolChoice.Opened("s1")), scanned.choices(state, true))
+        assertEquals(listOf(SpoolChoice.Stock, SpoolChoice.Opened("s1"), SpoolChoice.NewSpool), scanned.choices(state, true))
+        assertEquals(listOf(SpoolChoice.Stock, SpoolChoice.Opened("s1")), scanned.choices(state, false))
 
         val flow = scanned.choose(SpoolChoice.Stock, state).withTargetTag("SHELF", state)
         assertEquals(PlaceAction.MoveItem(pla, shelf), flow.action(state))
     }
 
     @Test
+    fun storingCanOpenANewSpoolIntoTheContainer() {
+        val flow = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLA", null, state, true)
+            .choose(SpoolChoice.NewSpool, state)
+            .withTargetTag("SHELF", state)
+        assertEquals("Anbrechen und einlagern", flow.actionTitle)
+        assertEquals(PlaceAction.OpenSpool(pla, SpoolPlace.container("shelf")), flow.action(state))
+    }
+
+    @Test
+    fun unknownPlateContinuesWithTheChosenSort() {
+        val scanned = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLATE2", null, state, false)
+        val withTag = state.copy(items = listOf(pla.copy(extraTags = listOf("PLATE2"))))
+        val flow = scanned.withItem(withTag.item("pla")!!, withTag, false)
+        assertNull(flow.unknownTag)
+        assertEquals(PlaceStep.CHOOSE_SPOOL, flow.step)
+    }
+
+    @Test
     fun printerContainerIsRefusedForStoring() {
-        val flow = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLA", null, state, true).first
+        val flow = PlaceFlow(PlaceTarget.CONTAINER).withFilament("PLA", null, state, true)
             .choose(SpoolChoice.Stock, state)
             .withTargetTag("U1BOX", state)
         assertNull(flow.containerId)
@@ -53,7 +71,11 @@ class PlaceFlowTest {
     @Test
     fun unknownFilamentIsCreatedAndGoesStraightToTheTarget() {
         val data = ItemJsonData(brand = "Sunlu", type = "PETG")
-        val (flow, created) = PlaceFlow(PlaceTarget.CONTAINER).withFilament("NEU", data, state, true)
+        val scanned = PlaceFlow(PlaceTarget.CONTAINER).withFilament("NEU", data, state, false)
+        // Unbekanntes Plättchen: erst fragen, nichts still anlegen
+        assertEquals("NEU", scanned.unknownTag)
+        assertNull(scanned.item)
+        val (flow, created) = scanned.withNewItem(state, false)
         assertEquals("Sunlu PETG", created?.name)
         // Ohne angebrochene Spulen gibt es nur die Sorte, also kein Auswahlschritt
         assertEquals(PlaceStep.CHOOSE_TARGET, flow.step)
@@ -62,7 +84,7 @@ class PlaceFlowTest {
 
     @Test
     fun printerFlowPreselectsTheCurrentHeadAndNamesTheDisplacedSpool() {
-        var flow = PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, true).first
+        var flow = PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, true)
         assertEquals(listOf(SpoolChoice.Opened("s1"), SpoolChoice.NewSpool), flow.choices(state, true))
         flow = flow.choose(SpoolChoice.Opened("s1"), state)
         assertEquals(SpoolPlace.printer("u1", 1), flow.printerPlace)
@@ -76,9 +98,9 @@ class PlaceFlowTest {
 
     @Test
     fun printerFlowNeedsTheBackendAndScanningThePrinterPicksItsFirstHead() {
-        assertEquals(emptyList<SpoolChoice>(), PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, false).first.choices(state, false))
+        assertEquals(emptyList<SpoolChoice>(), PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, false).choices(state, false))
 
-        val flow = PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, true).first
+        val flow = PlaceFlow(PlaceTarget.PRINTER).withFilament("PLA", null, state, true)
             .choose(SpoolChoice.NewSpool, state)
             .withTargetTag("U1BOX", state)
         assertEquals(PlaceAction.OpenSpool(pla, SpoolPlace.printer("u1", 0)), flow.action(state))

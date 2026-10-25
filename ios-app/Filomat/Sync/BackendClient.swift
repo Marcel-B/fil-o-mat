@@ -8,6 +8,16 @@ struct BackendSnapshot: Codable {
     var spools: [Spool]? = nil
 }
 
+/// Spule, die beim Zusammenführen eine neue Nummer bekommen hat.
+struct RenumberedSpool: Codable, Hashable {
+    var oldNumber: Int
+    var newNumber: Int
+}
+
+private struct MergeResult: Decodable {
+    var renumbered: [RenumberedSpool]
+}
+
 struct ImportResult: Codable {
     var containers: Int
     var items: Int
@@ -113,6 +123,14 @@ struct BackendClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try Self.encoder.encode(SpoolUpdate(remainingWeight: remainingWeight, printerId: printerId, tool: tool, containerId: containerId))
         return try Self.decoder.decode(Spool.self, from: try await send(request))
+    }
+
+    /// Führt das Filament `fromId` in `itemId` zusammen; liefert die Spulen, die eine neue Nummer bekommen haben.
+    func mergeItem(into itemId: String, from fromId: String) async throws -> [RenumberedSpool] {
+        var request = request("api/items/\(itemId)/merge", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(["fromId": fromId])
+        return try Self.decoder.decode(MergeResult.self, from: try await send(request)).renumbered
     }
 
     /// Restgewicht und Platz setzen; was am Zielplatz steckt, wandert ins Lager.

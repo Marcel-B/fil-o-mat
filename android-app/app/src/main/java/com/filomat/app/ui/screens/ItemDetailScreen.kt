@@ -102,6 +102,33 @@ private fun ItemDetailContent(
     var tagError by remember { mutableStateOf<String?>(null) }
     // Gescanntes Tag, das noch einem anderen Filament gehört; wartet auf Bestätigung
     var pendingTag by remember { mutableStateOf<Pair<String, Item>?>(null) }
+    // Doppelter Eintrag, der nach Bestätigung hierher zusammengeführt wird
+    var itemToMerge by remember { mutableStateOf<Item?>(null) }
+    var isMerging by remember { mutableStateOf(false) }
+    var mergeMessage by remember { mutableStateOf<String?>(null) }
+    val duplicates = state.possibleDuplicates(item)
+
+    fun duplicateDetail(duplicate: Item): String = listOfNotNull(
+        state.container(duplicate.containerId)?.name ?: "Lose",
+        state.spoolsOf(duplicate.id).takeIf { it.isNotEmpty() }?.joinToString(", ") { "#${it.number}" },
+        duplicate.spoolsInStock?.takeIf { it > 0 }?.let { "Vorrat $it" }
+    ).joinToString(" · ")
+
+    fun merge(duplicate: Item) {
+        isMerging = true
+        errorMessage = null
+        scope.launch {
+            try {
+                val renumbered = store.mergeItem(duplicate.id, item.id)
+                mergeMessage = if (renumbered.isEmpty()) "Zusammengeführt."
+                else "Zusammengeführt. Neue Nummern: " + renumbered.joinToString(", ") { "#${it.oldNumber} → #${it.newNumber}" } +
+                    ". Bitte auf den Spulen ändern."
+            } catch (e: Exception) {
+                errorMessage = ContainerStore.describe(e)
+            }
+            isMerging = false
+        }
+    }
 
     fun changeTags(operation: suspend () -> Unit) {
         isAssigningTag = true
@@ -245,6 +272,35 @@ private fun ItemDetailContent(
             }
         }
 
+        if (duplicates.isNotEmpty() || mergeMessage != null) {
+            item {
+                Card(Modifier.fillMaxWidth()) {
+                    Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text("Möglicherweise doppelt", style = MaterialTheme.typography.titleMedium)
+                        duplicates.forEach { duplicate ->
+                            OutlinedButton(
+                                enabled = connected && !isMerging,
+                                onClick = { itemToMerge = duplicate },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Column(Modifier.fillMaxWidth()) {
+                                    Text("„${duplicate.getDisplayTitle()}“ hierher übernehmen")
+                                    Text(duplicateDetail(duplicate), style = MaterialTheme.typography.bodySmall)
+                                }
+                            }
+                        }
+                        if (isMerging) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                        mergeMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
+                        Text(
+                            "Gleiche Marke, Typ, Variante und Farbe. Beim Zusammenführen wandern Spulen, Vorrat, Verbrauch und Tags hierher, der andere Eintrag wird gelöscht.",
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
         if (connected) {
             item {
                 Text("Angebrochene Spulen", style = MaterialTheme.typography.titleMedium)
@@ -315,6 +371,25 @@ private fun ItemDetailContent(
                 }
             }
         }
+    }
+
+    itemToMerge?.let { duplicate ->
+        AlertDialog(
+            onDismissRequest = { itemToMerge = null },
+            title = { Text("Zusammenführen?") },
+            text = {
+                Text("${duplicateDetail(duplicate)}. Alles davon kommt zu diesem Eintrag, „${duplicate.getDisplayTitle()}“ wird gelöscht. Spulennummern, die es hier schon gibt, bekommen eine neue Nummer.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    itemToMerge = null
+                    merge(duplicate)
+                }) { Text("Zusammenführen") }
+            },
+            dismissButton = {
+                TextButton(onClick = { itemToMerge = null }) { Text("Abbrechen") }
+            }
+        )
     }
 
     pendingTag?.let { (tag, previous) ->

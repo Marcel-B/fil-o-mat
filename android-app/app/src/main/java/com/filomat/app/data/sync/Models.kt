@@ -49,6 +49,16 @@ data class Snapshot(
 )
 
 @Serializable
+data class MergeRequest(val fromId: String)
+
+/** Spule, die beim Zusammenführen eine neue Nummer bekommen hat. */
+@Serializable
+data class RenumberedSpool(val oldNumber: Int, val newNumber: Int)
+
+@Serializable
+data class MergeResult(val renumbered: List<RenumberedSpool> = emptyList())
+
+@Serializable
 data class ImportResult(val containers: Int, val items: Int, val skipped: List<String> = emptyList())
 
 /** Eine angebrochene Spule einer Sorte. Die Nummer steht mit Stift auf der Spule. */

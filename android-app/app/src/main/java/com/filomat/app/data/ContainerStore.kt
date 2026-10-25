@@ -14,6 +14,7 @@ import com.filomat.app.data.sync.ContainerData
 import com.filomat.app.data.sync.ImportResult
 import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
+import com.filomat.app.data.sync.RenumberedSpool
 import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.Snapshot
 import com.filomat.app.data.sync.Spool
@@ -213,6 +214,18 @@ class ContainerStore private constructor(context: Context) {
         val result = client.importData(Snapshot(emptyList(), listOf(item.toSnapshot(sendWeights = false))))
         result.skipped.firstOrNull()?.let { throw IllegalStateException(it) }
         refresh()
+    }
+
+    /**
+     * Führt ein doppeltes Filament in dieses zusammen (Spulen, Verbrauch, Vorrat, Tags); das andere wird gelöscht.
+     * Liefert die Spulen, die eine neue Nummer bekommen haben.
+     */
+    suspend fun mergeItem(fromId: String, itemId: String): List<RenumberedSpool> {
+        val client = checkNotNull(backend) { "Zum Zusammenführen muss das Backend verbunden sein." }
+        val renumbered = client.mergeItem(itemId, fromId)
+        edit { s -> s.copy(items = s.items.filter { it.id != fromId }) }
+        refresh()
+        return renumbered
     }
 
     suspend fun addItemToContainer(itemId: String, containerId: String) = moveItem(itemId, containerId)
