@@ -22,7 +22,11 @@ import androidx.compose.ui.unit.dp
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.filomat.app.data.Container
 import com.filomat.app.data.ContainerStore
+import com.filomat.app.ui.components.TagPick
+import com.filomat.app.ui.components.TagPickerDialog
 import com.filomat.app.ui.viewmodel.ContainerDetailViewModel
+import android.nfc.NfcAdapter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -37,6 +41,8 @@ fun ContainerDetailScreen(
     val storeState by containerStore.state.collectAsState(initial = com.filomat.app.data.sync.StoreState())
     var showingEditContainer by remember { mutableStateOf(false) }
     var showingAddItem by remember { mutableStateOf(false) }
+    val nfcAvailable = remember { NfcAdapter.getDefaultAdapter(context)?.isEnabled == true }
+    val scope = rememberCoroutineScope()
     var showingDeleteDialog by remember { mutableStateOf(false) }
     var itemToRemove by remember { mutableStateOf<com.filomat.app.data.Item?>(null) }
     var showingRemoveItemDialog by remember { mutableStateOf(false) }
@@ -183,7 +189,20 @@ fun ContainerDetailScreen(
             )
         }
         
-        if (showingAddItem && container != null) {
+        if (showingAddItem && container != null && !nfcAvailable) {
+            // Ohne NFC eine bekannte Sorte aus der Liste in diesen Container legen
+            val target = container!!
+            TagPickerDialog(
+                TagPick.ITEM,
+                excludedItemIds = storeState.itemsIn(target.id).map { it.id }.toSet(),
+                onDismiss = { showingAddItem = false }
+            ) { tag ->
+                showingAddItem = false
+                storeState.findItemByTag(tag.tagId)?.let { item ->
+                    scope.launch { containerStore.addItemToContainer(item.id, target.id) }
+                }
+            }
+        } else if (showingAddItem && container != null) {
             AddItemDialog(
                 containerId = container!!.id,
                 onDismiss = { showingAddItem = false },

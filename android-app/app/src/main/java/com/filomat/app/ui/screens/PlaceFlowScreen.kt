@@ -27,6 +27,7 @@ import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ItemHeader
 import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.SectionCard
+import com.filomat.app.ui.components.TagPick
 import com.filomat.app.ui.components.rememberNfcReader
 import kotlinx.coroutines.launch
 
@@ -132,11 +133,12 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                         ItemHeader(item, stockText(item, state))
                     } else {
                         Text(
-                            if (target == PlaceTarget.CONTAINER) "Scanne das Musterplättchen des Filaments, das eingelagert wird."
-                            else "Scanne das Musterplättchen des Filaments, das in den Drucker kommt.",
+                            (if (reader.isAvailable) "Scanne das Musterplättchen" else "Wähle die Sorte") +
+                                (if (target == PlaceTarget.CONTAINER) " des Filaments, das eingelagert wird."
+                                else " des Filaments, das in den Drucker kommt."),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        ScanButton(reader, "Filament scannen") { tag ->
+                        ScanButton(reader, "Filament scannen", pick = TagPick.ITEM) { tag ->
                             val (next, newItem) = flow.withFilament(tag.tagId, tag.itemData, state, sync.connected)
                             newItem?.let { scope.launch { store.addItem(it) } }
                             flow = if (tag.parseError != null && next.error == null) next.failed(tag.parseError) else next

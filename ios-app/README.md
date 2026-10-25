@@ -1,6 +1,14 @@
 # Fil-o-mat – iOS-App
 
-Native iPhone-App (SwiftUI + CoreNFC) mit demselben Funktionsumfang wie die Android-App in `../android-app`.
+Native App für iPhone, iPad und Mac (SwiftUI + CoreNFC, Mac per Mac Catalyst) mit demselben Funktionsumfang wie die Android-App in `../android-app`.
+
+## iPad und Mac
+
+Dieselbe App läuft als Universal-App auf dem iPad und über Mac Catalyst als Mac-App (macOS 14 oder neuer). Auf großem Bildschirm stehen die Bereiche in einer Seitenleiste statt in der Tab-Leiste.
+
+iPad und Mac haben kein NFC. Dort heißt der Tab „Scannen“ „Abläufe“, und statt zu scannen wählt man die Sorte bzw. den Container aus einer durchsuchbaren Liste (*Filament wählen*, *Container wählen*). Einlagern, In Drucker einlegen, Container ansehen, Lichtdurchlässigkeit und „Filament hinzufügen“ im Container gehen so wie gewohnt. Nicht möglich sind dort *Filament-Tag lesen* und neue Tags beschreiben (neues Filament, neuer Container); das bleibt dem iPhone bzw. der Android-App. Bestehende Filamente bearbeiten geht überall.
+
+Am Mac in Xcode als Ziel *My Mac (Mac Catalyst)* wählen. Die Mac-Version hat eigene Entitlements (`Filomat/Filomat-macOS.entitlements`: App-Sandbox mit Netzwerkzugriff) und dieselbe Bundle-ID wie die iOS-App.
 
 ## Anforderungen
 

@@ -1,6 +1,6 @@
 # iOS-App über TestFlight
 
-Der Workflow [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml) baut die App und lädt sie zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
+Der Workflow [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml) baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
 
 Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht nur ad hoc signiert (damit die NFC-Entitlements drinstecken), beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
 
@@ -22,6 +22,15 @@ Build-Nummer: 1000 + Laufnummer des Workflows (von Hand in Xcode archivierte Bui
 4. In App Store Connect unter *TestFlight → Interne Tests* eine Gruppe anlegen und sich selbst hinzufügen. Auf dem iPhone die App „TestFlight“ installieren, dort erscheint Fil-o-mat nach dem ersten Upload (Verarbeitung meist 5–15 Minuten). Interne Tester brauchen keine Prüfung durch Apple.
 
 Weil die Bundle-ID gleich bleibt, ersetzt der TestFlight-Build die per Xcode installierte App; die lokalen Daten bleiben dabei normalerweise erhalten und liegen ohnehin auch im Backend.
+
+## Mac
+
+Die Mac-Version ist ein eigener Build für die Plattform macOS unter derselben App (gleiche Bundle-ID). Einmalig nötig:
+
+1. In App Store Connect bei Fil-o-mat die Plattform **macOS** hinzufügen (auf der App-Seite *Plattform hinzufügen*), sonst lehnt der Upload den Mac-Build ab.
+2. Auf dem Mac die App „TestFlight“ aus dem Mac App Store installieren; der Mac-Build erscheint dort für dieselbe interne Testgruppe.
+
+Für den Mac legt Xcode beim Export zusätzlich ein verwaltetes Installer-Zertifikat an. Schlägt nur der Mac-Job fehl, läuft der iPhone/iPad-Build trotzdem durch (die beiden Jobs sind unabhängig).
 
 ## Gut zu wissen
 
