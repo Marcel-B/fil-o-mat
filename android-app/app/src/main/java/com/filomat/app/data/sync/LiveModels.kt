@@ -129,10 +129,10 @@ data class ToolLive(
     val neededGrams: Double? = null,
     val enough: Boolean? = null
 ) {
-    /** "PLA Schwarz #2", was der Drucker meldet, oder "leer". */
+    /** "PLA Schwarz #2", die erkannte Sorte mit offener Spule ("PLA Schwarz #?"), was der Drucker meldet, oder "leer". */
     val title: String
         get() = when {
-            itemName != null -> spoolNumber?.let { "$itemName #$it" } ?: itemName
+            itemName != null -> spoolNumber?.let { "$itemName #$it" } ?: "$itemName #?"
             reported?.type != null && reported.loaded != false -> reported.type
             else -> "leer"
         }
@@ -140,7 +140,7 @@ data class ToolLive(
 
 @Serializable
 data class PrinterHint(
-    /** `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `Temperature`, `Humidity` */
+    /** `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `SpoolUnclear`, `Temperature`, `Humidity` */
     val kind: String,
     val warning: Boolean = false,
     val tool: Int? = null,

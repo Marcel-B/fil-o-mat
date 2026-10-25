@@ -3,6 +3,7 @@ using System.Net;
 using System.Net.Http.Json;
 using Filomat.Api.Domain;
 using Filomat.Api.Endpoints;
+using Filomat.Api.Printers;
 
 namespace Filomat.Api.Tests;
 
@@ -129,5 +130,43 @@ public class SnapmakerU1Tests : IDisposable
         var head4 = loaded.Single(i => i.RfidTag == "04593851CB2A81");
         var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?itemId={head4.Id}");
         Assert.Single(entries!);
+    }
+
+    [Fact]
+    public async Task AsksWhichSpoolInsteadOfOpeningANewOneWhenSeveralAreLoose()
+    {
+        // Marcel: Sunlu PLA Plus hat #1 (gewogen) und #2 lose; #1 kommt in Kopf 2, das Plättchen erkennt der U1 dort
+        var history = _printer.Routes["/server/history/list"];
+        _printer.Routes["/server/history/list"] = """{"result":{"count":0,"jobs":[]}}""";
+        var black = await CreateSpoolAsync("04EA1654CB2A81", null);
+        var first = (await (await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(792))).Content.ReadFromJsonAsync<Spool>())!;
+        await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(184));
+        var u1 = await CreateU1Async();
+
+        // Keine neue Spule, beide bleiben lose, und die App fragt nach
+        var spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
+        Assert.Equal([1, 2], spools.Select(s => s.Number));
+        Assert.All(spools, s => Assert.Null(s.PrinterId));
+        var live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{u1.Id}/status"))!;
+        Assert.Equal((black.Id, (string?)null), (live.Tools[1].ItemId, live.Tools[1].SpoolId));
+        var hint = Assert.Single(live.Hints, h => h.Kind == HintKind.SpoolUnclear);
+        Assert.Equal((1, "Kopf 2: Sunlu PLA erkannt. Welche Spule steckt dort? Lose liegen #1, #2."), (hint.Tool!.Value, hint.Text));
+
+        // Ein Druck, bevor die Spule gewählt ist, bleibt bei der Sorte ohne Spule
+        _printer.Routes["/server/history/list"] = history;
+        await _client.PostAsync($"/api/printers/{u1.Id}/sync", null);
+        var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={u1.Id}");
+        var head2 = Assert.Single(entries!, c => c.Tool == 1);
+        Assert.Equal((black.Id, (string?)null), (head2.ItemId, head2.SpoolId));
+        Assert.Equal(2, (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!.Count);
+
+        // In der App gewählt: #1 steckt in Kopf 2, der Abgleich lässt sie dort
+        await _client.PutAsJsonAsync($"/api/spools/{first.Id}", new SpoolUpdateRequest(792, u1.Id, 1));
+        await _client.PostAsync($"/api/printers/{u1.Id}/sync", null);
+        spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
+        Assert.Equal((u1.Id, 1), (spools[0].PrinterId, spools[0].Tool!.Value));
+        Assert.Null(spools[1].PrinterId);
+        live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{u1.Id}/status"))!;
+        Assert.DoesNotContain(live.Hints, h => h.Kind == HintKind.SpoolUnclear);
     }
 }

@@ -88,9 +88,14 @@ public class ConsumptionSync(
             var prefix = place.Length > 0 ? $"{place}: " : "";
             var item = entry.ItemId is null ? null : await db.Items.FindAsync([entry.ItemId], cancellationToken);
             var spool = entry.SpoolId is null ? null : await db.Spools.FindAsync([entry.SpoolId], cancellationToken);
-            if (item is null || spool is null)
+            if (item is null)
             {
                 lines.Add($"{prefix}{entry.Grams:0} g ohne Zuordnung");
+                continue;
+            }
+            if (spool is null)
+            {
+                lines.Add($"{prefix}{item.Name} −{entry.Grams:0} g, Spule unklar");
                 continue;
             }
             var line = $"{prefix}{item.Name} #{spool.Number} −{entry.Grams:0} g";
@@ -144,10 +149,18 @@ public class ConsumptionSync(
         });
     }
 
-    /// <summary>Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde.</summary>
-    private async Task<Spool> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
+    /// <summary>
+    /// Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde. Ist unklar, welche Spule
+    /// der Sorte dort steckt, bleibt die Buchung bei der Sorte ohne Spule.
+    /// </summary>
+    private async Task<Spool?> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
     {
         var spool = await spools.ResolveAsync(item, printerId, tool, cancellationToken);
+        if (spool is null)
+        {
+            logger.LogInformation("Unklar, welche Spule von {Item} in Kopf {Tool} steckt; {Grams} g ohne Spule gebucht", item.Name, tool + 1, grams);
+            return null;
+        }
         await spools.DeductAsync(spool, item, grams, cancellationToken);
         return spool;
     }
@@ -242,8 +255,8 @@ public class ConsumptionSync(
                 foreach (var entry in open) entry.ItemId = item.Id;
             }
             item.ContainerId = printer.ContainerId;
-            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort
-            await spools.ResolveAsync(item, printer.Id, tool, cancellationToken);
+            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort; welche, fragt die App, wenn mehrere lose liegen
+            await spools.FindAsync(item, printer.Id, tool, cancellationToken);
         }
     }
 

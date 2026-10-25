@@ -31,6 +31,8 @@ import com.filomat.app.data.sync.NotificationSettings
 import com.filomat.app.data.sync.NotificationSettingsRequest
 import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.PrinterStatus
+import com.filomat.app.data.sync.Spool
+import com.filomat.app.data.sync.SpoolPlace
 import com.filomat.app.data.sync.StatsResponse
 import com.filomat.app.data.sync.StatsTotals
 import com.filomat.app.data.sync.ToolLive
@@ -94,6 +96,8 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
     val printers by store.printers.collectAsState(initial = emptyList())
     val printer = printers.firstOrNull { it.id == printerId }
     val live = liveMap[printerId]
+    val spools by store.spools.collectAsState(initial = emptyList())
+    val scope = rememberCoroutineScope()
     var editing by remember { mutableStateOf(false) }
     var thumbnail by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -205,6 +209,18 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                 SectionCard(title) {
                     live.tools.forEach { tool ->
                         ToolLiveRow(tool, isActive = status.isActive && status.activeTool == tool.tool && live.tools.size > 1)
+                        // Plättchen erkannt, aber welche lose Spule der Sorte steckt dort?
+                        val loose = if (tool.spoolId == null && tool.itemId != null)
+                            spools.filter { it.itemId == tool.itemId && it.printerId == null }.sortedBy { it.number }
+                        else emptyList()
+                        if (loose.isNotEmpty()) {
+                            SpoolChoice(loose) { spool ->
+                                scope.launch {
+                                    runCatching { store.placeSpool(spool, SpoolPlace.printer(printerId, tool.tool)) }
+                                    store.refreshPrinterLive()
+                                }
+                            }
+                        }
                     }
                 }
             }
@@ -231,6 +247,26 @@ private fun LabeledRow(label: String, value: String) {
     Row(modifier = Modifier.fillMaxWidth()) {
         Text(label, modifier = Modifier.weight(1f))
         Text(value, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    }
+}
+
+/** Auswahl der losen Spule, die in einem Kopf steckt. */
+@Composable
+private fun SpoolChoice(loose: List<Spool>, onChoose: (Spool) -> Unit) {
+    var expanded by remember { mutableStateOf(false) }
+    Box {
+        TextButton(onClick = { expanded = true }) { Text("Welche Spule steckt hier?") }
+        DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+            loose.forEach { spool ->
+                DropdownMenuItem(
+                    text = { Text(spool.remainingWeight?.let { "#${spool.number} · ${gramsText(it)}" } ?: "#${spool.number}") },
+                    onClick = {
+                        expanded = false
+                        onChoose(spool)
+                    }
+                )
+            }
+        }
     }
 }
 

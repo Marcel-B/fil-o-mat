@@ -151,7 +151,8 @@ public class PrinterLive(
         var status = entry?.Status ?? new PrinterStatus(printer.Enabled ? PrintState.Offline : PrintState.Idle,
             Message: printer.Enabled ? "Noch nicht abgefragt." : "Pausiert.");
         var placed = await PlacedAsync(printer, cancellationToken);
-        var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed);
+        var detected = await DetectedAsync(status, placed, cancellationToken);
+        var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed, detected);
         return new PrinterLiveResponse(printer.Id, printer.Name, printer.Type, entry?.UpdatedAt, status, tools, hints);
     }
 
@@ -162,6 +163,22 @@ public class PrinterLive(
         var itemIds = spools.Select(s => s.ItemId).Distinct().ToList();
         var items = await db.Items.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
         return spools.Where(s => items.ContainsKey(s.ItemId)).Select(s => new PlacedSpool(s, items[s.ItemId])).ToList();
+    }
+
+    /// <summary>Köpfe ohne Spule in der App, an denen der Drucker das Plättchen einer bekannten Sorte erkennt.</summary>
+    private async Task<Dictionary<int, DetectedItem>> DetectedAsync(PrinterStatus status, List<PlacedSpool> placed,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<int, DetectedItem>();
+        foreach (var slot in status.Slots ?? [])
+        {
+            if (slot.TagUid is not { } tag || slot.Loaded == false || placed.Any(p => (p.Spool.Tool ?? 0) == slot.Tool)) continue;
+            if (await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken) is not { } item) continue;
+            var loose = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null && s.PrinterId == null)
+                .OrderBy(s => s.Number).Select(s => s.Number).ToListAsync(cancellationToken);
+            result[slot.Tool] = new DetectedItem(item, loose);
+        }
+        return result;
     }
 
     public static int ToolCount(Printer printer) => printer.ToolCount ?? (printer.Type == PrinterType.SnapmakerU1 ? 4 : 1);

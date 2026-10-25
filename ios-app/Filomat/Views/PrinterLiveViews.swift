@@ -58,7 +58,10 @@ struct PrinterDetailView: View {
                 }
                 if !live.tools.isEmpty {
                     Section(live.tools.count > 1 ? (printer.type == .moonraker || printer.type == .snapmakerU1 ? "Köpfe" : "Slots") : "Spule") {
-                        ForEach(live.tools) { ToolLiveRow(tool: $0, isActive: live.status.isActive && live.status.activeTool == $0.tool && live.tools.count > 1) }
+                        ForEach(live.tools) { tool in
+                            ToolLiveRow(tool: tool, isActive: live.status.isActive && live.status.activeTool == tool.tool && live.tools.count > 1)
+                            spoolChoice(for: tool)
+                        }
                     }
                 }
                 if let heaters = live.status.heaters, !heaters.isEmpty {
@@ -140,6 +143,30 @@ struct PrinterDetailView: View {
                 Text("Abgefragt \(date.formatted(.relative(presentation: .named)))")
             }
         }
+    }
+
+    /// Der Drucker erkennt das Plättchen einer Sorte, aber welche ihrer losen Spulen steckt dort?
+    @ViewBuilder
+    private func spoolChoice(for tool: ToolLive) -> some View {
+        if tool.spoolId == nil, let itemId = tool.itemId {
+            let loose = store.spools(of: itemId).filter { $0.printerId == nil }
+            if !loose.isEmpty {
+                Menu {
+                    ForEach(loose) { spool in
+                        Button(spool.remainingWeight.map { "#\(spool.number) · \($0.gramsText)" } ?? "#\(spool.number)") {
+                            Task { await place(spool, tool: tool.tool) }
+                        }
+                    }
+                } label: {
+                    Label("Welche Spule steckt hier?", systemImage: "questionmark.circle")
+                }
+            }
+        }
+    }
+
+    private func place(_ spool: Spool, tool: Int) async {
+        try? await store.placeSpool(spool, at: .printer(printer.id, tool: tool))
+        await store.refreshPrinterLive()
     }
 
     private func loadThumbnail() async {

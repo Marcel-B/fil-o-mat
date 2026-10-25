@@ -139,16 +139,16 @@ struct ToolLive: Decodable, Hashable, Identifiable {
 
     var id: Int { tool }
 
-    /// "PLA Schwarz #2", was der Drucker meldet, oder "leer".
+    /// "PLA Schwarz #2", die erkannte Sorte mit offener Spule ("PLA Schwarz #?"), was der Drucker meldet, oder "leer".
     var title: String {
-        if let itemName { return spoolNumber.map { "\(itemName) #\($0)" } ?? itemName }
+        if let itemName { return spoolNumber.map { "\(itemName) #\($0)" } ?? "\(itemName) #?" }
         if let type = reported?.type, reported?.loaded != false { return type }
         return "leer"
     }
 }
 
 struct PrinterHint: Decodable, Hashable, Identifiable {
-    /// `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `Temperature`, `Humidity`
+    /// `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `SpoolUnclear`, `Temperature`, `Humidity`
     var kind: String
     var warning: Bool
     var tool: Int?
@@ -160,6 +160,7 @@ struct PrinterHint: Decodable, Hashable, Identifiable {
         switch kind {
         case "SpoolShort": "scalemass"
         case "TagMismatch", "SlotMismatch", "SlotEmpty", "SlotUnknown": "tag"
+        case "SpoolUnclear": "questionmark.circle"
         case "Temperature": "thermometer.medium"
         case "Humidity": "humidity"
         default: "exclamationmark.triangle"
