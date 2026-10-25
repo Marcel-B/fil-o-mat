@@ -96,7 +96,7 @@ fun PrinterContent(printer: Printer, state: StoreState) {
 
 @Composable
 private fun ContainerContent(container: Container, state: StoreState, onOpen: () -> Unit) {
-    val items = state.itemsIn(container.id)
+    val items = state.unloadedItemsIn(container.id)
     val spools = state.spoolsIn(container.id)
     Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
         SectionCard(container.name) {
@@ -105,11 +105,13 @@ private fun ContainerContent(container: Container, state: StoreState, onOpen: ()
             }
             OutlinedButton(onClick = onOpen, modifier = Modifier.fillMaxWidth()) { Text("Container öffnen") }
         }
-        SectionCard("Sorten (${items.size})") {
-            if (items.isEmpty()) {
-                Text("Keine Sorten in diesem Container", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        if (items.isNotEmpty() || spools.isEmpty()) {
+            SectionCard("Sorten (${items.size})") {
+                if (items.isEmpty()) {
+                    Text("Keine Sorten in diesem Container", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                }
+                items.forEach { item -> ItemHeader(item, item.spoolsInStock?.let { "Vorrat: $it" }) }
             }
-            items.forEach { item -> ItemHeader(item, item.spoolsInStock?.let { "Vorrat: $it" }) }
         }
         if (spools.isNotEmpty()) {
             OpenedSpoolsCard(spools, state)

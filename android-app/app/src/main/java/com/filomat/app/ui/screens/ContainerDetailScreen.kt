@@ -124,23 +124,29 @@ fun ContainerDetailScreen(
                 if (printer != null) {
                     item { PrinterContent(printer, storeState) }
                 }
-                // Sorten, deren Spule in einem Kopf steckt, stehen schon oben
-                val shownItems = if (printer != null) storeState.unloadedItemsIn(cont.id) else cont.items
+                // Sorten, deren Spule hier liegt oder in einem Kopf steckt, stehen nur als Spule mit Nummer da
+                val shownItems = storeState.unloadedItemsIn(cont.id)
+                val spools = storeState.spoolsIn(cont.id)
 
-                item {
-                    Text(
-                        text = "Filamente (${shownItems.size})",
-                        style = MaterialTheme.typography.titleMedium
-                    )
-                }
-                
-                if (shownItems.isEmpty()) {
+                // Leere Sorten-Liste nur zeigen, wenn auch sonst nichts im Container liegt
+                if (shownItems.isNotEmpty() || (printer == null && spools.isEmpty())) {
                     item {
                         Text(
-                            text = "Keine Filamente in diesem Container",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = "Filamente (${shownItems.size})",
+                            style = MaterialTheme.typography.titleMedium
                         )
+                    }
+                }
+
+                if (shownItems.isEmpty()) {
+                    if (printer == null && spools.isEmpty()) {
+                        item {
+                            Text(
+                                text = "Keine Filamente in diesem Container",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
                     }
                 } else {
                     items(shownItems) { item ->
@@ -156,7 +162,6 @@ fun ContainerDetailScreen(
                     }
                 }
 
-                val spools = storeState.spoolsIn(cont.id)
                 if (spools.isNotEmpty()) {
                     item { OpenedSpoolsCard(spools, storeState) }
                 }

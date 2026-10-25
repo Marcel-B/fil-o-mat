@@ -161,4 +161,22 @@ class StoreStateTest {
         assertEquals(4, state.filamentCount("kc"))
         assertEquals(1, state.filamentCount("box"))
     }
+
+    @Test
+    fun containerShowsOpenedSpoolInsteadOfItsSort() {
+        val state = StoreState(
+            items = listOf(
+                Item(id = "a", rfidTag = "A", name = "PLA", containerId = "box", spoolsInStock = 2),
+                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "box")
+            ),
+            spools = listOf(
+                Spool("s1", "a", 1, containerId = "box"),
+                Spool("s2", "a", 2, containerId = "box")
+            )
+        )
+
+        // PLA liegt nur als Spulen #1 und #2 da, PETG ohne Spule als Sorte
+        assertEquals(listOf("b"), state.unloadedItemsIn("box").map { it.id })
+        assertEquals(3, state.filamentCount("box"))
+    }
 }

@@ -22,7 +22,7 @@ struct ContainerDetailView: View {
 
     private func content(for container: Container) -> some View {
         let printer = store.printer(owningContainer: container.id)
-        // Sorten, deren Spule in einem Kopf steckt, zeigt "Im Drucker"
+        // Sorten, deren Spule hier liegt oder in einem Kopf steckt, stehen nur als Spule mit Nummer da
         let items = store.unloadedItems(in: container.id)
         let isLoose = container.id == Container.looseId
 
@@ -69,8 +69,8 @@ struct ContainerDetailView: View {
                 }
             }
 
-            // Im Drucker-Container stehen Sorten, die in einem Slot stecken, schon oben
-            if printer == nil || !items.isEmpty {
+            // Leere Sorten-Liste nur zeigen, wenn auch sonst nichts im Container liegt
+            if !items.isEmpty || (printer == nil && store.spools(inContainer: container.id).isEmpty) {
                 Section("Filamente (\(items.count))") {
                     if items.isEmpty {
                         Text("Keine Filamente in diesem Container").foregroundStyle(.secondary)

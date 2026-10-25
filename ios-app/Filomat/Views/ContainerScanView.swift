@@ -52,7 +52,7 @@ struct ContainerScanView: View {
 
     @ViewBuilder
     private func contentSections(_ container: Container) -> some View {
-        let items = store.items(in: container.id)
+        let items = store.unloadedItems(in: container.id)
         let spools = store.spools(inContainer: container.id)
 
         Section {
@@ -66,12 +66,14 @@ struct ContainerScanView: View {
             Text(container.name)
         }
 
-        Section("Sorten (\(items.count))") {
-            if items.isEmpty {
-                Text("Keine Sorten in diesem Container").foregroundStyle(.secondary)
-            }
-            ForEach(items) { item in
-                ItemHeader(item: item, detail: item.spoolsInStock.map { "Vorrat: \($0)" })
+        if !items.isEmpty || spools.isEmpty {
+            Section("Sorten (\(items.count))") {
+                if items.isEmpty {
+                    Text("Keine Sorten in diesem Container").foregroundStyle(.secondary)
+                }
+                ForEach(items) { item in
+                    ItemHeader(item: item, detail: item.spoolsInStock.map { "Vorrat: \($0)" })
+                }
             }
         }
 

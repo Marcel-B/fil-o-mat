@@ -58,9 +58,7 @@ struct TagInfoView: View {
                 if !container.description.isEmpty {
                     Text(container.description).foregroundStyle(.secondary)
                 }
-                InfoRow(label: "Filamente darin", value: "\(store.items(in: container.id).count)")
-                let spools = store.spools(inContainer: container.id)
-                if !spools.isEmpty { InfoRow(label: "Angebrochene Spulen darin", value: "\(spools.count)") }
+                InfoRow(label: "Filamente darin", value: "\(store.filamentCount(in: container.id))")
             }
         } else if let item = store.findItem(byTag: uid) ?? store.findItem(byTag: tag.tagId) {
             Section("In Fil-o-mat") {

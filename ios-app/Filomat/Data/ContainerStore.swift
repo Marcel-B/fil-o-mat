@@ -103,20 +103,26 @@ final class ContainerStore {
         printers.first { $0.containerId == containerId }
     }
 
-    /// Sorten in diesem Container; im Container eines Druckers ohne die, deren Spule in einem seiner Köpfe steckt.
+    /// Sorten in diesem Container ohne eigene Spule darin: Liegt eine angebrochene Spule der Sorte im Container
+    /// oder steckt sie in einem Kopf seines Druckers, steht dort die Spule mit Nummer statt der Sorte.
     func unloadedItems(in containerId: String) -> [Item] {
-        let contained = items(in: containerId)
-        guard let printer = printer(owningContainer: containerId) else { return contained }
-        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zählen unter "Im Drucker"
-        return contained.filter { item in !spools(of: item.id).contains { $0.printerId == printer.id } }
+        let printer = printer(owningContainer: containerId)
+        return items(in: containerId).filter { item in
+            !spools(of: item.id).contains { spool in
+                // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container
+                (printer != nil && spool.printerId == printer?.id)
+                    || (spool.printerId == nil && spool.containerId == containerId)
+            }
+        }
     }
 
-    /// Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt.
+    /// Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt,
+    /// die angebrochenen Spulen darin und Sorten ohne eigene Spule darin.
     func filamentCount(in containerId: String) -> Int {
         let loaded = printer(owningContainer: containerId).map { printer in
             (0..<printer.toolCount).filter { spool(inPrinter: printer.id, tool: $0) != nil }.count
         } ?? 0
-        return loaded + unloadedItems(in: containerId).count
+        return loaded + spools(inContainer: containerId).count + unloadedItems(in: containerId).count
     }
 
     // MARK: - Container
