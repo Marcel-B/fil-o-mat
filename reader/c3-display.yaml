@@ -42,6 +42,18 @@ display:
     address: 0x3C
     update_interval: 500ms
     lambda: |-
+      // Zeile 2 bricht am letzten Leerzeichen um, das noch passt (nie mitten in einem Umlaut)
+      std::string a = id(line2), b;
+      if (a.size() > 12) {
+        size_t cut = a.rfind(' ', 12);
+        if (cut == std::string::npos || cut == 0) {
+          cut = 12;
+          while (cut > 0 && (a[cut] & 0xC0) == 0x80) cut--;
+        }
+        b = a.substr(cut);
+        a.resize(cut);
+        if (!b.empty() && b[0] == ' ') b.erase(0, 1);
+      }
       it.print(0, 0, id(small), id(line1).c_str());
-      it.print(0, 13, id(small), id(line2).c_str());
-      if (id(line2).size() > 12) it.print(0, 26, id(small), id(line2).substr(12).c_str());
+      it.print(0, 13, id(small), a.c_str());
+      it.print(0, 26, id(small), b.c_str());
