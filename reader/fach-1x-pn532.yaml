@@ -38,6 +38,10 @@ script:
     mode: queued
     max_runs: 3
     then:
+      # Gleich nach dem Start ist das WLAN noch nicht da
+      - wait_until:
+          condition: wifi.connected
+          timeout: 30s
       - http_request.send:
           method: PUT
           url: !lambda return std::string("${filomat_url}") + "/api/printers/${printer_id}/reader";
@@ -55,7 +59,12 @@ script:
                   id(line2) = "Fehler " + to_string(response->status_code);
                   return;
                 }
-                if (id(uid).empty()) return;
+                if (id(uid).empty()) {
+                  // Auch nach "nicht erreichbar" wieder den echten Stand zeigen
+                  id(line1) = "Kein";
+                  id(line2) = "Plättchen";
+                  return;
+                }
                 json::parse_json(body, [](JsonObject root) -> bool {
                   JsonObject slot = root["slots"][0];
                   std::string state = slot["state"] | "";
