@@ -67,6 +67,9 @@ struct BackendSettingsView: View {
                         LabeledContent("Letzter Abgleich", value: lastSyncedAt.formatted(date: .omitted, time: .shortened))
                     }
                 }
+                if let message = store.compatibility?.message {
+                    Section("Version") { Text(message).foregroundStyle(.orange) }
+                }
                 if let backup = store.backupStatus {
                     backupSection(backup)
                 }

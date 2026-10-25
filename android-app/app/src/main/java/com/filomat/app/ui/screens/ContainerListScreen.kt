@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.filomat.app.data.sync.ApiCompatibility
 import com.filomat.app.data.sync.BackendUpdateStatus
 import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.StoreState
@@ -92,6 +93,7 @@ fun ContainerListScreen(
             SyncBanners(
                 error = sync.error,
                 update = sync.updateStatus,
+                compatibility = sync.compatibility,
                 onClick = { navController.navigate("backend") }
             )
             ContainerList(containers, storeState, navController, liveMap)
@@ -111,10 +113,11 @@ fun ContainerListScreen(
 
 /** Hinweise auf Abgleich-Fehler und neue Backend-Versionen, wie in der iOS-App. */
 @Composable
-private fun SyncBanners(error: String?, update: BackendUpdateStatus?, onClick: () -> Unit) {
+private fun SyncBanners(error: String?, update: BackendUpdateStatus?, compatibility: ApiCompatibility?, onClick: () -> Unit) {
     if (error != null) {
         Banner(Icons.Default.CloudOff, error, isError = true, onClick = onClick)
     }
+    compatibility?.message?.let { Banner(Icons.Default.Warning, it, isError = true, onClick = onClick) }
     if (update != null && (update.updateAvailable || update.failed)) {
         when {
             update.failed -> Banner(Icons.Default.Warning, "Backend-Update fehlgeschlagen", isError = true, onClick = onClick)

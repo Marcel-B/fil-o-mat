@@ -49,6 +49,41 @@ struct BackendUpdateStatus: Codable, Equatable {
     var isUpdating: Bool { state == "requested" || state == "running" }
 }
 
+/// API-Stufe des Backends (`/api/version`).
+struct BackendVersion: Codable, Equatable {
+    var apiLevel: Int
+    var minAppLevel: Int
+    var commit: String?
+}
+
+/// Passen App und Backend zusammen? Die Stufen erklärt `backend/README.md` unter „Versionen“.
+enum ApiCompatibility: Equatable {
+    /// API-Stufe, gegen die diese App gebaut ist.
+    static let appLevel = 1
+    /// Kleinste Backend-Stufe, mit der diese App alles kann.
+    static let minBackendLevel = 1
+
+    case compatible
+    case backendOutdated
+    case appOutdated
+
+    /// `version == nil`: das Backend kennt `/api/version` noch nicht (Stufe 0).
+    init(_ version: BackendVersion?, appLevel: Int = ApiCompatibility.appLevel, minBackendLevel: Int = ApiCompatibility.minBackendLevel) {
+        let backendLevel = version?.apiLevel ?? 0
+        if appLevel < version?.minAppLevel ?? 0 { self = .appOutdated }
+        else if backendLevel < minBackendLevel { self = .backendOutdated }
+        else { self = .compatible }
+    }
+
+    var message: String? {
+        switch self {
+        case .compatible: nil
+        case .backendOutdated: "Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen."
+        case .appOutdated: "App veraltet: bitte die neue Version aus TestFlight installieren."
+        }
+    }
+}
+
 /// Stand der Nextcloud-Sicherung (`/api/backup`).
 struct BackupStatus: Codable, Equatable {
     struct Run: Codable, Equatable {
@@ -225,6 +260,12 @@ struct BackendClient {
     }
 
     // MARK: - Aktualisierung
+
+    /// `nil` bei einem Backend ohne `/api/version`.
+    func version() async throws -> BackendVersion? {
+        let data = try await send(request("api/version", method: "GET"), allowNotFound: true)
+        return data.isEmpty ? nil : try Self.decoder.decode(BackendVersion.self, from: data)
+    }
 
     func updateStatus() async throws -> BackendUpdateStatus {
         try Self.decoder.decode(BackendUpdateStatus.self, from: try await send(request("api/update", method: "GET")))

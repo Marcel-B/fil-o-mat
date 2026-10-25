@@ -62,6 +62,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | GET | `/api/stats?months=12` | Verbrauch, Drucke, Abbrüche und Druckzeit pro Monat, Drucker, Sorte und Material |
 | GET · PUT | `/api/settings/notifications` | ntfy-Adresse für Meldungen (`{"url", "token"}`; leere Adresse = Server-Konfiguration, `token: null` behält ihn) |
 | POST | `/api/settings/notifications/test` | Testmeldung schicken |
+| GET | `/api/version` | API-Stufe (`apiLevel`), älteste passende App-Stufe (`minAppLevel`) und laufender Commit; siehe „Versionen“ |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
 | POST | `/api/consumption/{id}/assign` | Offene Buchung zuordnen (`{"itemId": "…", "spoolId": "…"}`, Spule optional) und abziehen |
 | GET | `/api/spools?itemId=&printerId=&includeEmpty=true` | Angebrochene Spulen |
@@ -160,3 +161,7 @@ dotnet ef migrations add <Name> -p src/Filomat.Api -o Data/Migrations
 ```
 
 Migrationen werden beim Start automatisch angewendet.
+
+### Versionen
+
+Backend und Apps prüfen über `GET /api/version`, ob sie zusammenpassen. `ApiVersion.Level` (in `Endpoints/VersionEndpoints.cs`) steigt um eins, sobald die API etwas Neues kann, auf das sich eine App verlässt; `ApiVersion.MinAppLevel` steigt nur, wenn ältere Apps nicht mehr funktionieren. Die Apps tragen ihre eigene Stufe und die kleinste Backend-Stufe, die sie brauchen (iOS `ApiCompatibility`, Android `ApiCompatibility`). Ist das Backend älter, zeigen sie „Backend veraltet“ (ein Backend ohne `/api/version` zählt als Stufe 0), ist die App älter als `minAppLevel`, „App veraltet“.

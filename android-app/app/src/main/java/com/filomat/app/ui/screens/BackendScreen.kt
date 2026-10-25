@@ -134,6 +134,7 @@ fun BackendScreen(navController: NavController) {
 
             resultMessage?.let { InfoCard("Ergebnis", it) }
             sync.error?.let { InfoCard("Fehler", it, isError = true) }
+            sync.compatibility?.message?.let { InfoCard("Version", it, isError = true) }
             sync.lastSyncedAt?.takeIf { sync.connected }?.let {
                 InfoCard("Letzter Abgleich", DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)))
             }

@@ -22,6 +22,16 @@ struct ContainerListView: View {
                         .onTapGesture { showingBackend = true }
                 }
             }
+            if let message = store.compatibility?.message {
+                Section {
+                    Button {
+                        showingBackend = true
+                    } label: {
+                        Label(message, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                            .foregroundStyle(.orange)
+                    }
+                }
+            }
             if let update = store.updateStatus, update.updateAvailable || update.state == "failed" {
                 Section {
                     Button {
