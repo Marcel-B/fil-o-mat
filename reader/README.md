@@ -14,7 +14,7 @@ Ein ESP32 mit NFC-Leser meldet dem Backend, welches Musterplättchen in welchem 
 
 1. ESPHome installieren: `pip install esphome` (oder das ESPHome-Dashboard in Docker).
 2. `secrets.example.yaml` nach `secrets.yaml` kopieren und WLAN, Backend-Adresse und gegebenenfalls `Filomat:ApiKey` eintragen.
-3. In der Datei des Druckers `printer_id` setzen: die Id aus `GET /api/printers` (bzw. in der App beim Drucker). Für mehrere Drucker derselben Art eine Kopie mit eigenem `name` anlegen, z. B. `fach-1x-pn532.yaml` als `mk4s.yaml` mit `name: filomat-mk4s`.
+3. In der Datei des Druckers `printer_id` setzen: die Id aus `GET /api/printers` (im Browser `http://<Backend>/api/printers`, Feld `id` beim Drucker). Für mehrere Drucker derselben Art eine Kopie mit eigenem `name` anlegen, z. B. `fach-1x-pn532.yaml` als `mk4s.yaml` mit `name: filomat-mk4s`.
 4. Per USB flashen: `esphome run fach-1x-pn532.yaml`. Danach gehen Updates per WLAN mit demselben Befehl.
 5. Log ansehen: `esphome logs fach-1x-pn532.yaml`. Jede Meldung ans Backend steht dort mit Antwort.
 

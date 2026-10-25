@@ -9,7 +9,7 @@
 
 substitutions:
   name: filomat-core-one
-  # Id des Druckers aus der App (Drucker > Bearbeiten) bzw. GET /api/printers
+  # Id des Druckers: im Browser http://<Backend>/api/printers, Feld "id"
   printer_id: "HIER-DRUCKER-ID"
 
 esphome:

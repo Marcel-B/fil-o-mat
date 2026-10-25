@@ -5,7 +5,7 @@
 substitutions:
   name: filomat-p1s
   friendly_name: fil-O-mat P1S
-  # Id des Druckers aus der App bzw. GET /api/printers
+  # Id des Druckers: im Browser http://<Backend>/api/printers, Feld "id"
   printer_id: "HIER-DRUCKER-ID"
 
 packages:
