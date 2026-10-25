@@ -13,7 +13,7 @@ packages:
   board: !include c3-display.yaml
 
 globals:
-  - id: tag
+  - id: uid
     type: std::string
     restore_value: no
     initial_value: '""'
@@ -22,13 +22,13 @@ pn532_i2c:
   update_interval: 500ms
   on_tag:
     - lambda: |-
-        id(tag) = x;
+        id(uid) = x;
         id(line1) = "Gelesen";
         id(line2) = "…";
     - script.execute: send_state
   on_tag_removed:
     - lambda: |-
-        id(tag) = "";
+        id(uid) = "";
         id(line1) = "Kein";
         id(line2) = "Plättchen";
     - script.execute: send_state
@@ -45,7 +45,7 @@ script:
             Content-Type: application/json
             X-Api-Key: ${filomat_api_key}
           body: !lambda |-
-            return id(tag).empty() ? std::string("{\"slots\":[null]}") : "{\"slots\":[\"" + id(tag) + "\"]}";
+            return id(uid).empty() ? std::string("{\"slots\":[null]}") : "{\"slots\":[\"" + id(uid) + "\"]}";
           capture_response: true
           on_response:
             - lambda: |-
@@ -55,7 +55,7 @@ script:
                   id(line2) = "Fehler " + to_string(response->status_code);
                   return;
                 }
-                if (id(tag).empty()) return;
+                if (id(uid).empty()) return;
                 json::parse_json(body, [](JsonObject root) -> bool {
                   JsonObject slot = root["slots"][0];
                   std::string state = slot["state"] | "";

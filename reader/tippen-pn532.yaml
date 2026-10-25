@@ -16,7 +16,7 @@ packages:
   board: !include c3-display.yaml
 
 globals:
-  - id: tag
+  - id: uid
     type: std::string
     restore_value: no
     initial_value: '""'
@@ -31,12 +31,12 @@ pn532_i2c:
   on_tag:
     - if:
         condition:
-          lambda: return x == id(tag);
+          lambda: return x == id(uid);
         then:
           - logger.log: "Dasselbe Plättchen, ignoriert"
         else:
           - lambda: |-
-              id(tag) = x;
+              id(uid) = x;
               id(slot) = 0;
               id(line1) = "Taste: Slot";
               id(line2) = "…";
@@ -55,7 +55,7 @@ binary_sensor:
     on_press:
       - if:
           condition:
-            lambda: return !id(tag).empty();
+            lambda: return !id(uid).empty();
           then:
             - lambda: |-
                 id(slot) = id(slot) % ${slot_count} + 1;
@@ -70,7 +70,7 @@ script:
       - http_request.get:
           url: !lambda |-
             std::string uid;
-            for (char c : id(tag)) if (isxdigit(c)) uid += toupper(c);
+            for (char c : id(uid)) if (isxdigit(c)) uid += toupper(c);
             return std::string("${filomat_url}") + "/api/items/by-tag/" + uid;
           request_headers:
             X-Api-Key: ${filomat_api_key}
@@ -97,7 +97,7 @@ script:
             Content-Type: application/json
             X-Api-Key: ${filomat_api_key}
           body: !lambda |-
-            return "{\"slot\":" + to_string(id(slot) - 1) + ",\"tag\":\"" + id(tag) + "\"}";
+            return "{\"slot\":" + to_string(id(slot) - 1) + ",\"tag\":\"" + id(uid) + "\"}";
           capture_response: true
           on_response:
             - lambda: |-
@@ -115,7 +115,7 @@ script:
           on_error:
             - lambda: id(line1) = "Backend weg";
       # Danach darf dasselbe Plättchen wieder angetippt werden
-      - lambda: id(tag) = "";
+      - lambda: id(uid) = "";
 
   # Ohne Tastendruck: abbrechen
   - id: give_up
@@ -124,7 +124,7 @@ script:
       - delay: 15s
       - lambda: |-
           if (id(slot) == 0) {
-            id(tag) = "";
+            id(uid) = "";
             id(line1) = "fil-O-mat";
             id(line2) = "bereit";
           }
