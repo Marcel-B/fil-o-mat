@@ -21,6 +21,22 @@ class StoreStateTest {
         ItemData(id = id, rfidTag = "TAG$id", name = "Item $id", createdAt = 1, containerId = containerId)
 
     @Test
+    fun itemIsFoundByEveryTagAndKeepsThemThroughSnapshot() {
+        val snapshot = Snapshot(
+            emptyList(),
+            listOf(SnapshotItem("filofa", "04000001", "FiloFa", createdAt = 1, extraTags = listOf("04000002", "04000003")))
+        )
+        val state = StoreState.fromSnapshot(snapshot, emptyList())
+
+        assertEquals("filofa", state.findItemByTag("04000003")?.id)
+        assertNull(state.findItemByTag("04000009"))
+        assertEquals(listOf("04000002", "04000003"), state.items.single().toSnapshot(sendWeights = false).extraTags)
+        // Auch im Gerätespeicher bleiben die weiteren Tags erhalten
+        assertEquals(listOf("04000001", "04000002", "04000003"),
+            StoreState.fromStored(emptyList(), state.storedItems()).items.single().allTags)
+    }
+
+    @Test
     fun legacyAssignmentFromContainerListIsKept() {
         val box = ContainerData("box", "B", "Box", createdAt = 1, items = listOf(item("1"), item("2")))
         // Item 1 kennt seinen Container nur über die Liste, Item 2 steht nur in der Liste

@@ -66,7 +66,7 @@ final class ContainerStore {
     }
 
     func findItem(byTag rfidTag: String) -> Item? {
-        items.first { $0.rfidTag == rfidTag }
+        items.first { $0.hasTag(rfidTag) }
     }
 
     func spools(of itemId: String) -> [Spool] {
@@ -146,7 +146,7 @@ final class ContainerStore {
     /// Fügt ein Item hinzu, sofern noch kein Item mit demselben (nicht leeren) Tag existiert.
     func addItem(_ item: Item) {
         let tag = item.rfidTag.trimmingCharacters(in: .whitespaces)
-        if !tag.isEmpty, items.contains(where: { $0.rfidTag == item.rfidTag }) { return }
+        if !tag.isEmpty, findItem(byTag: item.rfidTag) != nil { return }
         items.append(item)
         save()
         push(items: [item])
@@ -164,6 +164,55 @@ final class ContainerStore {
         items.removeAll { $0.id == id }
         save()
         remote { try await $0.deleteItem(id: id) }
+    }
+
+    /// Fügt einem Filament ein weiteres Tag hinzu, z. B. ein Musterplättchen an einer Box oder einem Drucker.
+    /// Gehört das Tag bisher einem anderen Filament, wird es dort entfernt; war es dessen einziges Tag,
+    /// wird der Eintrag gelöscht (nur ohne angebrochene Spulen).
+    func addTag(_ tag: String, toItem itemId: String) async throws {
+        if let previous = findItem(byTag: tag), previous.id != itemId {
+            if previous.allTags.count > 1 {
+                try await removeTag(tag, fromItem: previous.id)
+            } else {
+                guard spools(of: previous.id).isEmpty else {
+                    throw StoreError.tagInUse("Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat.")
+                }
+                try await backend?.deleteItem(id: previous.id)
+                items.removeAll { $0.id == previous.id }
+            }
+        }
+        guard let index = items.firstIndex(where: { $0.id == itemId }), !items[index].hasTag(tag) else { return }
+        if items[index].rfidTag.isEmpty {
+            items[index].rfidTag = tag
+        } else {
+            items[index].extraTags = (items[index].extraTags ?? []) + [tag]
+        }
+        try await saveTags(of: items[index])
+    }
+
+    /// Entfernt ein Tag von einem Filament. Ist es das Haupt-Tag, rückt das erste weitere Tag nach;
+    /// das letzte Tag bleibt.
+    func removeTag(_ tag: String, fromItem itemId: String) async throws {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        var item = items[index]
+        var extra = item.extraTags ?? []
+        if item.rfidTag == tag {
+            guard !extra.isEmpty else { throw StoreError.tagInUse("Das letzte Tag eines Filaments bleibt.") }
+            item.rfidTag = extra.removeFirst()
+        } else {
+            extra.removeAll { $0 == tag }
+        }
+        item.extraTags = extra
+        items[index] = item
+        try await saveTags(of: item)
+    }
+
+    private func saveTags(of item: Item) async throws {
+        save()
+        guard let backend else { return }
+        let result = try await backend.importData(BackendSnapshot(containers: [], items: [Self.withoutWeights(item)]))
+        if let reason = result.skipped.first { throw StoreError.tagInUse(reason) }
+        await refresh()
     }
 
     /// Lagert ein Item in einen Container ein (verschiebt es ggf. aus seinem bisherigen Container).
@@ -414,4 +463,14 @@ final class ContainerStore {
         decoder.dateDecodingStrategy = .millisecondsSince1970
         return decoder
     }()
+}
+
+enum StoreError: LocalizedError {
+    case tagInUse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tagInUse(let message): message
+        }
+    }
 }

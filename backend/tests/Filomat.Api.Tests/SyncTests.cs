@@ -58,6 +58,27 @@ public class SyncTests : IDisposable
     }
 
     [Fact]
+    public async Task ItemHasExtraTagsThatAreFoundAndKept()
+    {
+        var plates = new Snapshot([], [new SnapshotItem("filofa", "04000001", "FiloFa PLA", "", 1, null, null,
+            ExtraTags: ["04000002", "04000003", "04000001", " "])]);
+        Assert.Empty((await (await _client.PostAsJsonAsync("/api/import", plates)).Content.ReadFromJsonAsync<ImportResult>())!.Skipped);
+
+        Assert.Equal("filofa", (await _client.GetFromJsonAsync<Item>("/api/items/by-tag/04000003"))!.Id);
+        Assert.Equal(["04000002", "04000003"], (await _client.GetFromJsonAsync<Snapshot>("/api/snapshot"))!.Items.Single().ExtraTags);
+
+        // Ältere App ohne das Feld lässt die Tags stehen
+        await _client.PostAsJsonAsync("/api/import", new Snapshot([], [new SnapshotItem("filofa", "04000001", "FiloFa", "", 1, null, null)]));
+        Assert.Equal(2, (await _client.GetFromJsonAsync<Item>("/api/items/filofa"))!.ExtraTags.Count);
+
+        // Ein weiteres Tag eines anderen Filaments wird nicht übernommen
+        var other = new Snapshot([], [new SnapshotItem("other", "04000009", "Anderes", "", 1, null, null, ExtraTags: ["04000002"])]);
+        var result = await (await _client.PostAsJsonAsync("/api/import", other)).Content.ReadFromJsonAsync<ImportResult>();
+        Assert.Single(result!.Skipped);
+        Assert.Empty((await _client.GetFromJsonAsync<Item>("/api/items/other"))!.ExtraTags);
+    }
+
+    [Fact]
     public async Task KeepsTransmissionDistanceWhenAppDoesNotSendIt()
     {
         var withTd = new Snapshot([], [new SnapshotItem("pla", "04112233", "PLA", "", 1, null, null, TransmissionDistance: 4.2)]);

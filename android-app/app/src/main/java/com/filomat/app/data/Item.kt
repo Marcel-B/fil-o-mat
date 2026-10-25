@@ -18,8 +18,15 @@ data class Item(
     /** Volle Spulen dieser Sorte im Vorrat; `null`, wenn kein Vorrat geführt wird. */
     val spoolsInStock: Int? = null,
     /** Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm; steht nur in Fil-o-mat, nicht auf dem Tag. */
-    val transmissionDistance: Double? = null
+    val transmissionDistance: Double? = null,
+    /** Weitere Tags derselben Sorte, z. B. Musterplättchen an Boxen und Druckern; `null` bei älteren Daten. */
+    val extraTags: List<String>? = null
 ) {
+    /** Haupt-Tag und weitere Tags. */
+    val allTags: List<String> get() = (listOf(rfidTag) + extraTags.orEmpty()).filter { it.isNotBlank() }
+
+    fun hasTag(tag: String): Boolean = tag.isNotBlank() && tag in allTags
+
     fun getDisplayTitle(): String {
         val parts = listOfNotNull(
             itemData?.brand?.trim(),

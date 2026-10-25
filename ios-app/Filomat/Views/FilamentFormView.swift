@@ -27,6 +27,9 @@ struct FilamentFormView: View {
     @State private var spoolsInStock: Int
     @State private var transmissionDistance: String
     @State private var isOpeningSpool = false
+    @State private var isAssigningTag = false
+    /// Gescanntes Tag, das noch einem anderen Filament gehört; wartet auf Bestätigung.
+    @State private var pendingTag: PendingTag?
     @State private var isWriting = false
     @State private var consumption: [ConsumptionEntry] = []
     @State private var errorMessage: String?
@@ -57,6 +60,12 @@ struct FilamentFormView: View {
     private var editedItem: Item? {
         if case .edit(let item) = mode { return item }
         return nil
+    }
+
+    /// Das bearbeitete Filament mit dem aktuellen Stand aus dem Store (z. B. nach „Plättchen hinzufügen“).
+    private var currentItem: Item? {
+        guard let editedItem else { return nil }
+        return store.item(id: editedItem.id) ?? editedItem
     }
 
     private var typeOptions: [String] {
@@ -102,6 +111,36 @@ struct FilamentFormView: View {
                         Text("Sorte")
                     } footer: {
                         Text("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst.")
+                    }
+
+                    Section {
+                        let tags = currentItem?.allTags ?? []
+                        if tags.isEmpty {
+                            Text("Noch kein Tag").foregroundStyle(.secondary)
+                        }
+                        ForEach(tags, id: \.self) { tag in
+                            Text(tag).monospaced().textSelection(.enabled)
+                                .swipeActions {
+                                    if tags.count > 1 {
+                                        Button("Entfernen", role: .destructive) {
+                                            Task { await removeTag(tag) }
+                                        }
+                                    }
+                                }
+                        }
+                        if isAssigningTag { ProgressView() }
+                        ScanButton(title: "Plättchen hinzufügen", prompt: "Halten Sie das iPhone an das Musterplättchen.") { tag in
+                            prepareTagAssignment(tag)
+                        } onError: { message in
+                            errorMessage = message
+                        }
+                        .listRowInsets(EdgeInsets())
+                        .listRowBackground(Color.clear)
+                        .disabled(isAssigningTag)
+                    } header: {
+                        Text("Tags")
+                    } footer: {
+                        Text("Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Zum Entfernen nach links wischen. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht.")
                     }
 
                     if store.backend != nil {
@@ -188,8 +227,67 @@ struct FilamentFormView: View {
                 await loadConsumption()
                 await suggestSpoolWeight()
             }
+            .confirmationDialog(
+                "Plättchen übernehmen?",
+                isPresented: Binding(get: { pendingTag != nil }, set: { if !$0 { pendingTag = nil } }),
+                titleVisibility: .visible,
+                presenting: pendingTag
+            ) { pending in
+                Button(pending.deletesPrevious ? "„\(pending.previous.displayTitle)“ löschen und übernehmen" : "Übernehmen",
+                       role: .destructive) {
+                    Task { await addTag(pending.tag) }
+                }
+            } message: { pending in
+                Text(pending.deletesPrevious
+                     ? "Das Tag \(pending.tag) gehört zu „\(pending.previous.displayTitle)“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht."
+                     : "Das Tag \(pending.tag) gehört zu „\(pending.previous.displayTitle)“ und wird dort entfernt.")
+            }
             .onChange(of: type) { loadTemperatures() }
             .onChange(of: brand) { loadTemperatures() }
+        }
+    }
+
+    private func prepareTagAssignment(_ scanned: ScannedTag) {
+        guard let item = currentItem else { return }
+        let tag = scanned.tagId.trimmingCharacters(in: .whitespaces)
+        errorMessage = nil
+        if tag.isEmpty {
+            errorMessage = "Ungültiger Tag."
+        } else if item.hasTag(tag) {
+            errorMessage = "Dieses Tag gehört schon zu diesem Filament."
+        } else if let container = store.findContainer(byTag: tag) {
+            errorMessage = "Dieses Tag gehört zum Container '\(container.name)'."
+        } else if let previous = store.findItem(byTag: tag) {
+            let deletesPrevious = previous.allTags.count <= 1
+            if deletesPrevious, !store.spools(of: previous.id).isEmpty {
+                errorMessage = "Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat."
+            } else {
+                pendingTag = PendingTag(tag: tag, previous: previous, deletesPrevious: deletesPrevious)
+            }
+        } else {
+            Task { await addTag(tag) }
+        }
+    }
+
+    private func addTag(_ tag: String) async {
+        guard let item = currentItem else { return }
+        isAssigningTag = true
+        defer { isAssigningTag = false }
+        do {
+            try await store.addTag(tag, toItem: item.id)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func removeTag(_ tag: String) async {
+        guard let item = currentItem else { return }
+        isAssigningTag = true
+        defer { isAssigningTag = false }
+        do {
+            try await store.removeTag(tag, fromItem: item.id)
+        } catch {
+            errorMessage = error.localizedDescription
         }
     }
 
@@ -211,7 +309,7 @@ struct FilamentFormView: View {
         defer { isOpeningSpool = false }
         do {
             // Eingetragene Werte zuerst speichern (abwarten, damit der Vorrat danach nicht überschrieben wird)
-            var updated = item
+            var updated = currentItem ?? item
             updated.itemData = filamentData
             applyWeights(to: &updated)
             try await store.backend?.importData(BackendSnapshot(containers: [], items: [updated]))
@@ -271,7 +369,7 @@ struct FilamentFormView: View {
     }
 
     private func save() {
-        guard var item = editedItem else { return }
+        guard var item = currentItem else { return }
         item.itemData = filamentData
         applyWeights(to: &item)
         store.updateItem(item, sendWeights: true)
@@ -292,21 +390,21 @@ struct FilamentFormView: View {
             return
         }
 
-        let expectedTag = editedItem?.rfidTag
+        let expectedTags = currentItem?.allTags
         do {
             _ = try await NFCService.shared.writeJSON(
                 json,
                 prompt: "Halten Sie das iPhone an den Filament-Tag."
             ) { [store] tagId in
-                if let expectedTag, tagId != expectedTag {
-                    return "Das ist nicht der Tag dieses Filaments."
+                if let expectedTags, !expectedTags.isEmpty, !expectedTags.contains(tagId) {
+                    return "Das ist kein Tag dieses Filaments."
                 }
                 if let container = store.findContainer(byTag: tagId) {
                     return "Dieses Tag gehört zum Container '\(container.name)'."
                 }
                 return nil
             }
-            if var item = editedItem {
+            if var item = currentItem {
                 item.itemData = data
                 applyWeights(to: &item)
                 store.updateItem(item, sendWeights: true)
@@ -318,6 +416,13 @@ struct FilamentFormView: View {
             errorMessage = error.localizedDescription
         }
     }
+}
+
+private struct PendingTag {
+    var tag: String
+    var previous: Item
+    /// Das Tag ist das einzige des anderen Eintrags, der deshalb gelöscht wird.
+    var deletesPrevious: Bool
 }
 
 private struct SpoolRow: View {

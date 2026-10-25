@@ -145,7 +145,7 @@ public static class PrinterEndpoints
 
         var id = Guid.NewGuid().ToString();
         var tag = string.IsNullOrWhiteSpace(request.RfidTag) ? $"PRINTER_{id}" : request.RfidTag.Trim();
-        if (await db.Containers.AnyAsync(c => c.RfidTag == tag) || await db.Items.AnyAsync(i => i.RfidTag == tag))
+        if (await db.Containers.AnyAsync(c => c.RfidTag == tag) || await db.Items.WithTag(tag).AnyAsync())
             return TypedResults.Conflict("Dieses Tag ist bereits vergeben.");
 
         var now = DateTime.UtcNow;

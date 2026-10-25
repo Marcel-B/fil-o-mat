@@ -57,7 +57,7 @@ public static class ContainerEndpoints
             return TypedResults.Conflict($"Container mit ID '{id}' existiert bereits.");
         if (await db.Containers.FirstOrDefaultAsync(c => c.RfidTag == tag) is { } other)
             return TypedResults.Conflict($"Dieses Tag gehört bereits zum Container '{other.Name}'.");
-        if (await db.Items.AnyAsync(i => i.RfidTag == tag))
+        if (await db.Items.WithTag(tag).AnyAsync())
             return TypedResults.Conflict("Dieses Tag gehört bereits zu einem Filament.");
 
         var container = new Container
