@@ -44,6 +44,7 @@ public static class SpoolEndpoints
             if (await db.Spools.FindAsync(id) is not { } spool) return TypedResults.NotFound();
             if (await ValidateAsync(db, request.RemainingWeight, request.PrinterId, request.Tool, request.ContainerId) is { } errors)
                 return TypedResults.ValidationProblem(errors);
+            if (request.RemainingWeight != spool.RemainingWeight) spool.WeighedAt = DateTime.UtcNow;
             spool.RemainingWeight = request.RemainingWeight;
             await stock.PlaceAsync(spool, request.PrinterId, request.Tool, containerId: request.ContainerId);
             return TypedResults.Ok(spool);
@@ -57,6 +58,25 @@ public static class SpoolEndpoints
         }).WithSummary("Spule ist leer");
 
         return api;
+    }
+
+    /// <summary>
+    /// Knöpfe in ntfy-Meldungen („Welche Spule steckt in Kopf 4?“). Liegt außerhalb von <c>/api</c>, damit kein API-Schlüssel
+    /// in der Meldung stehen muss; das Einmal-Token aus der Meldung legt genau eine Spule in genau einen Kopf.
+    /// </summary>
+    public static IEndpointRouteBuilder MapSpoolChoiceEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/choices/{token}", async Task<Results<Ok<string>, NotFound<string>>> (
+            string token, SpoolChoices choices, FilomatDbContext db, SpoolStock stock) =>
+        {
+            if (choices.Take(token) is not { } choice || await db.Spools.FindAsync(choice.SpoolId) is not { EmptiedAt: null } spool
+                || await db.Printers.FindAsync(choice.PrinterId) is not { } printer)
+                return TypedResults.NotFound("Die Auswahl ist abgelaufen. Bitte in der App im Drucker wählen.");
+            await stock.PlaceAsync(spool, printer.Id, choice.Tool);
+            var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), choice.Tool);
+            return TypedResults.Ok($"#{spool.Number} steckt jetzt in {printer.Name}{(place.Length > 0 ? $" {place}" : "")}.");
+        }).WithTags("Spulen").WithSummary("Spule aus einer Meldung in einen Kopf legen").ExcludeFromDescription();
+        return app;
     }
 
     private static async Task<Dictionary<string, string[]>?> ValidateAsync(

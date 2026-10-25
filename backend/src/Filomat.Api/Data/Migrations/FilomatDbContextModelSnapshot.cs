@@ -257,6 +257,9 @@ namespace Filomat.Api.Data.Migrations
                     b.Property<int?>("Tool")
                         .HasColumnType("INTEGER");
 
+                    b.Property<DateTime?>("WeighedAt")
+                        .HasColumnType("TEXT");
+
                     b.HasKey("Id");
 
                     b.HasIndex("ContainerId");

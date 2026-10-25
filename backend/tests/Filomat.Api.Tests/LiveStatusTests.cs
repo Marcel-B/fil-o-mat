@@ -10,7 +10,7 @@ namespace Filomat.Api.Tests;
 /// <summary>Nimmt Meldungen an ntfy entgegen.</summary>
 public class FakeNtfy : HttpMessageHandler
 {
-    public record Message(string Url, string Title, string Body, string? Tags, string? Authorization);
+    public record Message(string Url, string Title, string Body, string? Tags, string? Authorization, string? Actions = null);
 
     public List<Message> Messages { get; } = [];
 
@@ -18,9 +18,10 @@ public class FakeNtfy : HttpMessageHandler
     {
         var title = request.Headers.TryGetValues("Title", out var values) ? Decode(values.Single()) : "";
         var tags = request.Headers.TryGetValues("Tags", out var tagValues) ? tagValues.Single() : null;
+        var actions = request.Headers.TryGetValues("Actions", out var actionValues) ? actionValues.Single() : null;
         var body = await request.Content!.ReadAsStringAsync(cancellationToken);
         lock (Messages)
-            Messages.Add(new Message(request.RequestUri!.ToString(), title, body, tags, request.Headers.Authorization?.ToString()));
+            Messages.Add(new Message(request.RequestUri!.ToString(), title, body, tags, request.Headers.Authorization?.ToString(), actions));
         return new HttpResponseMessage(HttpStatusCode.OK);
     }
 

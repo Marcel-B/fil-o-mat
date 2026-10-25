@@ -54,10 +54,14 @@ public class SpoolStock(FilomatDbContext db)
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>So lange gilt eine frisch angebrochene oder gewogene Spule als die, die gerade eingelegt wird.</summary>
+    public static readonly TimeSpan RecentlyWeighed = TimeSpan.FromMinutes(30);
+
     /// <summary>
     /// Die Spule der Sorte, die gerade in diesem Kopf steckt. Steckt dort keine (oder eine andere Sorte), wird die einzige
-    /// angebrochene Spule der Sorte aus dem Lager eingelegt. Liegen mehrere im Lager, ist unklar, welche es ist: dann
-    /// <c>null</c>, und die App fragt nach. Eine neue wird nur angebrochen, wenn die Sorte noch gar keine angebrochene hat.
+    /// angebrochene Spule der Sorte aus dem Lager eingelegt. Liegen mehrere im Lager, zählt die einzige, die in den letzten
+    /// <see cref="RecentlyWeighed"/> angebrochen oder gewogen wurde. Sonst ist unklar, welche es ist: dann <c>null</c>, und
+    /// die App fragt nach. Eine neue wird nur angebrochen, wenn die Sorte noch gar keine angebrochene hat.
     /// </summary>
     public async Task<Spool?> FindAsync(Item item, string printerId, int tool, CancellationToken cancellationToken = default)
     {
@@ -65,10 +69,13 @@ public class SpoolStock(FilomatDbContext db)
         if (current?.ItemId == item.Id) return current;
 
         var onShelf = await LooseAsync(item, cancellationToken);
-        if (onShelf.Count == 1)
+        var since = DateTime.UtcNow - RecentlyWeighed;
+        var recent = onShelf.Where(s => (s.WeighedAt ?? s.OpenedAt) >= since).ToList();
+        if (onShelf.Count == 1 || recent.Count == 1)
         {
-            await PlaceAsync(onShelf[0], printerId, tool, cancellationToken);
-            return onShelf[0];
+            var spool = onShelf.Count == 1 ? onShelf[0] : recent[0];
+            await PlaceAsync(spool, printerId, tool, cancellationToken);
+            return spool;
         }
         if (onShelf.Count > 1 || await db.Spools.AnyAsync(s => s.ItemId == item.Id && s.EmptiedAt == null, cancellationToken))
             return null;

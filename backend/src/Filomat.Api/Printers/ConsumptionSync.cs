@@ -13,6 +13,9 @@ public class ConsumptionSync(
     IEnumerable<IPrinterAdapter> adapters,
     PrinterLive live,
     Notifier notifier,
+    PrinterStatusCache cache,
+    SpoolChoices choices,
+    BackendAddress address,
     ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
@@ -255,9 +258,29 @@ public class ConsumptionSync(
                 foreach (var entry in open) entry.ItemId = item.Id;
             }
             item.ContainerId = printer.ContainerId;
-            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort; welche, fragt die App, wenn mehrere lose liegen
-            await spools.FindAsync(item, printer.Id, tool, cancellationToken);
+            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort; liegen mehrere lose, wird nachgefragt
+            if (await spools.FindAsync(item, printer.Id, tool, cancellationToken) is null)
+                await AskWhichSpoolAsync(printer, tool, item, cancellationToken);
         }
+    }
+
+    /// <summary>Fragt per ntfy, welche der losen Spulen in diesem Kopf steckt, mit einem Knopf pro Spule (höchstens drei).</summary>
+    private async Task AskWhichSpoolAsync(Printer printer, int tool, Item item, CancellationToken cancellationToken)
+    {
+        var loose = await spools.LooseAsync(item, cancellationToken);
+        if (loose.Count < 2) return;
+        // Einmal pro Kopf, Sorte und Auswahl, nicht bei jedem Abgleich
+        if (!cache.FirstTime($"unclear|{printer.Id}|{tool}|{item.Id}|{string.Join(",", loose.Select(s => s.Id))}")) return;
+
+        var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), tool);
+        var where = place.Length > 0 ? $"{printer.Name} {place}" : printer.Name;
+        static string Label(Spool s) => s.RemainingWeight is { } grams ? $"#{s.Number} ({grams:0} g)" : $"#{s.Number}";
+        var actions = address.Url is { } url
+            ? loose.Take(3).Select(s => new NtfyAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
+            : new List<NtfyAction>();
+        var message = $"{item.Name} erkannt, lose liegen {string.Join(", ", loose.Select(Label))}. "
+            + (actions.Count == loose.Count ? "Tippe auf die Spule, die drin steckt." : "Wählen kannst du in der App beim Drucker.");
+        await notifier.SendAsync($"{where}: Welche Spule?", message, "question", cancellationToken: cancellationToken, actions: actions);
     }
 
     private static Item NewItemFromTag(string tag, DetectedFilament? filament, int tool)

@@ -26,6 +26,9 @@ public class Spool
 
     public DateTime OpenedAt { get; set; }
 
+    /// <summary>Zuletzt in der App gewogen (Restgewicht geändert); hilft zu erkennen, welche Spule gerade eingelegt wurde.</summary>
+    public DateTime? WeighedAt { get; set; }
+
     /// <summary>Zeitpunkt, an dem die Spule leer wurde; leere Spulen bleiben nur für den Verlauf erhalten.</summary>
     public DateTime? EmptiedAt { get; set; }
 }
