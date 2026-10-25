@@ -69,9 +69,9 @@ script:
     then:
       - http_request.get:
           url: !lambda |-
-            std::string uid;
-            for (char c : id(uid)) if (isxdigit(c)) uid += toupper(c);
-            return std::string("${filomat_url}") + "/api/items/by-tag/" + uid;
+            std::string hex;
+            for (char c : id(uid)) if (isxdigit(c)) hex += toupper(c);
+            return std::string("${filomat_url}") + "/api/items/by-tag/" + hex;
           request_headers:
             X-Api-Key: ${filomat_api_key}
           capture_response: true
