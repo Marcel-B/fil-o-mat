@@ -1,6 +1,7 @@
 package com.filomat.app
 
 import com.filomat.app.data.Item
+import com.filomat.app.data.ItemJsonData
 import com.filomat.app.data.sync.ContainerData
 import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
@@ -34,6 +35,19 @@ class StoreStateTest {
         // Auch im Gerätespeicher bleiben die weiteren Tags erhalten
         assertEquals(listOf("04000001", "04000002", "04000003"),
             StoreState.fromStored(emptyList(), state.storedItems()).items.single().allTags)
+    }
+
+    @Test
+    fun findsPossibleDuplicatesBySortAndColor() {
+        val matte = Item(id = "a", rfidTag = "A", name = "A", itemData = ItemJsonData(type = "PLA", color_hex = "#161616", brand = "SUNLU", variant = "matte"))
+        val same = Item(id = "b", rfidTag = "B", name = "B", itemData = ItemJsonData(type = "pla", color_hex = "161616", brand = "Sunlu ", variant = "Matte"))
+        val white = Item(id = "c", rfidTag = "C", name = "C", itemData = ItemJsonData(type = "PLA", color_hex = "FFFFFF", brand = "SUNLU", variant = "matte"))
+        val unnamed = Item(id = "d", rfidTag = "D", name = "D")
+        val state = StoreState(items = listOf(matte, same, white, unnamed))
+
+        assertEquals(listOf("b"), state.possibleDuplicates(matte).map { it.id })
+        assertEquals(emptyList<Item>(), state.possibleDuplicates(white))
+        assertEquals(emptyList<Item>(), state.possibleDuplicates(unnamed))
     }
 
     @Test

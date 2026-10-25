@@ -34,7 +34,8 @@ struct ItemsOverviewView: View {
             ForEach(visibleGroups) { group in
                 Section("\(group.type) (\(group.items.count))") {
                     ForEach(group.items) { item in
-                        ItemOverviewRow(item: item, containerName: containerName(for: item), spools: store.spools(of: item.id))
+                        ItemOverviewRow(item: item, containerName: containerName(for: item), spools: store.spools(of: item.id),
+                                        isPossibleDuplicate: !store.possibleDuplicates(of: item).isEmpty)
                             .contentShape(Rectangle())
                             .onTapGesture { itemToEdit = item }
                             .swipeActions {
@@ -100,6 +101,7 @@ private struct ItemOverviewRow: View {
     var item: Item
     var containerName: String
     var spools: [Spool] = []
+    var isPossibleDuplicate = false
 
     var body: some View {
         HStack(spacing: 12) {
@@ -129,6 +131,10 @@ private struct ItemOverviewRow: View {
                         field("Vorrat:", stock == 1 ? "1 Spule" : "\(stock) Spulen")
                     }
                     if let td = item.transmissionText { field("TD:", td) }
+                    if isPossibleDuplicate {
+                        Label("Möglicherweise doppelt", systemImage: "exclamationmark.triangle")
+                            .foregroundStyle(.orange)
+                    }
                 }
                 .font(.caption)
             }

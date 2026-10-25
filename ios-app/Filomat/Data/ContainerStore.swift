@@ -73,6 +73,12 @@ final class ContainerStore {
         spools.filter { $0.itemId == itemId }.sorted { $0.number < $1.number }
     }
 
+    /// Andere Einträge derselben Sorte (gleiche Marke, Typ, Variante und Farbe).
+    func possibleDuplicates(of item: Item) -> [Item] {
+        guard let key = item.duplicateKey else { return [] }
+        return items.filter { $0.id != item.id && $0.duplicateKey == key }
+    }
+
     func item(id: String) -> Item? {
         items.first { $0.id == id }
     }
@@ -213,6 +219,17 @@ final class ContainerStore {
         let result = try await backend.importData(BackendSnapshot(containers: [], items: [Self.withoutWeights(item)]))
         if let reason = result.skipped.first { throw StoreError.tagInUse(reason) }
         await refresh()
+    }
+
+    /// Führt ein doppeltes Filament in dieses zusammen (Spulen, Verbrauch, Vorrat, Tags); das andere wird gelöscht.
+    /// - Returns: Spulen, die eine neue Nummer bekommen haben.
+    func mergeItem(_ fromId: String, into itemId: String) async throws -> [RenumberedSpool] {
+        guard let backend else { throw StoreError.tagInUse("Zum Zusammenführen muss das Backend verbunden sein.") }
+        let renumbered = try await backend.mergeItem(into: itemId, from: fromId)
+        items.removeAll { $0.id == fromId }
+        save()
+        await refresh()
+        return renumbered
     }
 
     /// Lagert ein Item in einen Container ein (verschiebt es ggf. aus seinem bisherigen Container).

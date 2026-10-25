@@ -79,6 +79,32 @@ public class SyncTests : IDisposable
     }
 
     [Fact]
+    public async Task MergingMovesSpoolsStockAndTagsAndRenumbersCollisions()
+    {
+        var both = new Snapshot([], [
+            new SnapshotItem("neu", "04000001", "SUNLU PLA matte", "", 1, null, null, SpoolsInStock: 3),
+            new SnapshotItem("alt", "04000002", "SUNLU PLA matte", "", 2, Container.LooseId, null, SpoolsInStock: 2, ExtraTags: ["04000003"]),
+        ]);
+        await _client.PostAsJsonAsync("/api/import", both);
+        await _client.PostAsJsonAsync("/api/items/neu/spools", new OpenSpoolRequest(500));
+        await _client.PostAsJsonAsync("/api/items/alt/spools", new OpenSpoolRequest(100));
+        await _client.PostAsJsonAsync("/api/items/alt/spools", new OpenSpoolRequest(200));
+
+        var response = await _client.PostAsJsonAsync("/api/items/neu/merge", new MergeItemRequest("alt"));
+        var result = await response.Content.ReadFromJsonAsync<MergeItemResult>();
+
+        Assert.Equal([new RenumberedSpool(1, 3)], result!.Renumbered);
+        var item = result.Item;
+        Assert.Equal((2, Container.LooseId), (item.SpoolsInStock!.Value, item.ContainerId));
+        Assert.Equal(["04000002", "04000003"], item.ExtraTags);
+        var snapshot = await _client.GetFromJsonAsync<Snapshot>("/api/snapshot");
+        Assert.Equal("neu", snapshot!.Items.Single().Id);
+        Assert.Equal([(1, 500.0), (2, 200.0), (3, 100.0)],
+            snapshot.Spools!.OrderBy(s => s.Number).Select(s => (s.Number, s.RemainingWeight!.Value)).ToList());
+        Assert.Equal("neu", (await _client.GetFromJsonAsync<Item>("/api/items/by-tag/04000003"))!.Id);
+    }
+
+    [Fact]
     public async Task KeepsTransmissionDistanceWhenAppDoesNotSendIt()
     {
         var withTd = new Snapshot([], [new SnapshotItem("pla", "04112233", "PLA", "", 1, null, null, TransmissionDistance: 4.2)]);

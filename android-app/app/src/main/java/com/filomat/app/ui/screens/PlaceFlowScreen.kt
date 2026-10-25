@@ -3,6 +3,7 @@ package com.filomat.app.ui.screens
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
@@ -16,6 +17,7 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.Item
+import com.filomat.app.data.ItemJsonData
 import com.filomat.app.data.PlaceAction
 import com.filomat.app.data.PlaceFlow
 import com.filomat.app.data.PlaceStep
@@ -23,6 +25,7 @@ import com.filomat.app.data.PlaceTarget
 import com.filomat.app.data.SpoolChoice
 import com.filomat.app.data.sync.SpoolPlace
 import com.filomat.app.data.sync.StoreState
+import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ItemHeader
 import com.filomat.app.ui.components.ScanButton
@@ -42,6 +45,7 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
     val scope = rememberCoroutineScope()
     var flow by remember { mutableStateOf(PlaceFlow(target)) }
     var isWorking by remember { mutableStateOf(false) }
+    var choosingItem by remember { mutableStateOf(false) }
 
     fun perform(action: PlaceAction) {
         isWorking = true
@@ -61,7 +65,9 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                     is PlaceAction.OpenSpool -> {
                         val spool = store.openSpool(action.item.id, action.place)
                         val number = spool?.let { " #${it.number}" } ?: ""
-                        "Spule$number von ${action.item.getDisplayTitle()} angebrochen und in ${action.place.text(state.printers, state.containers)} eingelegt. Schreib die Nummer auf die Spule."
+                        val where = action.place.text(state.printers, state.containers)
+                        if (action.place.printerId != null) "Spule$number von ${action.item.getDisplayTitle()} angebrochen und in $where eingelegt. Schreib die Nummer auf die Spule."
+                        else "Spule$number von ${action.item.getDisplayTitle()} angebrochen und in „$where“ eingelagert. Schreib die Nummer auf die Spule."
                     }
                 }
                 flow = flow.reset(done = message)
@@ -70,6 +76,27 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
             }
             isWorking = false
         }
+    }
+
+    if (choosingItem) {
+        ItemPickerDialog(
+            items = state.items,
+            suggested = flow.unknownData,
+            onDismiss = { choosingItem = false },
+            onPick = { picked ->
+                choosingItem = false
+                val tag = flow.unknownTag ?: return@ItemPickerDialog
+                scope.launch {
+                    flow = try {
+                        store.addTag(tag, picked.id)
+                        val current = store.current()
+                        flow.withItem(current.item(picked.id) ?: picked, current, sync.connected)
+                    } catch (e: Exception) {
+                        flow.failed(ContainerStore.describe(e))
+                    }
+                }
+            }
+        )
     }
 
     Scaffold(
@@ -82,7 +109,7 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                     }
                 },
                 actions = {
-                    if (flow.step != PlaceStep.SCAN_FILAMENT) {
+                    if (flow.step != PlaceStep.SCAN_FILAMENT || flow.unknownTag != null) {
                         TextButton(onClick = { flow = flow.reset() }) { Text("Neu beginnen") }
                     }
                 }
@@ -128,8 +155,22 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
             item {
                 SectionCard("1. Filament") {
                     val item = flow.currentItem(state)
+                    val unknown = flow.unknownTag
                     if (item != null) {
                         ItemHeader(item, stockText(item, state))
+                    } else if (unknown != null) {
+                        Text("Dieses Plättchen ($unknown) kennt die App noch nicht.")
+                        Button(onClick = { choosingItem = true }, modifier = Modifier.fillMaxWidth()) {
+                            Text("Zu vorhandenem Filament hinzufügen")
+                        }
+                        OutlinedButton(
+                            onClick = {
+                                val (next, newItem) = flow.withNewItem(state, sync.connected)
+                                newItem?.let { scope.launch { store.addItem(it) } }
+                                flow = next
+                            },
+                            modifier = Modifier.fillMaxWidth()
+                        ) { Text("Als neues Filament anlegen") }
                     } else {
                         Text(
                             if (target == PlaceTarget.CONTAINER) "Scanne das Musterplättchen des Filaments, das eingelagert wird."
@@ -137,8 +178,7 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         ScanButton(reader, "Filament scannen") { tag ->
-                            val (next, newItem) = flow.withFilament(tag.tagId, tag.itemData, state, sync.connected)
-                            newItem?.let { scope.launch { store.addItem(it) } }
+                            val next = flow.withFilament(tag.tagId, tag.itemData, state, sync.connected)
                             flow = if (tag.parseError != null && next.error == null) next.failed(tag.parseError) else next
                         }
                     }
@@ -279,4 +319,46 @@ private fun stockText(item: Item, state: StoreState): String {
     val opened = state.spoolsOf(item.id).size
     if (opened > 0) parts += "$opened angebrochen"
     return if (parts.isEmpty()) item.rfidTag else parts.joinToString(" · ")
+}
+
+/** Filament auswählen; Filamente mit derselben Marke und demselben Typ wie auf dem Tag stehen oben. */
+@Composable
+fun ItemPickerDialog(items: List<Item>, suggested: ItemJsonData?, onDismiss: () -> Unit, onPick: (Item) -> Unit) {
+    var query by remember { mutableStateOf("") }
+    fun isSuggested(item: Item): Boolean {
+        val brand = suggested?.brand?.lowercase() ?: return false
+        val type = suggested.type?.lowercase() ?: return false
+        return item.itemData?.brand?.lowercase() == brand && item.itemData?.type?.lowercase() == type
+    }
+    val text = query.trim().lowercase()
+    val shown = items
+        .filter { text.isEmpty() || it.getDisplayTitle().lowercase().contains(text) || it.name.lowercase().contains(text) }
+        .sortedWith(compareBy<Item>({ !isSuggested(it) }, { it.getDisplayTitle().lowercase() }))
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        title = { Text("Filament wählen") },
+        text = {
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Suchen") }, singleLine = true,
+                    modifier = Modifier.fillMaxWidth())
+                LazyColumn(Modifier.heightIn(max = 360.dp)) {
+                    items(shown, key = { it.id }) { item ->
+                        Row(
+                            Modifier
+                                .fillMaxWidth()
+                                .clickable { onPick(item) }
+                                .padding(vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            ColorDot(item.itemData?.color_hex, 24.dp)
+                            Text(item.getDisplayTitle())
+                        }
+                    }
+                }
+            }
+        },
+        confirmButton = {},
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } }
+    )
 }

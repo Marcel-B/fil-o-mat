@@ -27,6 +27,16 @@ data class Item(
 
     fun hasTag(tag: String): Boolean = tag.isNotBlank() && tag in allTags
 
+    /** Gleiche Marke, Typ, Variante und Farbe ergeben denselben Schlüssel; `null` ohne Marke oder Typ. */
+    fun duplicateKey(): String? {
+        fun normalized(value: String?) = value?.trim()?.lowercase().orEmpty()
+        val brand = normalized(itemData?.brand)
+        val type = normalized(itemData?.type)
+        if (brand.isEmpty() || type.isEmpty()) return null
+        val color = normalized(itemData?.color_hex).replace("#", "").ifEmpty { normalized(itemData?.color) }
+        return listOf(brand, type, normalized(itemData?.variant), color).joinToString("|")
+    }
+
     fun getDisplayTitle(): String {
         val parts = listOfNotNull(
             itemData?.brand?.trim(),

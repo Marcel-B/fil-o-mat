@@ -51,6 +51,11 @@ data class StoreState(
     fun spoolsOf(itemId: String): List<Spool> = spools.filter { it.itemId == itemId }.sortedBy { it.number }
     fun spool(id: String): Spool? = spools.firstOrNull { it.id == id }
     fun findItemByTag(tag: String): Item? = items.firstOrNull { it.hasTag(tag) }
+    /** Andere Einträge derselben Sorte (gleiche Marke, Typ, Variante und Farbe). */
+    fun possibleDuplicates(item: Item): List<Item> {
+        val key = item.duplicateKey() ?: return emptyList()
+        return items.filter { it.id != item.id && it.duplicateKey() == key }
+    }
     fun findContainerByTag(tag: String): Container? = containers.firstOrNull { it.rfidTag == tag }
 
     /** Angebrochene Spulen, die im Lager in diesem Container liegen. */

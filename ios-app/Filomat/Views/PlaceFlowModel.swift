@@ -36,6 +36,8 @@ final class PlaceFlowModel {
     private(set) var choice: SpoolChoice?
     private(set) var container: Container?
     private(set) var printerPlace: SpoolPlace?
+    /// Gescanntes Plättchen, das die App noch nicht kennt; wartet auf „neu anlegen“ oder „zu vorhandenem hinzufügen“.
+    private(set) var unknownTag: ScannedTag?
     private(set) var errorMessage: String?
     /// Ergebnis des letzten Vorgangs; bleibt stehen, bis das nächste Filament gescannt wird.
     private(set) var doneMessage: String?
@@ -56,7 +58,7 @@ final class PlaceFlowModel {
 
     var actionTitle: String {
         switch target {
-        case .container: "Einlagern"
+        case .container: choice == .newSpool ? "Anbrechen und einlagern" : "Einlagern"
         case .printer: choice == .newSpool ? "Anbrechen und einlegen" : "Einlegen"
         }
     }
@@ -67,7 +69,8 @@ final class PlaceFlowModel {
         let opened = store.spools(of: item.id).map { SpoolChoice.spool($0.id) }
         switch target {
         case .container:
-            return [.stock] + opened
+            // Anbrechen geht nur über das Backend, das die Spulen pflegt
+            return [.stock] + opened + (store.backend != nil ? [.newSpool] : [])
         case .printer:
             // Spulen pflegt nur das Backend
             guard store.backend != nil else { return [] }
@@ -89,9 +92,42 @@ final class PlaceFlowModel {
         }
         reset()
         doneMessage = nil
-        item = existingOrNewItem(for: tag, store: store)
+        guard let existing = store.findItem(byTag: tagId) else {
+            unknownTag = tag
+            errorMessage = tag.parseError
+            return
+        }
+        start(with: existing, store: store)
         errorMessage = tag.parseError
+    }
 
+    /// Das unbekannte Plättchen wird ein neues Filament.
+    func createItemForUnknownTag(store: ContainerStore) {
+        guard let tag = unknownTag else { return }
+        let item = Item(
+            rfidTag: tag.tagId.trimmingCharacters(in: .whitespaces),
+            name: Item.defaultName(for: tag.itemData, fallback: "Filament"),
+            itemData: tag.itemData
+        )
+        store.addItem(item)
+        start(with: store.item(id: item.id) ?? item, store: store)
+    }
+
+    /// Das unbekannte Plättchen gehört zu einem Filament, das es schon gibt (z. B. ein weiteres Plättchen der Sorte).
+    func addUnknownTag(to item: Item, store: ContainerStore) async {
+        guard let tag = unknownTag else { return }
+        do {
+            try await store.addTag(tag.tagId.trimmingCharacters(in: .whitespaces), toItem: item.id)
+            start(with: store.item(id: item.id) ?? item, store: store)
+        } catch {
+            errorMessage = error.localizedDescription
+        }
+    }
+
+    private func start(with item: Item, store: ContainerStore) {
+        unknownTag = nil
+        errorMessage = nil
+        self.item = item
         let options = choices(store: store)
         if options.count == 1 {
             choose(options[0], store: store)
@@ -241,6 +277,11 @@ final class PlaceFlowModel {
                 guard let place = printerPlace, let spool = store.spools.first(where: { $0.id == id }) else { return }
                 try await store.placeSpool(weighted(spool), at: place)
                 message = "Spule #\(spool.number) von \(item.displayTitle) steckt jetzt in \(place.text(printers: store.printers))."
+            case (.container, .newSpool):
+                guard let container else { return }
+                let spool = try await store.openSpool(itemId: item.id, remainingWeight: GramText.parse(remaining), place: .container(container.id))
+                let number = spool.map { " #\($0.number)" } ?? ""
+                message = "Spule\(number) von \(item.displayTitle) angebrochen und in „\(container.name)“ eingelagert. Schreib die Nummer auf die Spule."
             case (.printer, .newSpool):
                 guard let place = printerPlace else { return }
                 let spool = try await store.openSpool(itemId: item.id, remainingWeight: GramText.parse(remaining), place: place)
@@ -268,17 +309,7 @@ final class PlaceFlowModel {
         choice = nil
         container = nil
         printerPlace = nil
+        unknownTag = nil
         errorMessage = nil
-    }
-
-    private func existingOrNewItem(for tag: ScannedTag, store: ContainerStore) -> Item {
-        if let item = store.findItem(byTag: tag.tagId) { return item }
-        let item = Item(
-            rfidTag: tag.tagId,
-            name: Item.defaultName(for: tag.itemData, fallback: "Filament"),
-            itemData: tag.itemData
-        )
-        store.addItem(item)
-        return item
     }
 }

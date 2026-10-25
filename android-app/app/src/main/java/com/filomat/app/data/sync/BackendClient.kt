@@ -26,6 +26,11 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
 
     suspend fun deleteItem(id: String) = io { send("DELETE", "api/items/${path(id)}", allowNotFound = true); Unit }
 
+    /** Führt das Filament [fromId] in [itemId] zusammen; liefert die Spulen, die eine neue Nummer bekommen haben. */
+    suspend fun mergeItem(itemId: String, fromId: String): List<RenumberedSpool> = io {
+        decode<MergeResult>(send("POST", "api/items/${path(itemId)}/merge", json.encodeToString(MergeRequest(fromId)))).renumbered
+    }
+
     /** Leergewichte von Spulen pro Hersteller (aus der SpoolmanDB, über das Backend). */
     suspend fun spoolWeights(): Map<String, Double> = io { decode(send("GET", "api/spool-weights")) }
 

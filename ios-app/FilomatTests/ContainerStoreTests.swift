@@ -65,6 +65,20 @@ final class ContainerStoreTests: XCTestCase {
         } catch {}
     }
 
+    func testFindsPossibleDuplicatesBySortAndColor() {
+        let store = ContainerStore(fileURL: fileURL)
+        let matte = ItemJsonData(type: "PLA", colorHex: "#161616", brand: "SUNLU", variant: "matte")
+        let a = Item(rfidTag: "A", name: "A", itemData: matte)
+        let b = Item(rfidTag: "B", name: "B", itemData: ItemJsonData(type: "pla", colorHex: "161616", brand: "Sunlu ", variant: "Matte"))
+        let white = Item(rfidTag: "C", name: "C", itemData: ItemJsonData(type: "PLA", colorHex: "FFFFFF", brand: "SUNLU", variant: "matte"))
+        let unnamed = Item(rfidTag: "D", name: "D")
+        [a, b, white, unnamed].forEach(store.addItem)
+
+        XCTAssertEqual(store.possibleDuplicates(of: a).map(\.id), [b.id])
+        XCTAssertTrue(store.possibleDuplicates(of: white).isEmpty)
+        XCTAssertTrue(store.possibleDuplicates(of: unnamed).isEmpty)
+    }
+
     func testRemovingContainerMovesItemsToLoose() {
         let store = ContainerStore(fileURL: fileURL)
         let box = Container(rfidTag: "AA", name: "Box")

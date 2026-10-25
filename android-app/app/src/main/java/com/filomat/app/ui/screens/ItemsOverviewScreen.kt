@@ -144,6 +144,7 @@ fun ItemsOverviewScreen(
                                 item = item,
                                 containers = allContainers,
                                 spools = allSpools.filter { it.itemId == item.id }.sortedBy { it.number },
+                                isPossibleDuplicate = item.duplicateKey()?.let { key -> allItems.any { it.id != item.id && it.duplicateKey() == key } } == true,
                                 onOpen = { navController.navigate("item/${item.id}") },
                                 onDelete = {
                                     itemToDelete = item
@@ -232,6 +233,7 @@ fun ItemOverviewCard(
     item: Item,
     containers: List<Container>,
     spools: List<Spool> = emptyList(),
+    isPossibleDuplicate: Boolean = false,
     onOpen: () -> Unit = {},
     onDelete: () -> Unit,
     onEdit: () -> Unit
@@ -467,6 +469,9 @@ fun ItemOverviewCard(
                             OverviewField("Vorrat:", if (stock == 1) "1 Spule" else "$stock Spulen")
                         }
                         item.transmissionText()?.let { OverviewField("TD:", it) }
+                        if (isPossibleDuplicate) {
+                            Text("⚠ Möglicherweise doppelt", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                        }
                     }
                     
                     // Rechte Spalte: Icons
