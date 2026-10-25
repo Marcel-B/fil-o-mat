@@ -166,6 +166,28 @@ class ContainerStore private constructor(context: Context) {
 
     suspend fun findItemByTag(rfidTag: String): Item? = current().items.firstOrNull { it.rfidTag == rfidTag }
 
+    /**
+     * Gibt einem Filament ein anderes Tag, z. B. das Musterplättchen. Gehört das Tag bisher einem anderen
+     * Filament ohne angebrochene Spulen, wird dieser Eintrag gelöscht.
+     */
+    suspend fun assignTag(tag: String, itemId: String) {
+        val state = current()
+        val previous = state.findItemByTag(tag)
+        if (previous != null && previous.id != itemId) {
+            check(state.spoolsOf(previous.id).isEmpty()) {
+                "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+            }
+            backend?.deleteItem(previous.id)
+            edit { s -> s.copy(items = s.items.filter { it.id != previous.id }) }
+        }
+        val item = current().item(itemId)?.copy(rfidTag = tag) ?: return
+        edit { s -> s.copy(items = s.items.map { if (it.id == itemId) item else it }) }
+        val client = backend ?: return
+        val result = client.importData(Snapshot(emptyList(), listOf(item.toSnapshot(sendWeights = false))))
+        result.skipped.firstOrNull()?.let { throw IllegalStateException(it) }
+        refresh()
+    }
+
     suspend fun addItemToContainer(itemId: String, containerId: String) = moveItem(itemId, containerId)
 
     @Suppress("UNUSED_PARAMETER")

@@ -26,6 +26,8 @@ import com.filomat.app.data.sync.StoreState
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
+import com.filomat.app.ui.components.ScanButton
+import com.filomat.app.ui.components.rememberNfcReader
 import com.filomat.app.ui.components.SpoolPlacePicker
 import com.filomat.app.ui.components.TransmissionField
 import kotlinx.coroutines.launch
@@ -95,6 +97,39 @@ private fun ItemDetailContent(
     var errorMessage by remember { mutableStateOf<String?>(null) }
     var showingEdit by remember { mutableStateOf(false) }
     var spoolToEdit by remember { mutableStateOf<Spool?>(null) }
+    val reader = rememberNfcReader()
+    var isAssigningTag by remember { mutableStateOf(false) }
+    var tagError by remember { mutableStateOf<String?>(null) }
+    // Gescanntes Tag, das noch einem anderen Filament gehört; wartet auf Bestätigung
+    var pendingTag by remember { mutableStateOf<Pair<String, Item>?>(null) }
+
+    fun assignTag(tag: String) {
+        isAssigningTag = true
+        scope.launch {
+            try {
+                store.assignTag(tag, item.id)
+            } catch (e: Exception) {
+                tagError = ContainerStore.describe(e)
+            }
+            isAssigningTag = false
+        }
+    }
+
+    fun prepareTagAssignment(scanned: String) {
+        val tag = scanned.trim()
+        tagError = null
+        val previous = state.findItemByTag(tag)
+        when {
+            tag.isEmpty() -> tagError = "Ungültiger Tag."
+            tag == item.rfidTag -> tagError = "Das ist schon das Tag dieses Filaments."
+            state.findContainerByTag(tag) != null ->
+                tagError = "Dieses Tag gehört zum Container '${state.findContainerByTag(tag)?.name}'."
+            previous == null -> assignTag(tag)
+            state.spoolsOf(previous.id).isNotEmpty() ->
+                tagError = "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+            else -> pendingTag = tag to previous
+        }
+    }
 
     // Nach einem Abgleich (z. B. Vorrat nach dem Anbrechen) den neuen Stand übernehmen
     LaunchedEffect(item.spoolsInStock) { spoolsInStock = item.spoolsInStock ?: 0 }
@@ -139,7 +174,25 @@ private fun ItemDetailContent(
                     if (data?.min_temp != null && data.max_temp != null) InfoRow("Temperatur", "${data.min_temp}°C - ${data.max_temp}°C")
                     if (data?.bed_min_temp != null && data.bed_max_temp != null) InfoRow("Bett-Temp", "${data.bed_min_temp}°C - ${data.bed_max_temp}°C")
                     InfoRow("Container", containerName)
-                    InfoRow("RFID-Tag", item.rfidTag)
+                }
+            }
+        }
+
+        item {
+            Card(Modifier.fillMaxWidth()) {
+                Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Text("Tag", style = MaterialTheme.typography.titleMedium)
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(item.rfidTag.ifBlank { "keins" }, modifier = Modifier.weight(1f))
+                        if (isAssigningTag) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
+                    }
+                    ScanButton(reader, "Tag zuordnen") { tag -> prepareTagAssignment(tag.tagId) }
+                    Text(
+                        "Über dieses Tag findet die App das Filament beim Scannen. Gehört das gescannte Tag noch einem anderen Eintrag ohne angebrochene Spulen, wird dieser gelöscht.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    tagError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 }
             }
         }
@@ -250,6 +303,25 @@ private fun ItemDetailContent(
                 }
             }
         }
+    }
+
+    pendingTag?.let { (tag, previous) ->
+        AlertDialog(
+            onDismissRequest = { pendingTag = null },
+            title = { Text("Tag übernehmen?") },
+            text = {
+                Text("Das Tag $tag gehört zu „${previous.getDisplayTitle()}“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht.")
+            },
+            confirmButton = {
+                TextButton(onClick = {
+                    pendingTag = null
+                    assignTag(tag)
+                }) { Text("Löschen und übernehmen") }
+            },
+            dismissButton = {
+                TextButton(onClick = { pendingTag = null }) { Text("Abbrechen") }
+            }
+        )
     }
 
     if (showingEdit) {
