@@ -1,6 +1,6 @@
 import SwiftUI
 
-/// Container scannen und sehen, was darin liegt: Sorten, angebrochene Spulen bzw. bei einem Drucker die Spulen je Kopf.
+/// Container scannen und sehen, was darin liegt: die Spulen bzw. bei einem Drucker die Spulen je Kopf.
 struct ContainerScanView: View {
     @Environment(ContainerStore.self) private var store
     @State private var containerId: String?
@@ -52,7 +52,6 @@ struct ContainerScanView: View {
 
     @ViewBuilder
     private func contentSections(_ container: Container) -> some View {
-        let items = store.unloadedItems(in: container.id)
         let spools = store.spools(inContainer: container.id)
 
         Section {
@@ -66,23 +65,16 @@ struct ContainerScanView: View {
             Text(container.name)
         }
 
-        if !items.isEmpty || spools.isEmpty {
-            Section("Sorten (\(items.count))") {
-                if items.isEmpty {
-                    Text("Keine Sorten in diesem Container").foregroundStyle(.secondary)
-                }
-                ForEach(items) { item in
-                    ItemHeader(item: item, detail: item.spoolsInStock.map { "Vorrat: \($0)" })
-                }
-            }
-        }
-
         if !spools.isEmpty {
-            Section("Angebrochene Spulen (\(spools.count))") {
+            Section("Spulen (\(spools.count))") {
                 ForEach(spools) { spool in
                     LabeledContent("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)",
                                    value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
                 }
+            }
+        } else {
+            Section {
+                Text("Keine Spulen in diesem Container").foregroundStyle(.secondary)
             }
         }
     }

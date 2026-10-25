@@ -133,7 +133,7 @@ private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem
             }
             container != null -> {
                 InfoRow("Container", container.name)
-                InfoRow("Filamente darin", "${state.filamentCount(container.id)}")
+                InfoRow("Spulen darin", "${state.spoolCount(container.id)}")
             }
             else -> Text("Dieser Tag ist in der App noch nicht bekannt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
         }

@@ -11,7 +11,7 @@ struct ContainerListView: View {
         let otherContainers = regular.filter { store.printer(owningContainer: $0.id) == nil }
         // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
         let standard = store.containers.filter {
-            $0.isStandard && ($0.id != Container.printerId || store.filamentCount(in: $0.id) > 0)
+            $0.isStandard && ($0.id != Container.printerId || store.spoolCount(in: $0.id) > 0)
         }
 
         List {
@@ -100,7 +100,7 @@ private struct ContainerRow: View {
                 Text("RFID: \(container.rfidTag)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("\(store.filamentCount(in: container.id)) Filamente")
+                Text(store.spoolCount(in: container.id) == 1 ? "1 Spule" : "\(store.spoolCount(in: container.id)) Spulen")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let printer = store.printer(owningContainer: container.id), printer.enabled,

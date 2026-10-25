@@ -83,9 +83,13 @@ final class ContainerStore {
         items.first { $0.id == id }
     }
 
-    /// Angebrochene Spulen, die im Lager in diesem Container liegen.
+    /// Angebrochene Spulen, die im Lager in diesem Container liegen; "Lose" zeigt auch die ohne (bekannten) Container.
     func spools(inContainer containerId: String) -> [Spool] {
-        spools.filter { $0.printerId == nil && $0.containerId == containerId }
+        spools.filter { spool in
+            guard spool.printerId == nil else { return false }
+            if spool.containerId == containerId { return true }
+            return containerId == Container.looseId && (spool.containerId.map { container(id: $0) == nil } ?? true)
+        }
     }
 
     /// Die Spule, die in diesem Kopf steckt.
@@ -103,26 +107,12 @@ final class ContainerStore {
         printers.first { $0.containerId == containerId }
     }
 
-    /// Sorten in diesem Container ohne eigene Spule darin: Liegt eine angebrochene Spule der Sorte im Container
-    /// oder steckt sie in einem Kopf seines Druckers, steht dort die Spule mit Nummer statt der Sorte.
-    func unloadedItems(in containerId: String) -> [Item] {
-        let printer = printer(owningContainer: containerId)
-        return items(in: containerId).filter { item in
-            !spools(of: item.id).contains { spool in
-                // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container
-                (printer != nil && spool.printerId == printer?.id)
-                    || (spool.printerId == nil && spool.containerId == containerId)
-            }
-        }
-    }
-
-    /// Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt,
-    /// die angebrochenen Spulen darin und Sorten ohne eigene Spule darin.
-    func filamentCount(in containerId: String) -> Int {
+    /// Spulen, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt.
+    func spoolCount(in containerId: String) -> Int {
         let loaded = printer(owningContainer: containerId).map { printer in
             (0..<printer.toolCount).filter { spool(inPrinter: printer.id, tool: $0) != nil }.count
         } ?? 0
-        return loaded + spools(inContainer: containerId).count + unloadedItems(in: containerId).count
+        return loaded + spools(inContainer: containerId).count
     }
 
     // MARK: - Container

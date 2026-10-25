@@ -36,10 +36,7 @@ fun ContainerDetailScreen(
     val container by viewModel.container.collectAsState()
     val storeState by containerStore.state.collectAsState(initial = com.filomat.app.data.sync.StoreState())
     var showingEditContainer by remember { mutableStateOf(false) }
-    var showingAddItem by remember { mutableStateOf(false) }
     var showingDeleteDialog by remember { mutableStateOf(false) }
-    var itemToRemove by remember { mutableStateOf<com.filomat.app.data.Item?>(null) }
-    var showingRemoveItemDialog by remember { mutableStateOf(false) }
     
     LaunchedEffect(containerId) {
         containerStore.containers.collect { containerList ->
@@ -73,9 +70,11 @@ fun ContainerDetailScreen(
             )
         },
         floatingActionButton = {
-            FloatingActionButton(onClick = { showingAddItem = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Filament hinzufügen")
-            }
+            ExtendedFloatingActionButton(
+                onClick = { navController.navigate("scan/place/container") },
+                icon = { Icon(Icons.Default.Add, contentDescription = null) },
+                text = { Text("Einlagern") }
+            )
         }
     ) { padding ->
         container?.let { cont ->
@@ -124,46 +123,18 @@ fun ContainerDetailScreen(
                 if (printer != null) {
                     item { PrinterContent(printer, storeState) }
                 }
-                // Sorten, deren Spule hier liegt oder in einem Kopf steckt, stehen nur als Spule mit Nummer da
-                val shownItems = storeState.unloadedItemsIn(cont.id)
+                // Sorten stehen unter "Filamente"; ein Container kennt nur die Spulen, die darin liegen
                 val spools = storeState.spoolsIn(cont.id)
-
-                // Leere Sorten-Liste nur zeigen, wenn auch sonst nichts im Container liegt
-                if (shownItems.isNotEmpty() || (printer == null && spools.isEmpty())) {
-                    item {
-                        Text(
-                            text = "Filamente (${shownItems.size})",
-                            style = MaterialTheme.typography.titleMedium
-                        )
-                    }
-                }
-
-                if (shownItems.isEmpty()) {
-                    if (printer == null && spools.isEmpty()) {
-                        item {
-                            Text(
-                                text = "Keine Filamente in diesem Container",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                } else {
-                    items(shownItems) { item ->
-                        ItemCard(
-                            item = item,
-                            onOpen = { navController.navigate("item/${item.id}") },
-                            onRemove = {
-                                itemToRemove = item
-                                showingRemoveItemDialog = true
-                            },
-                            isLoseContainer = cont.id == "standard_lose"
-                        )
-                    }
-                }
-
                 if (spools.isNotEmpty()) {
                     item { OpenedSpoolsCard(spools, storeState) }
+                } else if (printer == null) {
+                    item {
+                        Text(
+                            text = "Keine Spulen in diesem Container",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                 }
             }
         } ?: run {
@@ -188,21 +159,12 @@ fun ContainerDetailScreen(
             )
         }
         
-        if (showingAddItem && container != null) {
-            AddItemDialog(
-                containerId = container!!.id,
-                onDismiss = { showingAddItem = false },
-                onAdd = { }, // Wird nicht mehr benötigt, da automatisch hinzugefügt wird
-                containerStore = containerStore
-            )
-        }
-        
         if (showingDeleteDialog && container != null) {
             AlertDialog(
                 onDismissRequest = { showingDeleteDialog = false },
                 title = { Text("Container löschen") },
                 text = { 
-                    Text("Möchten Sie den Container '${container!!.name}' wirklich löschen? Die Items bleiben erhalten, sind aber keinem Container mehr zugeordnet.")
+                    Text("Möchten Sie den Container '${container!!.name}' wirklich löschen? Die Spulen darin stehen danach unter 'Lose'.")
                 },
                 confirmButton = {
                     TextButton(
@@ -223,87 +185,6 @@ fun ContainerDetailScreen(
             )
         }
         
-        // Dialog für Item-Entfernen
-        if (showingRemoveItemDialog && itemToRemove != null && container != null) {
-            if (container!!.id == "standard_lose") {
-                // Von "Lose" aus direkt löschen
-                AlertDialog(
-                    onDismissRequest = {
-                        showingRemoveItemDialog = false
-                        itemToRemove = null
-                    },
-                    title = { Text("Filament löschen") },
-                    text = {
-                        Text("Möchten Sie das Filament '${itemToRemove!!.getDisplayTitle()}' wirklich komplett löschen?")
-                    },
-                    confirmButton = {
-                        TextButton(
-                            onClick = {
-                                viewModel.removeItemCompletely(itemToRemove!!.id, containerStore)
-                                showingRemoveItemDialog = false
-                                itemToRemove = null
-                            }
-                        ) {
-                            Text("Löschen", color = MaterialTheme.colorScheme.error)
-                        }
-                    },
-                    dismissButton = {
-                        TextButton(onClick = {
-                            showingRemoveItemDialog = false
-                            itemToRemove = null
-                        }) {
-                            Text("Abbrechen")
-                        }
-                    }
-                )
-            } else {
-                // Von normalem Container: Auswahl zwischen Löschen und Verschieben
-                AlertDialog(
-                    onDismissRequest = {
-                        showingRemoveItemDialog = false
-                        itemToRemove = null
-                    },
-                    title = { Text("Filament entfernen") },
-                    text = {
-                        Column(
-                            modifier = Modifier.fillMaxWidth(),
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            Text("Was möchten Sie mit dem Filament '${itemToRemove!!.getDisplayTitle()}' machen?")
-                            TextButton(
-                                onClick = {
-                                    viewModel.moveItemToLose(itemToRemove!!.id, container!!.id, containerStore)
-                                    showingRemoveItemDialog = false
-                                    itemToRemove = null
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("In 'Lose' verschieben")
-                            }
-                            TextButton(
-                                onClick = {
-                                    viewModel.removeItemCompletely(itemToRemove!!.id, containerStore)
-                                    showingRemoveItemDialog = false
-                                    itemToRemove = null
-                                },
-                                modifier = Modifier.fillMaxWidth()
-                            ) {
-                                Text("Komplett löschen", color = MaterialTheme.colorScheme.error)
-                            }
-                        }
-                    },
-                    confirmButton = {
-                        TextButton(onClick = {
-                            showingRemoveItemDialog = false
-                            itemToRemove = null
-                        }) {
-                            Text("Abbrechen")
-                        }
-                    },
-                    dismissButton = null
-                )
-            }
-        }
     }
 }
 
@@ -326,144 +207,5 @@ fun InfoRow(label: String, value: String) {
                 .padding(start = 16.dp)
                 .weight(1f, fill = false)
         )
-    }
-}
-
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun ItemCard(
-    item: com.filomat.app.data.Item,
-    onOpen: () -> Unit,
-    onRemove: () -> Unit,
-    isLoseContainer: Boolean = false
-) {
-    // Antippen öffnet die Sorte mit Gewichten, angebrochenen Spulen und Verbrauch
-    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
-        Column(
-            modifier = Modifier.padding(16.dp),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            Row(
-                modifier = Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                Column(modifier = Modifier.weight(1f)) {
-                    Text(
-                        text = item.getDisplayTitle(),
-                        style = MaterialTheme.typography.titleSmall
-                    )
-                    Text(
-                        text = "RFID: ${item.rfidTag}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-                IconButton(onClick = onRemove) {
-                    Icon(
-                        Icons.Default.Remove,
-                        contentDescription = if (isLoseContainer) "Löschen" else "Entfernen",
-                        tint = MaterialTheme.colorScheme.error
-                    )
-                }
-            }
-            if (item.description.isNotEmpty()) {
-                Text(
-                    text = item.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-            
-            // Zeige Item-Daten an, falls vorhanden
-            item.itemData?.let { data ->
-                Divider(modifier = Modifier.padding(vertical = 4.dp))
-                Text(
-                    text = "Tag-Daten:",
-                    style = MaterialTheme.typography.labelSmall,
-                    color = MaterialTheme.colorScheme.primary
-                )
-                if (data.brand != null) {
-                    InfoRow("Marke", data.brand)
-                }
-                if (data.type != null) {
-                    InfoRow("Typ", data.type)
-                }
-                // Farbe immer anzeigen (mit Kreis oder n/a)
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "Farbe",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(8.dp),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        data.color_hex?.let { colorHex ->
-                            val trimmedHex = colorHex.trim()
-                            if (trimmedHex.isNotEmpty()) {
-                                val hexString = if (trimmedHex.startsWith("#")) {
-                                    trimmedHex
-                                } else {
-                                    "#$trimmedHex"
-                                }
-                                val colorValue = try {
-                                    val hexWithoutHash = hexString.substring(1)
-                                    if (hexWithoutHash.length == 6 || hexWithoutHash.length == 8) {
-                                        android.graphics.Color.parseColor(hexString)
-                                    } else {
-                                        null
-                                    }
-                                } catch (e: Exception) {
-                                    null
-                                }
-                                if (colorValue != null) {
-                                    Box(
-                                        modifier = Modifier
-                                            .size(20.dp)
-                                            .background(
-                                                color = androidx.compose.ui.graphics.Color(colorValue),
-                                                shape = androidx.compose.foundation.shape.CircleShape
-                                            )
-                                            .border(
-                                                width = 1.dp,
-                                                color = MaterialTheme.colorScheme.outline.copy(alpha = 0.5f),
-                                                shape = androidx.compose.foundation.shape.CircleShape
-                                            )
-                                    )
-                                }
-                                Text(
-                                    text = data.color?.trim()?.takeIf { it.isNotEmpty() } ?: hexString,
-                                    style = MaterialTheme.typography.bodyMedium
-                                )
-                            } else {
-                                Text(
-                                    text = "n/a",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                                )
-                            }
-                        } ?: run {
-                            Text(
-                                text = "n/a",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                        }
-                    }
-                }
-                if (data.min_temp != null && data.max_temp != null) {
-                    InfoRow("Temperatur", "${data.min_temp}°C - ${data.max_temp}°C")
-                }
-                if (data.bed_min_temp != null && data.bed_max_temp != null) {
-                    InfoRow("Bett-Temp", "${data.bed_min_temp}°C - ${data.bed_max_temp}°C")
-                }
-            }
-        }
     }
 }
