@@ -1,0 +1,36 @@
+name: NFC-Leser
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "reader/**"
+      - ".github/workflows/reader.yml"
+  pull_request:
+    paths:
+      - "reader/**"
+      - ".github/workflows/reader.yml"
+
+jobs:
+  esphome:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: reader
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install esphome
+      - name: Platzhalter für secrets.yaml
+        run: |
+          sed 's/wifi_password: ""/wifi_password: "xxxxxxxx"/' secrets.example.yaml > secrets.yaml
+      - name: Konfigurationen prüfen
+        run: for f in fach-5x-rc522.yaml fach-1x-pn532.yaml tippen-pn532.yaml; do esphome config "$f" > /dev/null; done
+      - name: Tipp-Modus bauen
+        run: esphome compile tippen-pn532.yaml
+      - name: Fach-Leser bauen
+        run: |
+          esphome compile fach-1x-pn532.yaml
+          esphome compile fach-5x-rc522.yaml

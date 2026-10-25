@@ -58,6 +58,8 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | POST | `/api/printers/{id}/sync` | Sofort abgleichen |
 | GET | `/api/printers/status` · `/api/printers/{id}/status` | Zustand (Druck, Fortschritt, Restzeit, Temperaturen, Slots, Feuchte), Spulen pro Kopf mit „reicht/reicht nicht“ und Hinweise; älter als 10 s wird neu abgefragt |
 | GET | `/api/printers/{id}/thumbnail` | Vorschaubild des laufenden Drucks (404, wenn es keins gibt) |
+| PUT | `/api/printers/{id}/reader` | NFC-Leser am Drucker meldet den ganzen Stand: `{"slots": ["04378F53CB2A81", null, …]}` (ab Slot 0); Antwort pro Slot `empty`/`known`/`unknown`/`container` mit Kurztext |
+| POST | `/api/printers/{id}/reader/tap` | Tipp-Modus: `{"slot": 4, "tag": "…"}`, die Spule der Sorte kommt in diesen Slot |
 | GET | `/api/stats?months=12` | Verbrauch, Drucke, Abbrüche und Druckzeit pro Monat, Drucker, Sorte und Material |
 | GET · PUT | `/api/settings/notifications` | ntfy-Adresse für Meldungen (`{"url", "token"}`; leere Adresse = Server-Konfiguration, `token: null` behält ihn) |
 | POST | `/api/settings/notifications/test` | Testmeldung schicken |
@@ -125,6 +127,10 @@ Ein Filament (Item) ist eine Sorte: Das Tag klebt z. B. auf einem Musterplättch
 Jede angebrochene Spule (`Spool`) hat eine Nummer pro Sorte (mit Stift auf die Spule schreiben), ein eigenes Restgewicht und einen Platz: Drucker und Kopf (`printerId`, `tool`) oder Lager. So können mehrere Spulen derselben Sorte gleichzeitig laufen, etwa als Nachfüllspule am U1 und in einem anderen Drucker.
 
 Gebucht wird auf die Spule, die an diesem Drucker-Kopf steckt. Steckt dort keine Spule der Sorte, wird die einzige Lager-Spule der Sorte eingelegt, sonst eine neue angebrochen. Reicht eine Spule für einen Druck nicht, wird sie als leer markiert und am selben Platz eine aus dem Vorrat angebrochen; ohne Vorrat bleibt das Restgewicht bei 0. Wird eine Spule an einen belegten Platz gelegt, wandert die bisherige ins Lager.
+
+### NFC-Leser am Drucker
+
+Drucker, die die Plättchen nicht selbst lesen (Prusa, Bambu, Kobra), bekommen einen ESP32 mit NFC-Leser; Aufbau und ESPHome-Konfigurationen in [`reader/`](../reader/README.md). Der Leser meldet, welches Plättchen in welchem Slot steckt. Ein neu eingestecktes Plättchen legt die Spule seiner Sorte in den Slot, wie bei den Köpfen der U1; steckte sie vorher in einem anderen Slot desselben Druckers, wandert sie mit. Die Meldung jede Minute ändert nichts, solange das Plättchen bleibt, damit ein Umstecken in der App nicht überschrieben wird. Ein herausgezogenes Plättchen legt die Spule nicht ins Lager. Unbekannte Plättchen kommen als ntfy-Meldung; nach dem Zuordnen in der App gelten sie beim nächsten Melden als neu. Solange der Leser sich meldet (höchstens 5 min her), zeigt der Druckerzustand die Plättchen als Tag des Slots, inklusive Hinweis, wenn in der App eine andere Sorte dort steckt.
 
 ## Sicherung in die Nextcloud
 

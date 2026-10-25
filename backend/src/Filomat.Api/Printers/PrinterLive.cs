@@ -150,6 +150,7 @@ public class PrinterLive(
     {
         var status = entry?.Status ?? new PrinterStatus(printer.Enabled ? PrintState.Offline : PrintState.Idle,
             Message: printer.Enabled ? "Noch nicht abgefragt." : "Pausiert.");
+        status = WithReaderTags(printer, status);
         var placed = await PlacedAsync(printer, cancellationToken);
         var detected = await DetectedAsync(status, placed, cancellationToken);
         var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed, detected);
@@ -179,6 +180,22 @@ public class PrinterLive(
             result[slot.Tool] = new DetectedItem(item, loose);
         }
         return result;
+    }
+
+    /// <summary>Plättchen, die der NFC-Leser am Drucker meldet, als Tag des Slots (ohne Leser bleibt der Zustand, wie er ist).</summary>
+    public static PrinterStatus WithReaderTags(Printer printer, PrinterStatus status)
+    {
+        if (PrinterReader.Slots(printer, DateTime.UtcNow) is not { } tags) return status;
+        var slots = status.Slots?.ToList() ?? [];
+        var count = Math.Max(ToolCount(printer), slots.Count);
+        for (var tool = 0; tool < Math.Min(tags.Count, count); tool++)
+        {
+            if (tags[tool] is not { } tag) continue;
+            var index = slots.FindIndex(s => s.Tool == tool);
+            if (index < 0) slots.Add(new SlotReport(tool, null, null, null, TagUid: tag));
+            else if (slots[index].TagUid is null) slots[index] = slots[index] with { TagUid = tag };
+        }
+        return status with { Slots = slots.OrderBy(s => s.Tool).ToList() };
     }
 
     public static int ToolCount(Printer printer) => printer.ToolCount ?? (printer.Type == PrinterType.SnapmakerU1 ? 4 : 1);

@@ -29,6 +29,8 @@ builder.Services.AddScoped<Notifier>();
 builder.Services.AddScoped<SpoolStock>();
 builder.Services.AddSingleton<SpoolChoices>();
 builder.Services.AddSingleton<BackendAddress>();
+builder.Services.AddScoped<SpoolQuestion>();
+builder.Services.AddScoped<PrinterReader>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpoolWeightCatalog)),
