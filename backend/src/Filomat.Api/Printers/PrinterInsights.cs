@@ -62,6 +62,9 @@ public static class PrinterInsights
     /// <summary>Spielraum für die Düsentemperatur, bevor gewarnt wird.</summary>
     private const double TemperatureTolerance = 5;
 
+    /// <summary>Bis hierhin gilt eine zu niedrige Solltemperatur als Vorheizen (Prusa misst bei 170 °C das Bett ab), nicht als falsches Profil.</summary>
+    private const double PreheatMax = 180;
+
     /// <summary>Ab diesem RGB-Abstand gilt eine Farbe als anders.</summary>
     private const double ColorDistance = 150;
 
@@ -147,7 +150,8 @@ public static class PrinterInsights
             var min = Number(spool.Item.ItemData?.MinTemp);
             var max = Number(spool.Item.ItemData?.MaxTemp);
             if (min is null && max is null) continue;
-            if (target < (min ?? double.MinValue) - TemperatureTolerance || target > (max ?? double.MaxValue) + TemperatureTolerance)
+            var tooCold = target < (min ?? double.MinValue) - TemperatureTolerance && target > PreheatMax;
+            if (tooCold || target > (max ?? double.MaxValue) + TemperatureTolerance)
             {
                 var place = tools.FirstOrDefault(t => t.Tool == tool)?.Place ?? "";
                 var range = min is not null && max is not null ? $"{min:0}–{max:0} °C" : min is not null ? $"mindestens {min:0} °C" : $"höchstens {max:0} °C";

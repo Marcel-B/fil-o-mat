@@ -143,6 +143,27 @@ public class LiveStatusTests : IDisposable
     }
 
     [Fact]
+    public async Task IgnoresTheProbingTemperatureAtTheStartOfAPrusaPrint()
+    {
+        _moonraker.Routes["/api/v1/info"] = """{"mmu":false}""";
+        _moonraker.Routes["/api/v1/status"] = """
+            {"job":{"id":18,"progress":0,"time_remaining":3000,"time_printing":30},
+             "printer":{"state":"PRINTING","temp_nozzle":150.2,"target_nozzle":170,"temp_bed":58.1,"target_bed":60}}
+            """;
+        _moonraker.Routes["/api/v1/job"] = """
+            {"id":18,"state":"PRINTING","progress":0,"time_printing":30,
+             "file":{"name":"BOX~1.BGC","display_name":"box.bgcode","path":"/usb","m_timestamp":1760000000,
+                     "meta":{"filament used [g]":50,"filament_type":"PLA"}}}
+            """;
+        var printer = await CreatePrinterAsync("MK4S", PrinterType.PrusaLink, "http://prusa.local", "abc123");
+        await PlaceSpoolAsync("P1", printer.Id, 0, remaining: 500, minTemp: "190", maxTemp: "230");
+        await SyncAsync(printer.Id);
+
+        Assert.Empty((await StatusAsync(printer.Id)).Hints);
+        Assert.Empty(_ntfy.Messages);
+    }
+
+    [Fact]
     public async Task NotifiesFinishedPrintsWithTheRemainingWeight()
     {
         var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
