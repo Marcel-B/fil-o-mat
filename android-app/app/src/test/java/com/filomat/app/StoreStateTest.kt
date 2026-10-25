@@ -1,5 +1,6 @@
 package com.filomat.app
 
+import com.filomat.app.data.Container
 import com.filomat.app.data.Item
 import com.filomat.app.data.ItemJsonData
 import com.filomat.app.data.sync.ContainerData
@@ -140,25 +141,40 @@ class StoreStateTest {
     }
 
     @Test
-    fun filamentCountOfPrinterContainerIncludesLoadedSpools() {
+    fun spoolCountOfPrinterContainerIncludesLoadedSpools() {
         val kobra = Printer("k", "Kobra", "Anycubic", "http://kobra", containerId = "kc", tools = 8)
         val state = StoreState(
             items = listOf(
                 Item(id = "a", rfidTag = "A", name = "PLA", containerId = "box"),
-                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "kc"),
-                Item(id = "c", rfidTag = "C", name = "ASA", containerId = "kc")
+                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "kc")
             ),
             spools = listOf(
                 Spool("s1", "a", 1, printerId = "k", tool = 0),
                 Spool("s2", "a", 2, printerId = "k", tool = 1),
-                Spool("s3", "b", 1, printerId = "k", tool = 2)
+                Spool("s3", "b", 1, printerId = "k", tool = 2),
+                Spool("s4", "a", 3, containerId = "box")
             ),
             printers = listOf(kobra)
         )
 
-        // Drei Spulen in Slots; PETG steckt schon, ASA liegt nur im Container
-        assertEquals(listOf("c"), state.unloadedItemsIn("kc").map { it.id })
-        assertEquals(4, state.filamentCount("kc"))
-        assertEquals(1, state.filamentCount("box"))
+        // Drei Spulen in Slots, eine in der Box; Sorten zählen nicht mit
+        assertEquals(3, state.spoolCount("kc"))
+        assertEquals(1, state.spoolCount("box"))
+    }
+
+    @Test
+    fun looseShowsSpoolsWithoutKnownContainer() {
+        val state = StoreState(
+            containers = listOf(Container(id = "standard_lose", rfidTag = "L", name = "Lose"), Container(id = "box", rfidTag = "B", name = "Box")),
+            spools = listOf(
+                Spool("s1", "a", 1, containerId = "box"),
+                Spool("s2", "a", 2),
+                Spool("s3", "a", 3, containerId = "geloescht"),
+                Spool("s4", "a", 4, printerId = "k", tool = 0)
+            )
+        )
+
+        assertEquals(listOf("s1"), state.spoolsIn("box").map { it.id })
+        assertEquals(listOf("s2", "s3"), state.spoolsIn("standard_lose").map { it.id })
     }
 }

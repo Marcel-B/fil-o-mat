@@ -165,7 +165,7 @@ private fun ContainerList(
             "Container" to regularContainers.filter { storeState.printerOwning(it.id) == null },
             // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
             null to containers.filter {
-                it.isStandard && (it.id != StoreState.PRINTER_CONTAINER_ID || storeState.filamentCount(it.id) > 0)
+                it.isStandard && (it.id != StoreState.PRINTER_CONTAINER_ID || storeState.spoolCount(it.id) > 0)
             }
         ).filter { it.second.isNotEmpty() }
 
@@ -196,7 +196,7 @@ private fun ContainerList(
                 items(sectionContainers, key = { it.id }) { container ->
                     ContainerCard(
                         container = container,
-                        filamentCount = storeState.filamentCount(container.id),
+                        spoolCount = storeState.spoolCount(container.id),
                         live = storeState.printerOwning(container.id)?.takeIf { it.enabled }?.let { liveMap[it.id] },
                         onClick = {
                             navController.navigate("container/${container.id}")
@@ -212,7 +212,7 @@ private fun ContainerList(
 @Composable
 fun ContainerCard(
     container: Container,
-    filamentCount: Int,
+    spoolCount: Int,
     live: PrinterLive? = null,
     onClick: () -> Unit
 ) {
@@ -234,7 +234,7 @@ fun ContainerCard(
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "$filamentCount Filamente",
+                text = if (spoolCount == 1) "1 Spule" else "$spoolCount Spulen",
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

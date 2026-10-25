@@ -47,52 +47,6 @@ struct ColorInfo: View {
     }
 }
 
-/// Filament-Zeile in der Container-Ansicht mit allen Tag-Daten.
-struct ItemDetailRow: View {
-    var item: Item
-    var isLooseContainer: Bool
-    var onRemove: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.displayTitle).font(.headline)
-                    Text("RFID: \(item.rfidTag)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(role: .destructive, action: onRemove) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isLooseContainer ? "Löschen" : "Entfernen")
-            }
-            if !item.description.isEmpty {
-                Text(item.description).font(.caption).foregroundStyle(.secondary)
-            }
-            if let data = item.itemData {
-                Divider()
-                Text("Tag-Daten:").font(.caption).foregroundStyle(.tint)
-                if let brand = data.brand { InfoRow(label: "Marke", value: brand) }
-                if let type = data.type { InfoRow(label: "Typ", value: type) }
-                LabeledContent("Farbe") { ColorInfo(data: data, dotSize: 20) }
-                if let min = data.minTemp, let max = data.maxTemp {
-                    InfoRow(label: "Temperatur", value: "\(min)°C - \(max)°C")
-                }
-                if let min = data.bedMinTemp, let max = data.bedMaxTemp {
-                    InfoRow(label: "Bett-Temp", value: "\(min)°C - \(max)°C")
-                }
-            }
-        }
-        .font(.subheadline)
-        .padding(.vertical, 4)
-    }
-}
-
 /// Knopf, der einen Tag scannt und das Ergebnis weiterreicht. Abbrechen im Scanfenster ist kein Fehler.
 struct ScanButton: View {
     var title: String
