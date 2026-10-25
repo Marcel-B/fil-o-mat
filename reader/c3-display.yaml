@@ -1,0 +1,47 @@
+# Gemeinsamer Teil für das ESP32-C3-Board mit 0,42"-OLED (HW-675) und einem PN532 über I²C.
+#
+# Verdrahtung: der PN532 hängt am selben I²C-Bus wie das Display.
+#   PN532   VCC   GND  SDA    SCL
+#   ESP32   3V3   GND  GPIO5  GPIO6
+# Am PN532 die Schalter auf I²C stellen (1 = ON, 2 = OFF).
+
+esphome:
+  name: ${name}
+  friendly_name: ${friendly_name}
+
+esp32:
+  board: esp32-c3-devkitm-1
+  framework:
+    type: esp-idf
+
+i2c:
+  sda: GPIO5
+  scl: GPIO6
+  scan: true
+
+font:
+  - file: "gfonts://Roboto Condensed"
+    id: small
+    size: 10
+    glyphs: " !\"#%&'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÄÖÜäöüß–…"
+
+globals:
+  # Was das Display zeigt: Zeile 1 und 2
+  - id: line1
+    type: std::string
+    restore_value: no
+    initial_value: '"fil-O-mat"'
+  - id: line2
+    type: std::string
+    restore_value: no
+    initial_value: '"bereit"'
+
+display:
+  - platform: ssd1306_i2c
+    model: "SSD1306 72x40"
+    address: 0x3C
+    update_interval: 500ms
+    lambda: |-
+      it.print(0, 0, id(small), id(line1).c_str());
+      it.print(0, 13, id(small), id(line2).c_str());
+      if (id(line2).size() > 12) it.print(0, 26, id(small), id(line2).substr(12).c_str());

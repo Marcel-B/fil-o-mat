@@ -1,0 +1,74 @@
+# Ein Fach mit einem Leser (P1S ohne AMS, MK4S, Mini): ESP32-C3 mit OLED und PN532, Verdrahtung in c3-display.yaml.
+# Plättchen steckt im Fach = Spule dieser Sorte ist eingelegt; das Display zeigt sie mit Nummer.
+# Pro Drucker eine Kopie mit eigenem name und printer_id anlegen (oder per Kommandozeile überschreiben).
+
+substitutions:
+  name: filomat-p1s
+  friendly_name: fil-O-mat P1S
+  # Id des Druckers aus der App bzw. GET /api/printers
+  printer_id: "HIER-DRUCKER-ID"
+
+packages:
+  common: !include common.yaml
+  board: !include c3-display.yaml
+
+globals:
+  - id: tag
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+
+pn532_i2c:
+  update_interval: 500ms
+  on_tag:
+    - lambda: |-
+        id(tag) = x;
+        id(line1) = "Gelesen";
+        id(line2) = "…";
+    - script.execute: send_state
+  on_tag_removed:
+    - lambda: |-
+        id(tag) = "";
+        id(line1) = "Kein";
+        id(line2) = "Plättchen";
+    - script.execute: send_state
+
+script:
+  - id: send_state
+    mode: queued
+    max_runs: 3
+    then:
+      - http_request.send:
+          method: PUT
+          url: !lambda return std::string("${filomat_url}") + "/api/printers/${printer_id}/reader";
+          request_headers:
+            Content-Type: application/json
+            X-Api-Key: ${filomat_api_key}
+          body: !lambda |-
+            return id(tag).empty() ? std::string("{\"slots\":[null]}") : "{\"slots\":[\"" + id(tag) + "\"]}";
+          capture_response: true
+          on_response:
+            - lambda: |-
+                ESP_LOGI("filomat", "Backend: HTTP %d %s", response->status_code, body.c_str());
+                if (response->status_code != 200) {
+                  id(line1) = "Backend";
+                  id(line2) = "Fehler " + to_string(response->status_code);
+                  return;
+                }
+                if (id(tag).empty()) return;
+                json::parse_json(body, [](JsonObject root) -> bool {
+                  JsonObject slot = root["slots"][0];
+                  std::string state = slot["state"] | "";
+                  id(line1) = state == "known" ? "Eingelegt" : state == "unknown" ? "Unbekannt" : "Container";
+                  id(line2) = slot["label"] | "";
+                  return true;
+                });
+          on_error:
+            - lambda: |-
+                id(line1) = "Backend";
+                id(line2) = "nicht erreichbar";
+
+interval:
+  - interval: 60s
+    then:
+      - script.execute: send_state

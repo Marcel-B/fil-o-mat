@@ -1,0 +1,130 @@
+# Ein Leser für mehrere Slots (Kobra X: Rack 1–4, ACE 5–8): ESP32-C3 mit OLED und PN532, Verdrahtung in c3-display.yaml.
+#
+# Ablauf: Plättchen an den Leser halten, das Display zeigt die Sorte. Mit der BOOT-Taste den Slot wählen (jeder Druck
+# einen weiter). 4 s nach dem letzten Druck kommt die Spule in diesen Slot (POST /api/printers/<id>/reader/tap).
+# Ohne Tastendruck passiert nach 15 s nichts.
+
+substitutions:
+  name: filomat-kobra
+  friendly_name: fil-O-mat Kobra X
+  printer_id: "HIER-DRUCKER-ID"
+  # Anzahl Slots am Drucker (Kobra X mit ACE: 8)
+  slot_count: "8"
+
+packages:
+  common: !include common.yaml
+  board: !include c3-display.yaml
+
+globals:
+  - id: tag
+    type: std::string
+    restore_value: no
+    initial_value: '""'
+  # Gewählter Slot ab 1, 0 = noch keiner
+  - id: slot
+    type: int
+    restore_value: no
+    initial_value: "0"
+
+pn532_i2c:
+  update_interval: 500ms
+  on_tag:
+    - if:
+        condition:
+          lambda: return x == id(tag);
+        then:
+          - logger.log: "Dasselbe Plättchen, ignoriert"
+        else:
+          - lambda: |-
+              id(tag) = x;
+              id(slot) = 0;
+              id(line1) = "Taste: Slot";
+              id(line2) = "…";
+          - script.execute: lookup
+          - script.execute: give_up
+
+binary_sensor:
+  - platform: gpio
+    id: button
+    pin:
+      number: GPIO9
+      inverted: true
+      mode:
+        input: true
+        pullup: true
+    on_press:
+      - if:
+          condition:
+            lambda: return !id(tag).empty();
+          then:
+            - lambda: |-
+                id(slot) = id(slot) % ${slot_count} + 1;
+                id(line1) = "> Slot " + to_string(id(slot));
+            - script.execute: confirm
+
+script:
+  # Name der Sorte fürs Display
+  - id: lookup
+    mode: restart
+    then:
+      - http_request.get:
+          url: !lambda |-
+            std::string uid;
+            for (char c : id(tag)) if (isxdigit(c)) uid += toupper(c);
+            return std::string("${filomat_url}") + "/api/items/by-tag/" + uid;
+          request_headers:
+            X-Api-Key: ${filomat_api_key}
+          capture_response: true
+          on_response:
+            - lambda: |-
+                if (response->status_code == 404) { id(line2) = "Unbekannt"; return; }
+                json::parse_json(body, [](JsonObject root) -> bool {
+                  id(line2) = root["name"] | "?";
+                  return true;
+                });
+          on_error:
+            - lambda: id(line2) = "Backend weg";
+
+  # 4 s nach dem letzten Tastendruck den Slot übernehmen
+  - id: confirm
+    mode: restart
+    then:
+      - script.stop: give_up
+      - delay: 4s
+      - http_request.post:
+          url: !lambda return std::string("${filomat_url}") + "/api/printers/${printer_id}/reader/tap";
+          request_headers:
+            Content-Type: application/json
+            X-Api-Key: ${filomat_api_key}
+          body: !lambda |-
+            return "{\"slot\":" + to_string(id(slot) - 1) + ",\"tag\":\"" + id(tag) + "\"}";
+          capture_response: true
+          on_response:
+            - lambda: |-
+                ESP_LOGI("filomat", "Backend: HTTP %d %s", response->status_code, body.c_str());
+                if (response->status_code != 200) {
+                  id(line1) = "Fehler " + to_string(response->status_code);
+                  return;
+                }
+                json::parse_json(body, [](JsonObject root) -> bool {
+                  std::string state = root["state"] | "";
+                  id(line1) = (state == "known" ? "Slot " : "? Slot ") + to_string(id(slot));
+                  id(line2) = root["label"] | "";
+                  return true;
+                });
+          on_error:
+            - lambda: id(line1) = "Backend weg";
+      # Danach darf dasselbe Plättchen wieder angetippt werden
+      - lambda: id(tag) = "";
+
+  # Ohne Tastendruck: abbrechen
+  - id: give_up
+    mode: restart
+    then:
+      - delay: 15s
+      - lambda: |-
+          if (id(slot) == 0) {
+            id(tag) = "";
+            id(line1) = "fil-O-mat";
+            id(line2) = "bereit";
+          }

@@ -1,0 +1,113 @@
+# Leser pro Fach für die MMU3 (Core One): ESP32-DevKit mit 5 RC522 an einem SPI-Bus, je Leser ein eigener CS-Pin.
+# Plättchen steckt im Fach = Spule dieser Sorte steckt in diesem Slot. Der ESP32 schickt bei jeder Änderung und
+# jede Minute den ganzen Stand an PUT /api/printers/<id>/reader.
+#
+# Verdrahtung (alle RC522 parallel, nur SDA/CS einzeln):
+#   RC522   3.3V  GND  SCK     MOSI    MISO    RST     SDA (=CS)
+#   ESP32   3V3   GND  GPIO18  GPIO23  GPIO19  3V3     Slot 1: GPIO26, 2: GPIO17, 3: GPIO16, 4: GPIO4, 5: GPIO13
+# IRQ bleibt frei. Die RC522 nie an 5 V anschließen.
+
+substitutions:
+  name: filomat-core-one
+  # Id des Druckers aus der App (Drucker > Bearbeiten) bzw. GET /api/printers
+  printer_id: "HIER-DRUCKER-ID"
+
+esphome:
+  name: ${name}
+  friendly_name: fil-O-mat Core One
+
+esp32:
+  board: esp32dev
+  framework:
+    type: esp-idf
+
+packages:
+  common: !include common.yaml
+
+globals:
+  # UID pro Slot, leer = kein Plättchen
+  - id: slots
+    type: std::vector<std::string>
+    restore_value: no
+    initial_value: std::vector<std::string>(5)
+
+spi:
+  clk_pin: GPIO18
+  mosi_pin: GPIO23
+  miso_pin: GPIO19
+
+rc522_spi:
+  - id: slot1
+    cs_pin: GPIO26
+    update_interval: 1s
+    on_tag:
+      - lambda: id(slots)[0] = x;
+      - script.execute: send_state
+    on_tag_removed:
+      - lambda: id(slots)[0] = "";
+      - script.execute: send_state
+  - id: slot2
+    cs_pin: GPIO17
+    update_interval: 1s
+    on_tag:
+      - lambda: id(slots)[1] = x;
+      - script.execute: send_state
+    on_tag_removed:
+      - lambda: id(slots)[1] = "";
+      - script.execute: send_state
+  - id: slot3
+    cs_pin: GPIO16
+    update_interval: 1s
+    on_tag:
+      - lambda: id(slots)[2] = x;
+      - script.execute: send_state
+    on_tag_removed:
+      - lambda: id(slots)[2] = "";
+      - script.execute: send_state
+  - id: slot4
+    cs_pin: GPIO4
+    update_interval: 1s
+    on_tag:
+      - lambda: id(slots)[3] = x;
+      - script.execute: send_state
+    on_tag_removed:
+      - lambda: id(slots)[3] = "";
+      - script.execute: send_state
+  - id: slot5
+    cs_pin: GPIO13
+    update_interval: 1s
+    on_tag:
+      - lambda: id(slots)[4] = x;
+      - script.execute: send_state
+    on_tag_removed:
+      - lambda: id(slots)[4] = "";
+      - script.execute: send_state
+
+script:
+  - id: send_state
+    mode: queued
+    max_runs: 3
+    then:
+      - http_request.send:
+          method: PUT
+          url: !lambda return std::string("${filomat_url}") + "/api/printers/${printer_id}/reader";
+          request_headers:
+            Content-Type: application/json
+            X-Api-Key: ${filomat_api_key}
+          body: !lambda |-
+            std::string json = "{\"slots\":[";
+            for (size_t i = 0; i < id(slots).size(); i++) {
+              if (i > 0) json += ",";
+              json += id(slots)[i].empty() ? "null" : "\"" + id(slots)[i] + "\"";
+            }
+            return json + "]}";
+          capture_response: true
+          on_response:
+            - lambda: |-
+                ESP_LOGI("filomat", "Backend: HTTP %d %s", response->status_code, body.c_str());
+
+interval:
+  # Auch ohne Änderung jede Minute, damit das Backend weiß, dass der Leser läuft
+  - interval: 60s
+    then:
+      - script.execute: send_state
