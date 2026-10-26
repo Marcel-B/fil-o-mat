@@ -78,6 +78,7 @@ api.MapSyncEndpoints();
 api.MapSpoolEndpoints();
 api.MapBackupEndpoints();
 api.MapUpdateEndpoints();
+api.MapVersionEndpoints();
 api.MapStatsEndpoints();
 api.MapNotificationEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))

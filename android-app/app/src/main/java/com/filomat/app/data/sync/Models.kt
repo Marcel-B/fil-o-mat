@@ -240,6 +240,32 @@ data class BackendUpdateStatus(
 @Serializable
 data class UpdateCommit(val sha: String, val subject: String, val date: Long)
 
+/** API-Stufe des Backends (`/api/version`). */
+@Serializable
+data class BackendVersion(val apiLevel: Int, val minAppLevel: Int = 0, val commit: String? = null)
+
+/** Passen App und Backend zusammen? Die Stufen erklärt `backend/README.md` unter „Versionen“. */
+enum class ApiCompatibility(val message: String?) {
+    COMPATIBLE(null),
+    BACKEND_OUTDATED("Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen."),
+    APP_OUTDATED("App veraltet: bitte die neue Version installieren.");
+
+    companion object {
+        /** API-Stufe, gegen die diese App gebaut ist. */
+        const val APP_LEVEL = 1
+
+        /** Kleinste Backend-Stufe, mit der diese App alles kann. */
+        const val MIN_BACKEND_LEVEL = 1
+
+        /** `version == null`: das Backend kennt `/api/version` noch nicht (Stufe 0). */
+        fun of(version: BackendVersion?, appLevel: Int = APP_LEVEL, minBackendLevel: Int = MIN_BACKEND_LEVEL): ApiCompatibility = when {
+            appLevel < (version?.minAppLevel ?: 0) -> APP_OUTDATED
+            (version?.apiLevel ?: 0) < minBackendLevel -> BACKEND_OUTDATED
+            else -> COMPATIBLE
+        }
+    }
+}
+
 /** Datumswerte aus dem Backend (ISO 8601, .NET liefert bis zu 7 Nachkommastellen). */
 object BackendDate {
     private val pattern = Regex("""^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2})(?:\.(\d+))?(Z|[+-]\d{2}:\d{2})?$""")

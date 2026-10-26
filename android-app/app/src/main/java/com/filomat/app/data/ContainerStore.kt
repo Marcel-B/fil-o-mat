@@ -8,6 +8,7 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.filomat.app.data.sync.BackendClient
+import com.filomat.app.data.sync.ApiCompatibility
 import com.filomat.app.data.sync.BackendUpdateStatus
 import com.filomat.app.data.sync.ConsumptionEntry
 import com.filomat.app.data.sync.ContainerData
@@ -48,7 +49,9 @@ data class SyncState(
     val error: String? = null,
     val lastSyncedAt: Long? = null,
     /** Stand der Backend-Version; `null`, solange unbekannt oder ohne Updater auf dem Server. */
-    val updateStatus: BackendUpdateStatus? = null
+    val updateStatus: BackendUpdateStatus? = null,
+    /** Passen App und Backend zusammen? `null`, solange unbekannt (z. B. Backend nicht erreichbar). */
+    val compatibility: ApiCompatibility? = null
 )
 
 /**
@@ -320,6 +323,12 @@ class ContainerStore private constructor(context: Context) {
     /** Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein Backend ohne Updater) zählen nicht als Sync-Fehler. */
     suspend fun refreshUpdateStatus() {
         val client = backend ?: return
+        try {
+            val compatibility = ApiCompatibility.of(client.version())
+            _sync.update { it.copy(compatibility = compatibility) }
+        } catch (e: Exception) {
+            // Nicht erreichbar (z. B. während des Neustarts): den letzten Stand behalten
+        }
         val status = try {
             client.updateStatus()
         } catch (e: Exception) {

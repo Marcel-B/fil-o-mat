@@ -91,6 +91,11 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
 
     // Aktualisierung des Backends
 
+    /** `null` bei einem Backend ohne `/api/version`. */
+    suspend fun version(): BackendVersion? = io {
+        send("GET", "api/version", allowNotFound = true).takeIf { it.isNotEmpty() }?.let { decode<BackendVersion>(it) }
+    }
+
     suspend fun updateStatus(): BackendUpdateStatus = io { decode(send("GET", "api/update")) }
 
     /** Lässt den Server sofort nach neuen Commits suchen; das Ergebnis liefert später `updateStatus()`. */

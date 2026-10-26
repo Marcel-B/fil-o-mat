@@ -22,6 +22,8 @@ final class ContainerStore {
     private(set) var lastSyncedAt: Date?
     /// Stand der Backend-Version; `nil`, solange unbekannt oder ohne Updater auf dem Server.
     private(set) var updateStatus: BackendUpdateStatus?
+    /// Passen App und Backend zusammen? `nil`, solange unbekannt (z. B. Backend nicht erreichbar).
+    private(set) var compatibility: ApiCompatibility?
     /// Stand der Nextcloud-Sicherung; `nil`, solange unbekannt oder bei einem Backend ohne `/api/backup`.
     private(set) var backupStatus: BackupStatus?
     /// Zustand der Drucker pro Drucker-ID; leer bei einem Backend ohne `/api/printers/status`.
@@ -275,6 +277,7 @@ final class ContainerStore {
         syncError = nil
         lastSyncedAt = nil
         updateStatus = nil
+        compatibility = nil
         backupStatus = nil
         printerLive = [:]
     }
@@ -306,6 +309,11 @@ final class ContainerStore {
     /// Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein älteres Backend ohne `/api/update`) zählen nicht als Sync-Fehler.
     func refreshUpdateStatus() async {
         guard let backend else { return }
+        do {
+            compatibility = ApiCompatibility(try await backend.version())
+        } catch {
+            // Nicht erreichbar (z. B. während des Neustarts): den letzten Stand behalten
+        }
         guard let status = try? await backend.updateStatus() else {
             // Während des Neustarts antwortet das Backend kurz nicht; den Stand dann behalten
             if updateStatus?.isUpdating != true { updateStatus = nil }
