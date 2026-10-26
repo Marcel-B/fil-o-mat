@@ -27,6 +27,9 @@ builder.Services.AddScoped<PrinterLive>();
 builder.Services.AddHttpClient(Notifier.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<Notifier>();
 builder.Services.AddScoped<SpoolStock>();
+builder.Services.AddSingleton<SpoolChoices>();
+builder.Services.AddSingleton<BackendAddress>();
+builder.Services.AddScoped<SpoolQuestion>();
 builder.Services.AddScoped<PrinterReader>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
@@ -52,6 +55,14 @@ app.MapOpenApi();
 // Optionaler API-Schlüssel: ist "Filomat:ApiKey" gesetzt, muss jeder /api-Aufruf ihn im Header X-Api-Key mitschicken.
 var apiKey = app.Configuration["Filomat:ApiKey"];
 var api = app.MapGroup("/api");
+// Unter dieser Adresse erreichen die Apps das Backend; daraus entstehen die Knöpfe in ntfy-Meldungen
+var backendAddress = app.Services.GetRequiredService<BackendAddress>();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api") && (string.IsNullOrEmpty(apiKey) || context.Request.Headers["X-Api-Key"] == apiKey))
+        backendAddress.Remember(context.Request);
+    await next(context);
+});
 if (!string.IsNullOrEmpty(apiKey))
 {
     api.AddEndpointFilter(async (context, next) =>
@@ -72,6 +83,7 @@ api.MapNotificationEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
+app.MapSpoolChoiceEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
 
 app.Run();

@@ -40,6 +40,9 @@ public enum HintKind
     /// <summary>Slot laut Drucker belegt, in der App ist dort nichts eingetragen.</summary>
     SlotUnknown,
 
+    /// <summary>Der Drucker erkennt das Plättchen einer Sorte, aber in der App ist offen, welche ihrer Spulen dort steckt.</summary>
+    SpoolUnclear,
+
     /// <summary>Die Düse heizt außerhalb des Bereichs der eingelegten Sorte.</summary>
     Temperature,
 
@@ -52,6 +55,9 @@ public record Hint(HintKind Kind, bool Warning, int? Tool, string Text);
 
 /// <summary>Spule im Drucker mit ihrer Sorte, wie die App sie führt.</summary>
 public record PlacedSpool(Spool Spool, Item Item);
+
+/// <summary>Sorte, deren Plättchen der Drucker an einem Kopf ohne Spule erkennt, mit den Nummern ihrer losen Spulen.</summary>
+public record DetectedItem(Item Item, IReadOnlyList<int> LooseNumbers);
 
 /// <summary>Verknüpft den gemeldeten Zustand eines Druckers mit den Spulen der App.</summary>
 public static class PrinterInsights
@@ -74,7 +80,9 @@ public static class PrinterInsights
     public const double HygroscopicLimit = 40;
     public const double DefaultLimit = 55;
 
-    public static (List<ToolLive> Tools, List<Hint> Hints) Build(PrinterType type, int toolCount, PrinterStatus status, IReadOnlyList<PlacedSpool> placed)
+    /// <param name="detected">Pro Kopf ohne Spule die Sorte, deren Plättchen der Drucker dort erkennt.</param>
+    public static (List<ToolLive> Tools, List<Hint> Hints) Build(PrinterType type, int toolCount, PrinterStatus status,
+        IReadOnlyList<PlacedSpool> placed, IReadOnlyDictionary<int, DetectedItem>? detected = null)
     {
         var tools = new List<ToolLive>();
         var hints = new List<Hint>();
@@ -85,8 +93,10 @@ public static class PrinterInsights
             var place = PlaceName(type, count, tool);
             var spool = placed.FirstOrDefault(p => (p.Spool.Tool ?? 0) == tool);
             var reported = status.Slots?.FirstOrDefault(s => s.Tool == tool);
-            var itemType = spool?.Item.ItemData?.Type;
-            var itemColor = Normalize(spool?.Item.ItemData?.ColorHex);
+            var found = spool is null ? detected?.GetValueOrDefault(tool) : null;
+            var item = spool?.Item ?? found?.Item;
+            var itemType = item?.ItemData?.Type;
+            var itemColor = Normalize(item?.ItemData?.ColorHex);
             var label = spool is null ? null : $"{spool.Item.Name} #{spool.Spool.Number}";
 
             double? needed = null;
@@ -113,6 +123,10 @@ public static class PrinterInsights
                     hints.Add(new Hint(HintKind.TagMismatch, true, tool, $"{Prefix(place)}Der Drucker erkennt ein anderes Tag als {label}."));
                 else if (reported.Loaded == false && spool is not null)
                     hints.Add(new Hint(HintKind.SlotEmpty, true, tool, $"{Prefix(place)}Laut Drucker leer, in der App steckt dort {label}."));
+                else if (found is not null)
+                    hints.Add(new Hint(HintKind.SpoolUnclear, true, tool, found.LooseNumbers.Count > 0
+                        ? $"{Prefix(place)}{found.Item.Name} erkannt. Welche Spule steckt dort? Lose liegen {string.Join(", ", found.LooseNumbers.Select(n => $"#{n}"))}."
+                        : $"{Prefix(place)}{found.Item.Name} erkannt, in der App steckt dort keine Spule."));
                 else if (reported.Loaded == true && spool is null && reported.Type is not null)
                     hints.Add(new Hint(HintKind.SlotUnknown, false, tool,
                         $"{Prefix(place)}{Describe(reported.Type, reported.ColorHex)} eingelegt, in der App ist dort nichts eingetragen."));
@@ -127,7 +141,7 @@ public static class PrinterInsights
                 }
             }
 
-            tools.Add(new ToolLive(tool, place, spool?.Spool.Id, spool?.Spool.Number, spool?.Item.Id, spool?.Item.Name,
+            tools.Add(new ToolLive(tool, place, spool?.Spool.Id, spool?.Spool.Number, item?.Id, item?.Name,
                 itemType ?? reported?.Type, itemColor ?? Normalize(reported?.ColorHex), spool?.Spool.RemainingWeight, reported, needed, enough));
         }
 

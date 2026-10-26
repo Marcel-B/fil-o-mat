@@ -1,8 +1,11 @@
 using System.Globalization;
 using System.Net;
 using System.Net.Http.Json;
+using Filomat.Api.Data;
 using Filomat.Api.Domain;
 using Filomat.Api.Endpoints;
+using Filomat.Api.Printers;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace Filomat.Api.Tests;
 
@@ -10,12 +13,13 @@ namespace Filomat.Api.Tests;
 public class SnapmakerU1Tests : IDisposable
 {
     private readonly FakeMoonraker _printer = new();
+    private readonly FakeNtfy _ntfy = new();
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
     public SnapmakerU1Tests()
     {
-        _factory = new ApiFactory { PrinterHandler = _printer };
+        _factory = new ApiFactory { PrinterHandler = _printer, NtfyHandler = _ntfy };
         _client = _factory.CreateClient();
         _printer.Routes["/printer/objects/query"] = """
             {"result":{"eventtime":731304.1,"status":{
@@ -129,5 +133,79 @@ public class SnapmakerU1Tests : IDisposable
         var head4 = loaded.Single(i => i.RfidTag == "04593851CB2A81");
         var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?itemId={head4.Id}");
         Assert.Single(entries!);
+    }
+
+    [Fact]
+    public async Task AsksWhichSpoolInsteadOfOpeningANewOneWhenSeveralAreLoose()
+    {
+        // Marcel: Sunlu PLA Plus hat #1 (gewogen) und #2 lose; #1 kommt in Kopf 2, das Plättchen erkennt der U1 dort
+        var history = _printer.Routes["/server/history/list"];
+        _printer.Routes["/server/history/list"] = """{"result":{"count":0,"jobs":[]}}""";
+        var black = await CreateSpoolAsync("04EA1654CB2A81", null);
+        await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(792));
+        await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(184));
+        var u1 = await CreateU1Async();
+
+        // Keine neue Spule, beide bleiben lose, und die App fragt nach
+        var spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
+        Assert.Equal([1, 2], spools.Select(s => s.Number));
+        Assert.All(spools, s => Assert.Null(s.PrinterId));
+        var live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{u1.Id}/status"))!;
+        Assert.Equal((black.Id, (string?)null), (live.Tools[1].ItemId, live.Tools[1].SpoolId));
+        var hint = Assert.Single(live.Hints, h => h.Kind == HintKind.SpoolUnclear);
+        Assert.Equal((1, "Kopf 2: Sunlu PLA erkannt. Welche Spule steckt dort? Lose liegen #1, #2."), (hint.Tool!.Value, hint.Text));
+
+        // Ein Druck, bevor die Spule gewählt ist, bleibt bei der Sorte ohne Spule
+        _printer.Routes["/server/history/list"] = history;
+        await _client.PostAsync($"/api/printers/{u1.Id}/sync", null);
+        var entries = await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={u1.Id}");
+        var head2 = Assert.Single(entries!, c => c.Tool == 1);
+        Assert.Equal((black.Id, (string?)null), (head2.ItemId, head2.SpoolId));
+        Assert.Equal(2, (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!.Count);
+
+        // Per Knopf in der Meldung gewählt: #1 steckt in Kopf 2, der Abgleich lässt sie dort
+        var question = Assert.Single(_ntfy.Messages, m => m.Title == "Snapmaker U1 Kopf 2: Welche Spule?");
+        Assert.Equal("Sunlu PLA erkannt, lose liegen #1 (792 g), #2 (184 g). Tippe auf die Spule, die drin steckt.", question.Body);
+        var buttons = question.Actions!.Split("; ");
+        Assert.Equal(2, buttons.Length);
+        Assert.StartsWith("http, #1 (792 g), http://localhost/choices/", buttons[0]);
+        var choice = buttons[0].Split(", ")[2];
+        var chosen = await _client.PostAsync(new Uri(choice).PathAndQuery, null);
+        Assert.Equal(HttpStatusCode.OK, chosen.StatusCode);
+        Assert.Contains("#1 steckt jetzt in Snapmaker U1 Kopf 2.", await chosen.Content.ReadAsStringAsync());
+        // Die anderen Knöpfe derselben Frage verfallen
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync(new Uri(buttons[1].Split(", ")[2]).PathAndQuery, null)).StatusCode);
+
+        await _client.PostAsync($"/api/printers/{u1.Id}/sync", null);
+        spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
+        Assert.Equal((u1.Id, 1, 792d), (spools[0].PrinterId, spools[0].Tool!.Value, spools[0].RemainingWeight!.Value));
+        Assert.Null(spools[1].PrinterId);
+        Assert.Single(_ntfy.Messages, m => m.Title.EndsWith("Welche Spule?"));
+        live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{u1.Id}/status"))!;
+        Assert.DoesNotContain(live.Hints, h => h.Kind == HintKind.SpoolUnclear);
+    }
+
+    [Fact]
+    public async Task TakesTheSpoolJustWeighedWhenSeveralAreLoose()
+    {
+        _printer.Routes["/server/history/list"] = """{"result":{"count":0,"jobs":[]}}""";
+        var black = await CreateSpoolAsync("04EA1654CB2A81", null);
+        var first = (await (await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(500))).Content.ReadFromJsonAsync<Spool>())!;
+        await _client.PostAsJsonAsync($"/api/items/{black.Id}/spools", new OpenSpoolRequest(184));
+        using (var scope = _factory.Services.CreateScope())
+        {
+            // Beide schon vor Tagen angebrochen
+            var db = scope.ServiceProvider.GetRequiredService<FilomatDbContext>();
+            foreach (var spool in db.Spools) spool.OpenedAt = DateTime.UtcNow.AddDays(-3);
+            await db.SaveChangesAsync();
+        }
+        // #1 gerade gewogen, dann in Kopf 2 gelegt
+        await _client.PutAsJsonAsync($"/api/spools/{first.Id}", new SpoolUpdateRequest(792, null, null));
+        var u1 = await CreateU1Async();
+
+        var spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
+        Assert.Equal((u1.Id, 1, 792d), (spools[0].PrinterId, spools[0].Tool!.Value, spools[0].RemainingWeight!.Value));
+        Assert.Null(spools[1].PrinterId);
+        Assert.DoesNotContain(_ntfy.Messages, m => m.Title.EndsWith("Welche Spule?"));
     }
 }

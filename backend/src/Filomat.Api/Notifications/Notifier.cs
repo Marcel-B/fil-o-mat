@@ -14,6 +14,9 @@ public record NtfySettings(string? Url, string? Token, bool FromApp)
     public bool Configured => Uri.TryCreate(Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
 }
 
+/// <summary>Knopf in einer Meldung, der beim Antippen <paramref name="Url"/> per POST aufruft.</summary>
+public record NtfyAction(string Label, string Url);
+
 /// <summary>Schickt Meldungen über ntfy (https://ntfy.sh oder selbst gehostet), z. B. wenn ein Druck fertig ist.</summary>
 public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConfiguration configuration, ILogger<Notifier> logger)
 {
@@ -52,8 +55,9 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
     /// <summary>Schickt eine Meldung, falls ein Ziel eingestellt ist. Fehler landen nur im Log, außer <paramref name="throwOnError"/>.</summary>
     /// <param name="tags">ntfy-Tags, z. B. <c>white_check_mark</c> (wird als Emoji gezeigt).</param>
     /// <param name="priority">1 (min) bis 5 (dringend), 3 ist normal.</param>
+    /// <param name="actions">Höchstens drei Knöpfe (Grenze von ntfy).</param>
     public async Task<bool> SendAsync(string title, string message, string? tags = null, int priority = 3,
-        bool throwOnError = false, CancellationToken cancellationToken = default)
+        bool throwOnError = false, CancellationToken cancellationToken = default, IReadOnlyList<NtfyAction>? actions = null)
     {
         var settings = await GetSettingsAsync(cancellationToken);
         if (!settings.Configured) return false;
@@ -67,6 +71,9 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
             request.Headers.TryAddWithoutValidation("Title", $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(title))}?=");
             if (tags is not null) request.Headers.TryAddWithoutValidation("Tags", tags);
             if (priority != 3) request.Headers.TryAddWithoutValidation("Priority", priority.ToString());
+            if (actions is { Count: > 0 })
+                request.Headers.TryAddWithoutValidation("Actions",
+                    string.Join("; ", actions.Take(3).Select(a => $"http, {a.Label}, {a.Url}, method=POST, clear=true")));
             if (settings.Token is { Length: > 0 } token) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
 
             using var response = await httpFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);

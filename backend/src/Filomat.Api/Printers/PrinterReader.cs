@@ -24,7 +24,7 @@ public record ReaderTap(int Slot, string Tag);
 /// NFC-Leser am Drucker (ESP32 mit PN532/RC522): meldet pro Slot, welches Musterplättchen dort steckt. Ein neu
 /// eingestecktes Plättchen legt die Spule seiner Sorte in diesen Slot, wie bei den Köpfen der U1.
 /// </summary>
-public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier notifier)
+public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier notifier, SpoolQuestion question)
 {
     /// <summary>Der Leser meldet sich jede Minute; länger still gilt er als aus.</summary>
     public static readonly TimeSpan MaxAge = TimeSpan.FromMinutes(5);
@@ -90,7 +90,8 @@ public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier noti
         {
             var spool = await LoadAsync(printer, item, slot, null, cancellationToken);
             item.ContainerId = printer.ContainerId;
-            result = new ReaderSlot(slot, tag, "known", $"{item.Name} #{spool.Number}", item.Id, spool.Number, spool.RemainingWeight);
+            result = new ReaderSlot(slot, tag, "known", spool is null ? item.Name : $"{item.Name} #{spool.Number}", item.Id,
+                spool?.Number, spool?.RemainingWeight);
         }
         else if (await db.Containers.AnyAsync(c => c.RfidTag == tag, cancellationToken))
             result = new ReaderSlot(slot, tag, "container", "Container-Tag");
@@ -106,23 +107,31 @@ public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier noti
     /// <summary>
     /// Legt die Spule der Sorte in den Slot. Steckt sie schon in einem anderen Slot dieses Druckers (Plättchen umgesteckt),
     /// wandert sie mit, statt dass eine neue angebrochen wird; außer der Leser meldet dort noch ein Plättchen derselben Sorte.
+    /// Liegen mehrere Spulen der Sorte lose und ist keine gerade gewogen, wird per ntfy nachgefragt (dann <c>null</c>).
     /// </summary>
-    private async Task<Spool> LoadAsync(Printer printer, Item item, int slot, IReadOnlyList<string?>? reported,
+    private async Task<Spool?> LoadAsync(Printer printer, Item item, int slot, IReadOnlyList<string?>? reported,
         CancellationToken cancellationToken)
     {
         var inPrinter = await db.Spools
             .Where(s => s.ItemId == item.Id && s.PrinterId == printer.Id && s.EmptiedAt == null)
             .ToListAsync(cancellationToken);
-        if (inPrinter.Any(s => s.Tool == slot)) return await spools.ResolveAsync(item, printer.Id, slot, cancellationToken);
+        if (inPrinter.Any(s => s.Tool == slot)) return await FindAsync(printer, item, slot, cancellationToken);
 
         var tags = item.AllTags.ToHashSet(StringComparer.OrdinalIgnoreCase);
         var elsewhere = inPrinter
             .Where(s => s.Tool is not { } tool || reported is null || tool >= reported.Count || reported[tool] is not { } other
                         || !tags.Contains(other))
             .ToList();
-        if (elsewhere.Count != 1) return await spools.ResolveAsync(item, printer.Id, slot, cancellationToken);
+        if (elsewhere.Count != 1) return await FindAsync(printer, item, slot, cancellationToken);
         await spools.PlaceAsync(elsewhere[0], printer.Id, slot, cancellationToken);
         return elsewhere[0];
+    }
+
+    private async Task<Spool?> FindAsync(Printer printer, Item item, int slot, CancellationToken cancellationToken)
+    {
+        if (await spools.FindAsync(item, printer.Id, slot, cancellationToken) is { } spool) return spool;
+        await question.AskAsync(printer, slot, item, cancellationToken);
+        return null;
     }
 
     /// <summary>Zuletzt gemeldete Plättchen pro Slot; <c>null</c>, wenn der Drucker keinen Leser hat oder er still ist.</summary>
