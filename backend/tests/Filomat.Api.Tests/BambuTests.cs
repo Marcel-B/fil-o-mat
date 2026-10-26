@@ -351,7 +351,7 @@ public class BambuTests : IDisposable
             foreach (var payload in new[]
                      {
                          """{"print":{"mc_percent":41,"command":"push_status","msg":1}}""",
-                         $$"""{"print":{"gcode_state":"FINISH","ams":{{FakeBambu.Ams(255)}},"command":"push_status","msg":1}}""",
+                         $$$"""{"print":{"gcode_state":"FINISH","ams":{{{FakeBambu.Ams(255)}}},"command":"push_status","msg":1}}""",
                          $$"""{"print":{{FakeBambu.Report("RUNNING", 42, trayNow: 2)}}}""",
                      })
                 await server.InjectApplicationMessage(new InjectedMqttApplicationMessage(new MqttApplicationMessageBuilder()
