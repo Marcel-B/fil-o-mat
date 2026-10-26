@@ -160,13 +160,18 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         var state = print.GetStringOrNull("gcode_state");
         var name = print.GetStringOrNull("subtask_name") ?? Path.GetFileNameWithoutExtension(print.GetStringOrNull("gcode_file") ?? "");
         var key = $"{print.GetStringOrNull("gcode_file")}|{name}";
+        // Fehlen Datei und Name in der Meldung, ist das kein Hinweis auf einen anderen Druck
+        var named = print.TryGetProperty("gcode_file", out _) || print.TryGetProperty("subtask_name", out _);
         var taskId = print.GetStringOrNull("task_id") is { Length: > 0 } id && id != "0" ? id : null;
-        var progress = print.GetDoubleOrNull("mc_percent") ?? 0;
+        var reported = print.GetDoubleOrNull("mc_percent");
+        var progress = reported ?? tracked?.Progress ?? 0;
+        var running = state is "PREPARE" or "SLICING" or "RUNNING" or "PAUSE";
 
-        // Ein anderer Druck: der gemerkte ist vorbei, ohne dass ein Abgleich sein Ende sah
-        if (tracked is not null && (tracked.Key != key
+        // Ein anderer Druck: der gemerkte ist vorbei, ohne dass ein Abgleich sein Ende sah. Ein fallender Fortschritt
+        // zählt nur bei einem laufenden Druck; nach FINISH meldet der P1S den Fortschritt nicht immer mit.
+        if (tracked is not null && (named && tracked.Key != key
                                     || taskId is not null && tracked.TaskId is not null && taskId != tracked.TaskId
-                                    || progress + 10 < tracked.Progress))
+                                    || running && reported is { } percent && percent + 10 < tracked.Progress))
         {
             finished.Add(Finish(printer, tracked, Ended(tracked)));
             tracked = null;
@@ -186,6 +191,11 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
                 tracked = Advance(tracked, progress, taskId, ams);
                 finished.Add(Finish(printer, tracked, state == "FINISH" ? "completed" : "cancelled"));
                 break;
+
+            // Unvollständige Meldung ohne Zustand: nichts entscheiden, der nächste Abgleich sieht mehr
+            case null:
+                printer.AdapterStateJson = tracked is null ? null : JsonSerializer.Serialize(tracked);
+                return finished;
 
             // FINISH und FAILED bleiben stehen, bis der nächste Druck beginnt; ohne gemerkten Druck ist er schon gebucht
             default:

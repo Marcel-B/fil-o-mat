@@ -63,9 +63,11 @@ public class BambuLan : IBambuLan
                     return Task.CompletedTask;
                 lock (merged)
                 {
-                    // Änderungen ergänzen den Stand; der vollständige kommt auf pushall
+                    // Änderungen ergänzen den Stand; der vollständige kommt auf pushall. Erst auf ihn warten: eine
+                    // Änderung mit gcode_state und ams, aber ohne Fortschritt und Datei, ließ einen fertigen Druck
+                    // wie abgebrochen aussehen.
                     foreach (var (key, value) in print) merged[key] = value?.DeepClone();
-                    if (merged.ContainsKey("gcode_state") && merged.ContainsKey("ams")) complete.TrySetResult();
+                    if (IsFullReport(print)) complete.TrySetResult();
                 }
             }
             catch (JsonException)
@@ -130,6 +132,14 @@ public class BambuLan : IBambuLan
             throw new PrinterUnavailableException($"MQTT-Verbindung zum Drucker fehlgeschlagen: {Describe(ex)}", ex);
         }
     }
+
+    /// <summary>
+    /// Vollständiger Zustand: die Antwort auf pushall (<c>msg</c> 0, Änderungen haben 1) oder eine Meldung mit Zustand,
+    /// Fortschritt und Datei.
+    /// </summary>
+    public static bool IsFullReport(JsonObject print) =>
+        print["msg"] is JsonValue msg && msg.ToString() == "0"
+        || print.ContainsKey("gcode_state") && print.ContainsKey("mc_percent") && (print.ContainsKey("gcode_file") || print.ContainsKey("subtask_name"));
 
     /// <summary>Meldung samt Ursachen; MQTTnet meldet außen nur "Error while connecting host".</summary>
     public static string Describe(Exception ex)

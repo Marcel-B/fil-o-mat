@@ -219,6 +219,43 @@ public class BambuTests : IDisposable
         Assert.Equal(1000 - 7, await RemainingAsync(spool.Id), 2);
     }
 
+    /// <summary>Barret meldete einen fertigen Druck als abgebrochen: die FINISH-Meldung kam ohne Fortschritt und Datei.</summary>
+    [Fact]
+    public async Task BooksAFinishedPrintAsCompletedWhenTheReportLacksProgressAndFile()
+    {
+        _printer.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 30, 10)));
+        var printer = await CreatePrinterAsync();
+        var black = await PlaceSpoolAsync("B", printer.Id, 1);
+
+        _printer.Print = FakeBambu.Report("RUNNING", 96, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _printer.Print = $$"""{"gcode_state":"FINISH","ams":{{FakeBambu.Ams(255)}},"command":"push_status","msg":1}""";
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+        // Danach wieder vollständig: derselbe Druck, nicht noch einmal gebucht
+        _printer.Print = FakeBambu.Report("FINISH", 100);
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal("completed", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
+        Assert.Equal(1000 - 30, await RemainingAsync(black.Id), 2);
+    }
+
+    [Fact]
+    public async Task KeepsTheTrackedPrintWhenTheReportLacksTheState()
+    {
+        _printer.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 10, 3.3)));
+        var printer = await CreatePrinterAsync();
+        await PlaceSpoolAsync("B", printer.Id, 1);
+
+        _printer.Print = FakeBambu.Report("RUNNING", 50, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _printer.Print = """{"mc_percent":51,"command":"push_status","msg":1}""";
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Print = FakeBambu.Report("FINISH", 100);
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal("completed", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
+    }
+
     [Fact]
     public async Task FinishesThePreviousPrintWhenANewOneStarts()
     {
@@ -310,8 +347,13 @@ public class BambuTests : IDisposable
         server.InterceptingPublishAsync += async e =>
         {
             if (e.ApplicationMessage.Topic != $"device/{serial}/request" || !e.ApplicationMessage.ConvertPayloadToString().Contains("pushall")) return;
-            // Erst eine Änderung, dann der vollständige Zustand
-            foreach (var payload in new[] { """{"print":{"mc_percent":41,"command":"push_status","msg":1}}""", $$"""{"print":{{FakeBambu.Report("RUNNING", 42, trayNow: 2)}}}""" })
+            // Erst Änderungen (auch mit Zustand und AMS, aber ohne Datei), dann der vollständige Zustand
+            foreach (var payload in new[]
+                     {
+                         """{"print":{"mc_percent":41,"command":"push_status","msg":1}}""",
+                         $$"""{"print":{"gcode_state":"FINISH","ams":{{FakeBambu.Ams(255)}},"command":"push_status","msg":1}}""",
+                         $$"""{"print":{{FakeBambu.Report("RUNNING", 42, trayNow: 2)}}}""",
+                     })
                 await server.InjectApplicationMessage(new InjectedMqttApplicationMessage(new MqttApplicationMessageBuilder()
                     .WithTopic($"device/{serial}/report")
                     .WithPayload(payload)
