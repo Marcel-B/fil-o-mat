@@ -146,6 +146,12 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         return file is not null && BambuLan.ReadPlateImage(file, BambuLan.PlateOf(gcodeFile)) is { } png ? new Thumbnail(png, "image/png") : null;
     }
 
+    public async Task<Thumbnail?> GetSnapshotAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        return await lan.SnapshotAsync(printer.BaseUrl, accessCode, cancellationToken) is { } jpeg ? new Thumbnail(jpeg, "image/jpeg") : null;
+    }
+
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
         var (serial, accessCode) = Credentials(printer.ApiKey);

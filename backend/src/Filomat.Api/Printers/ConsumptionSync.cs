@@ -124,7 +124,7 @@ public class ConsumptionSync(
         };
         var name = job.Name.Length > 0 ? job.Name : "Druck";
         await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : $"{name} ist {verb}.",
-            low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken);
+            low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken, image: token => live.GetPhotoAsync(printer, token));
     }
 
     private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)

@@ -18,9 +18,18 @@ public class FakeMoonraker : HttpMessageHandler
     /// <summary>Antworten pro Pfad; andere Pfade bekommen <see cref="Body"/>. Ein leerer Text antwortet mit 204.</summary>
     public Dictionary<string, string> Routes { get; } = [];
 
+    /// <summary>Bilder pro Adresse (mit Host), als JPEG.</summary>
+    public Dictionary<string, byte[]> Images { get; } = [];
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
+        if (Images.TryGetValue(request.RequestUri!.GetLeftPart(UriPartial.Path), out var image))
+        {
+            var content = new ByteArrayContent(image);
+            content.Headers.ContentType = new System.Net.Http.Headers.MediaTypeHeaderValue("image/jpeg");
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = content });
+        }
         var body = Routes.GetValueOrDefault(request.RequestUri!.AbsolutePath, Body);
         if (body.Length == 0) return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NoContent));
         return Task.FromResult(new HttpResponseMessage(Status)

@@ -209,13 +209,40 @@ public class PrinterLive(
         return image;
     }
 
+    /// <summary>
+    /// Bild für eine Meldung: was die Kamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Fehler bleiben im
+    /// Log, die Meldung geht dann ohne Bild raus.
+    /// </summary>
+    public async Task<Thumbnail?> GetPhotoAsync(Printer printer, CancellationToken cancellationToken = default)
+    {
+        var adapter = AdapterFor(printer);
+        foreach (var source in new Func<CancellationToken, Task<Thumbnail?>>[]
+                 {
+                     token => adapter.GetSnapshotAsync(printer, token),
+                     token => GetThumbnailAsync(printer, token),
+                 })
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try
+            {
+                if (await source(timeout.Token) is { Data.Length: > 0 } image) return image;
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogDebug(ex, "Kein Bild von {Printer}", printer.Name);
+            }
+        }
+        return null;
+    }
+
     /// <summary>Fehler und Spulen, die nicht reichen, je einmal pro Druck.</summary>
     private async Task NotifyAsync(Printer printer, PrinterStatus status, PrinterStatus? previous, CancellationToken cancellationToken)
     {
         if (status.State == PrintState.Error && previous is { State: not PrintState.Error })
             await notifier.SendAsync($"{printer.Name}: Fehler",
                 status.Message ?? (status.JobName is { } job ? $"Der Druck {job} braucht Aufmerksamkeit." : "Der Drucker braucht Aufmerksamkeit."),
-                "warning", 4, cancellationToken: cancellationToken);
+                "warning", 4, cancellationToken: cancellationToken, image: token => GetPhotoAsync(printer, token));
 
         if (!status.IsActive || status.JobGramsPerTool is null) return;
         var placed = await PlacedAsync(printer, cancellationToken);

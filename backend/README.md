@@ -119,6 +119,8 @@ Daraus entstehen Hinweise:
 
 Mit einer ntfy-Adresse (in der App unter Drucker > Meldungen oder per `Ntfy__Url`) meldet das Backend beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers und einmal pro Druck, wenn eine Spule nicht reicht. Ein Thema auf [ntfy.sh](https://ntfy.sh) reicht (schwer erratbarer Name, z. B. `https://ntfy.sh/filomat-7f3k2q`), in der ntfy-App abonnieren; das klappt auch auf GrapheneOS ohne Google-Dienste. Für einen eigenen ntfy-Server mit Zugriffsschutz kommt der Token (`tk_…`) dazu.
 
+Meldungen zu beendeten Drucken und Fehlern bringen ein Bild mit: was die Druckerkamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Kamerabilder gibt es bei Bambu P1/A1 (Port 6000, am Drucker muss die LAN-Liveansicht an sein) und bei Moonraker-Druckern, die eine Kamera unter `/server/webcams/list` mit Snapshot-Adresse führen (relative Adressen gehen an Port 80 des Druckers). Prusa und Kobra liefern nur das Vorschaubild. Das Bild geht als Anhang per PUT an ntfy; nimmt der Server keine Anhänge an (beim eigenen ntfy-Server braucht es `attachment-cache-dir`), kommt die Meldung ohne Bild.
+
 Erkennt ein Drucker das Plättchen einer Sorte, von der mehrere Spulen lose liegen, legt das Backend die Spule ein, die in den letzten 30 Minuten angebrochen oder gewogen wurde. Ist das nicht eindeutig, fragt es per ntfy „Welche Spule?“ mit einem Knopf pro Spule (höchstens drei); der Knopf ruft `POST /choices/{token}` auf (Einmal-Token, einen Tag gültig, ohne API-Schlüssel). Wählen geht auch in der App beim Drucker.
 
 ### Tags auf Musterplättchen
