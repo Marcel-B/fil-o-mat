@@ -35,6 +35,11 @@ public class FakeBambu : IBambuLan
         return Task.FromResult(File);
     }
 
+    /// <summary>Bild der Kamera; ohne bleibt sie stumm.</summary>
+    public byte[]? Snapshot { get; set; }
+
+    public Task<byte[]?> SnapshotAsync(string baseUrl, string accessCode, CancellationToken cancellationToken) => Task.FromResult(Snapshot);
+
     /// <summary>Ein AMS: Fach 0 weiße Bambu-Spule (mit Restmenge), 1 schwarz, 2 rotes PETG, 3 leer.</summary>
     public static string Ams(int trayNow, double whiteRemain = 80) => $$"""
         {"ams":[{"id":"0","humidity":"4","temp":"0.0","tray":[

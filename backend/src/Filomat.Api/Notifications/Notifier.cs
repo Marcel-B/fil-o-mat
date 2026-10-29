@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Filomat.Api.Data;
 using Filomat.Api.Domain;
+using Filomat.Api.Printers;
 using Microsoft.EntityFrameworkCore;
 
 namespace Filomat.Api.Notifications;
@@ -56,28 +57,29 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
     /// <param name="tags">ntfy-Tags, z. B. <c>white_check_mark</c> (wird als Emoji gezeigt).</param>
     /// <param name="priority">1 (min) bis 5 (dringend), 3 ist normal.</param>
     /// <param name="actions">Höchstens drei Knöpfe (Grenze von ntfy).</param>
+    /// <param name="image">Holt ein Bild als Anhang (nur, wenn ein Ziel eingestellt ist); nimmt der Server keine Anhänge an, geht die Meldung ohne raus.</param>
     public async Task<bool> SendAsync(string title, string message, string? tags = null, int priority = 3,
-        bool throwOnError = false, CancellationToken cancellationToken = default, IReadOnlyList<NtfyAction>? actions = null)
+        bool throwOnError = false, CancellationToken cancellationToken = default, IReadOnlyList<NtfyAction>? actions = null,
+        Func<CancellationToken, Task<Thumbnail?>>? image = null)
     {
         var settings = await GetSettingsAsync(cancellationToken);
         if (!settings.Configured) return false;
         try
         {
-            using var request = new HttpRequestMessage(HttpMethod.Post, settings.Url)
+            if (image is not null && await image(cancellationToken) is { } attachment)
             {
-                Content = new StringContent(message, Encoding.UTF8, "text/plain"),
-            };
-            // Kopfzeilen sind ASCII; ntfy versteht RFC 2047 für Umlaute im Titel
-            request.Headers.TryAddWithoutValidation("Title", $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(title))}?=");
-            if (tags is not null) request.Headers.TryAddWithoutValidation("Tags", tags);
-            if (priority != 3) request.Headers.TryAddWithoutValidation("Priority", priority.ToString());
-            if (actions is { Count: > 0 })
-                request.Headers.TryAddWithoutValidation("Actions",
-                    string.Join("; ", actions.Take(3).Select(a => $"http, {a.Label}, {a.Url}, method=POST, clear=true")));
-            if (settings.Token is { Length: > 0 } token) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
-
-            using var response = await httpFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
-            response.EnsureSuccessStatusCode();
+                try
+                {
+                    await PostAsync(settings, title, message, tags, priority, actions, attachment, cancellationToken);
+                    return true;
+                }
+                catch (HttpRequestException ex) when (ex.StatusCode is not null)
+                {
+                    // Z. B. Anhänge auf dem eigenen Server abgeschaltet oder Bild zu groß
+                    logger.LogInformation(ex, "ntfy nimmt das Bild nicht an, Meldung geht ohne raus");
+                }
+            }
+            await PostAsync(settings, title, message, tags, priority, actions, null, cancellationToken);
             return true;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
@@ -87,6 +89,35 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
             return false;
         }
     }
+
+    /// <summary>Mit Bild per PUT, das Bild ist dann der Inhalt und der Text steht in der Kopfzeile <c>Message</c>.</summary>
+    private async Task PostAsync(NtfySettings settings, string title, string message, string? tags, int priority,
+        IReadOnlyList<NtfyAction>? actions, Thumbnail? image, CancellationToken cancellationToken)
+    {
+        using var request = new HttpRequestMessage(image is null ? HttpMethod.Post : HttpMethod.Put, settings.Url);
+        if (image is null)
+            request.Content = new StringContent(message, Encoding.UTF8, "text/plain");
+        else
+        {
+            request.Content = new ByteArrayContent(image.Data);
+            request.Content.Headers.ContentType = new MediaTypeHeaderValue(image.ContentType);
+            request.Headers.TryAddWithoutValidation("Filename", image.ContentType == "image/png" ? "bild.png" : "bild.jpg");
+            request.Headers.TryAddWithoutValidation("Message", Encode(message));
+        }
+        // Kopfzeilen sind ASCII; ntfy versteht RFC 2047 für Umlaute
+        request.Headers.TryAddWithoutValidation("Title", Encode(title));
+        if (tags is not null) request.Headers.TryAddWithoutValidation("Tags", tags);
+        if (priority != 3) request.Headers.TryAddWithoutValidation("Priority", priority.ToString());
+        if (actions is { Count: > 0 })
+            request.Headers.TryAddWithoutValidation("Actions",
+                string.Join("; ", actions.Take(3).Select(a => $"http, {a.Label}, {a.Url}, method=POST, clear=true")));
+        if (settings.Token is { Length: > 0 } token) request.Headers.Authorization = new AuthenticationHeaderValue("Bearer", token);
+
+        using var response = await httpFactory.CreateClient(HttpClientName).SendAsync(request, cancellationToken);
+        response.EnsureSuccessStatusCode();
+    }
+
+    private static string Encode(string value) => $"=?UTF-8?B?{Convert.ToBase64String(Encoding.UTF8.GetBytes(value))}?=";
 
     private static string? Clean(string? value) => string.IsNullOrWhiteSpace(value) ? null : value.Trim();
 }

@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -30,6 +33,9 @@ public interface IBambuLan
 
     /// <summary>Lädt die erste vorhandene der Dateien von der SD-Karte; <c>null</c>, wenn keine da ist.</summary>
     Task<byte[]?> DownloadAsync(string baseUrl, string accessCode, IReadOnlyList<string> paths, CancellationToken cancellationToken);
+
+    /// <summary>Ein JPEG der eingebauten Kamera; <c>null</c>, wenn der Drucker keins schickt.</summary>
+    Task<byte[]?> SnapshotAsync(string baseUrl, string accessCode, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -37,12 +43,14 @@ public interface IBambuLan
 /// Themen <c>device/{seriennummer}/report</c> und <c>…/request</c>. Die P1-Serie schickt nur Änderungen; den
 /// vollständigen Zustand gibt es auf <c>pushall</c>. Daher pro Abgleich: verbinden, fragen, trennen. Die
 /// Seriennummer steht im Zertifikat des Druckers. Die Druckdatei (3MF mit den Slicer-Gewichten) liegt auf der
-/// SD-Karte, erreichbar per FTPS (implizites TLS, Port 990).
+/// SD-Karte, erreichbar per FTPS (implizites TLS, Port 990). Die Kamera der P1- und A1-Serie schickt JPEGs über TLS
+/// auf Port 6000 (in den Druckereinstellungen muss die LAN-Liveansicht an sein).
 /// </summary>
 public class BambuLan : IBambuLan
 {
     public const int MqttPort = 8883;
     public const int FtpPort = 990;
+    public const int CameraPort = 6000;
     public const string User = "bblp";
     private static readonly TimeSpan ReportTimeout = TimeSpan.FromSeconds(10);
 
@@ -166,6 +174,45 @@ public class BambuLan : IBambuLan
         }
         return null;
     }
+
+    /// <summary>
+    /// Nach der Anmeldung (80 Byte: 0x40, 0x3000, zwei Nullen, Benutzer und Zugangscode auf je 32 Byte) schickt die
+    /// Kamera Bilder mit 16 Byte Kopf, die ersten vier Byte sind die Länge (little endian). Das erste reicht.
+    /// Siehe github.com/Doridian/OpenBambuAPI (video.md).
+    /// </summary>
+    public async Task<byte[]?> SnapshotAsync(string baseUrl, string accessCode, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(Address(baseUrl).Host, CameraPort, timeout.Token);
+        // Selbst signiert, auf die Seriennummer ausgestellt
+        await using var tls = new SslStream(tcp.GetStream(), false, (_, _, _, _) => true);
+        await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = Address(baseUrl).Host }, timeout.Token);
+        await tls.WriteAsync(CameraLogin(accessCode), timeout.Token);
+
+        var header = new byte[16];
+        await tls.ReadExactlyAsync(header, timeout.Token);
+        var length = BitConverter.ToInt32(header, 0);
+        if (length is <= 0 or > 10_000_000) return null;
+        var image = new byte[length];
+        await tls.ReadExactlyAsync(image, timeout.Token);
+        return IsJpeg(image) ? image : null;
+    }
+
+    public static byte[] CameraLogin(string accessCode)
+    {
+        var packet = new byte[80];
+        BitConverter.GetBytes(0x40).CopyTo(packet, 0);
+        BitConverter.GetBytes(0x3000).CopyTo(packet, 4);
+        Encoding.ASCII.GetBytes(User).CopyTo(packet, 16);
+        var code = Encoding.ASCII.GetBytes(accessCode);
+        code.AsSpan(0, Math.Min(code.Length, 32)).CopyTo(packet.AsSpan(48));
+        return packet;
+    }
+
+    public static bool IsJpeg(byte[] data) =>
+        data.Length > 4 && data[0] == 0xFF && data[1] == 0xD8 && data[^2] == 0xFF && data[^1] == 0xD9;
 
     /// <summary>Adresse des Druckers, mit oder ohne <c>http://</c>.</summary>
     public static Uri Address(string baseUrl) => new(baseUrl.Contains("://") ? baseUrl : $"http://{baseUrl}");

@@ -170,6 +170,53 @@ public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter
             response.Content.Headers.ContentType?.MediaType ?? "image/png");
     }
 
+    /// <summary>
+    /// Standbild der ersten eingeschalteten Kamera aus <c>/server/webcams/list</c>. Relative Adressen liefert der
+    /// Webserver des Druckers (Port 80), nicht Moonraker.
+    /// </summary>
+    public async Task<Thumbnail?> GetSnapshotAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        string? snapshot;
+        using (var json = await GetJsonAsync(printer, "server/webcams/list", cancellationToken))
+        {
+            if (!json.RootElement.TryGetProperty("result", out var result) || !result.TryGetProperty("webcams", out var webcams)
+                || webcams.ValueKind != JsonValueKind.Array)
+                return null;
+            snapshot = webcams.EnumerateArray()
+                .Where(w => !(w.TryGetProperty("enabled", out var enabled) && enabled.ValueKind == JsonValueKind.False))
+                .Select(w => w.GetStringOrNull("snapshot_url"))
+                .FirstOrDefault(url => !string.IsNullOrWhiteSpace(url));
+        }
+        if (SnapshotUri(printer.BaseUrl, snapshot) is not { } uri) return null;
+
+        using var response = await http.GetAsync(uri, cancellationToken);
+        if (!response.IsSuccessStatusCode) return null;
+        var data = await response.Content.ReadAsByteArrayAsync(cancellationToken);
+        var type = response.Content.Headers.ContentType?.MediaType;
+        if (data.Length == 0) return null;
+        if (type is null || !type.StartsWith("image/", StringComparison.OrdinalIgnoreCase))
+        {
+            // Manche Kamera-Server schicken JPEGs ohne passenden Typ
+            if (data.Length < 2 || data[0] != 0xFF || data[1] != 0xD8) return null;
+            type = "image/jpeg";
+        }
+        return new Thumbnail(data, type);
+    }
+
+    /// <summary>Adresse des Standbilds; <c>localhost</c> meint den Drucker selbst.</summary>
+    public static Uri? SnapshotUri(string baseUrl, string? snapshotUrl)
+    {
+        if (string.IsNullOrWhiteSpace(snapshotUrl)
+            || !Uri.TryCreate(baseUrl.Contains("://") ? baseUrl : $"http://{baseUrl}", UriKind.Absolute, out var printer))
+            return null;
+        if (Uri.TryCreate(snapshotUrl, UriKind.Absolute, out var absolute) && absolute.Scheme is "http" or "https")
+        {
+            if (!absolute.IsLoopback) return absolute;
+            return new UriBuilder(absolute) { Host = printer.Host }.Uri;
+        }
+        return new Uri(new Uri($"{printer.Scheme}://{printer.Host}/"), snapshotUrl.TrimStart('/'));
+    }
+
     protected async Task<JsonDocument> GetJsonAsync(Printer printer, string path, CancellationToken cancellationToken)
     {
         using var request = new HttpRequestMessage(HttpMethod.Get, $"{printer.BaseUrl.TrimEnd('/')}/{path}");

@@ -60,4 +60,8 @@ public interface IPrinterAdapter
     /// <summary>Vorschaubild des laufenden bzw. zuletzt gezeigten Drucks, falls der Drucker eines liefert.</summary>
     Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken) =>
         Task.FromResult<Thumbnail?>(null);
+
+    /// <summary>Aktuelles Bild der Druckerkamera, falls der Drucker eine im LAN anbietet.</summary>
+    Task<Thumbnail?> GetSnapshotAsync(Printer printer, CancellationToken cancellationToken) =>
+        Task.FromResult<Thumbnail?>(null);
 }

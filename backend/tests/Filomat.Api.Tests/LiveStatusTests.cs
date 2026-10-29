@@ -10,22 +10,38 @@ namespace Filomat.Api.Tests;
 /// <summary>Nimmt Meldungen an ntfy entgegen.</summary>
 public class FakeNtfy : HttpMessageHandler
 {
-    public record Message(string Url, string Title, string Body, string? Tags, string? Authorization, string? Actions = null);
+    /// <param name="Attachment">Angehängtes Bild (PUT mit Dateiname), dann steht der Text in der Kopfzeile <c>Message</c>.</param>
+    public record Message(string Url, string Title, string Body, string? Tags, string? Authorization, string? Actions = null,
+        byte[]? Attachment = null, string? Filename = null);
 
     public List<Message> Messages { get; } = [];
+
+    /// <summary>Wie ein Server, auf dem Anhänge abgeschaltet sind.</summary>
+    public bool RejectAttachments { get; set; }
 
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         var title = request.Headers.TryGetValues("Title", out var values) ? Decode(values.Single()) : "";
         var tags = request.Headers.TryGetValues("Tags", out var tagValues) ? tagValues.Single() : null;
         var actions = request.Headers.TryGetValues("Actions", out var actionValues) ? actionValues.Single() : null;
-        var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+        var filename = request.Headers.TryGetValues("Filename", out var filenames) ? filenames.Single() : null;
+        if (filename is not null && RejectAttachments) return new HttpResponseMessage(HttpStatusCode.BadRequest);
+        byte[]? attachment = null;
+        string body;
+        if (filename is not null)
+        {
+            Assert.Equal(HttpMethod.Put, request.Method);
+            attachment = await request.Content!.ReadAsByteArrayAsync(cancellationToken);
+            body = Decode(request.Headers.GetValues("Message").Single());
+        }
+        else body = await request.Content!.ReadAsStringAsync(cancellationToken);
         lock (Messages)
-            Messages.Add(new Message(request.RequestUri!.ToString(), title, body, tags, request.Headers.Authorization?.ToString(), actions));
+            Messages.Add(new Message(request.RequestUri!.ToString(), title, body, tags, request.Headers.Authorization?.ToString(), actions,
+                attachment, filename));
         return new HttpResponseMessage(HttpStatusCode.OK);
     }
 
-    /// <summary>RFC 2047, wie der Notifier den Titel schickt.</summary>
+    /// <summary>RFC 2047, wie der Notifier Titel und Text schickt.</summary>
     private static string Decode(string header) =>
         header.StartsWith("=?UTF-8?B?", StringComparison.Ordinal)
             ? Encoding.UTF8.GetString(Convert.FromBase64String(header[10..^2]))
@@ -184,6 +200,88 @@ public class LiveStatusTests : IDisposable
         var entry = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
         Assert.Equal(4980, entry.DurationSeconds);
     }
+
+    private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
+
+    private const string VoronFinished = """
+        {"result":{"count":1,"jobs":[{"job_id":"000001","filename":"benchy.gcode","status":"completed",
+          "end_time":4102444800,"filament_used":5000,"print_duration":4980,
+          "metadata":{"filament_total":10000,"filament_weight_total":30,"filament_type":"PLA"}}]}}
+        """;
+
+    [Fact]
+    public async Task AttachesTheWebcamPictureToTheFinishedMessage()
+    {
+        var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
+        var (item, _) = await PlaceSpoolAsync("V1", printer.Id, 0);
+        _moonraker.Body = VoronFinished;
+        _moonraker.Routes["/server/webcams/list"] = """
+            {"result":{"webcams":[{"name":"aus","enabled":false,"snapshot_url":"/aus/?action=snapshot"},
+                                  {"name":"cam","enabled":true,"snapshot_url":"/webcam/?action=snapshot"}]}}
+            """;
+        _moonraker.Images["http://voron.local/webcam/"] = Jpeg;
+        await SyncAsync(printer.Id);
+
+        var message = Assert.Single(_ntfy.Messages);
+        Assert.Equal("Voron: benchy.gcode fertig", message.Title);
+        Assert.Equal($"{item.Name} #1 −15 g, noch 985 g\nDruckzeit 1:23 h", message.Body);
+        Assert.Equal(Jpeg, message.Attachment);
+        Assert.Equal("bild.jpg", message.Filename);
+    }
+
+    [Fact]
+    public async Task AttachesTheSlicerPreviewWithoutCamera()
+    {
+        var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
+        await PlaceSpoolAsync("V1", printer.Id, 0);
+        _moonraker.Body = VoronFinished;
+        _moonraker.Routes["/server/webcams/list"] = """{"result":{"webcams":[]}}""";
+        _moonraker.Routes["/printer/objects/query"] = """{"result":{"status":{"print_stats":{"state":"complete","filename":"teile/benchy.gcode"}}}}""";
+        _moonraker.Routes["/server/files/metadata"] = VoronMetadata;
+        _moonraker.Images["http://voron.local:7125/server/files/gcodes/teile/.thumbs/benchy-300x300.png"] = Jpeg;
+        await SyncAsync(printer.Id);
+
+        Assert.Equal(Jpeg, Assert.Single(_ntfy.Messages).Attachment);
+    }
+
+    [Fact]
+    public async Task SendsWithoutPictureWhenNtfyRejectsAttachments()
+    {
+        _ntfy.RejectAttachments = true;
+        _bambu.Snapshot = Jpeg;
+        _bambu.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 12.5, 4.2)));
+        var printer = await CreatePrinterAsync("Barret", PrinterType.Bambu, "http://192.168.2.170", "12345678");
+        _bambu.Print = FakeBambu.Report("RUNNING", 60, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _bambu.Print = FakeBambu.Report("FINISH", 100);
+        await SyncAsync(printer.Id);
+
+        var message = Assert.Single(_ntfy.Messages);
+        Assert.Equal("Barret: benchy fertig", message.Title);
+        Assert.Null(message.Attachment);
+    }
+
+    [Fact]
+    public async Task AttachesTheBambuCameraPicture()
+    {
+        _bambu.Snapshot = Jpeg;
+        _bambu.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 12.5, 4.2)));
+        var printer = await CreatePrinterAsync("Barret", PrinterType.Bambu, "http://192.168.2.170", "12345678");
+        _bambu.Print = FakeBambu.Report("RUNNING", 60, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _bambu.Print = FakeBambu.Report("FINISH", 100);
+        await SyncAsync(printer.Id);
+
+        Assert.Equal(Jpeg, Assert.Single(_ntfy.Messages).Attachment);
+    }
+
+    [Theory]
+    [InlineData("http://voron.local:7125", "/webcam/?action=snapshot", "http://voron.local/webcam/?action=snapshot")]
+    [InlineData("192.168.2.155", "webcam/snapshot.jpg", "http://192.168.2.155/webcam/snapshot.jpg")]
+    [InlineData("http://u1.local", "http://localhost:8080/snapshot", "http://u1.local:8080/snapshot")]
+    [InlineData("http://u1.local", "http://192.168.2.50/cam.jpg", "http://192.168.2.50/cam.jpg")]
+    public void ResolvesTheSnapshotAddress(string baseUrl, string snapshot, string expected) =>
+        Assert.Equal(expected, MoonrakerAdapter.SnapshotUri(baseUrl, snapshot)!.ToString());
 
     [Fact]
     public async Task U1ReportsTheTagInEachHead()
