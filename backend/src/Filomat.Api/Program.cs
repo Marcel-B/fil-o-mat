@@ -50,6 +50,9 @@ var app = builder.Build();
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.UseExceptionHandler();
+// Web-Oberfläche (web/, im Docker-Image unter wwwroot)
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapOpenApi();
 
 // Optionaler API-Schlüssel: ist "Filomat:ApiKey" gesetzt, muss jeder /api-Aufruf ihn im Header X-Api-Key mitschicken.
@@ -86,6 +89,9 @@ api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken canc
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
 app.MapSpoolChoiceEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
+// Unbekannte /api-Pfade bleiben 404; alles andere sind Seiten der Web-Oberfläche (Vue-Router im Browser)
+api.MapFallback(() => TypedResults.NotFound()).ExcludeFromDescription();
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

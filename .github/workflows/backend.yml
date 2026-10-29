@@ -5,10 +5,14 @@ on:
     branches: [main]
     paths:
       - "backend/**"
+      - "web/**"
+      - ".dockerignore"
       - ".github/workflows/backend.yml"
   pull_request:
     paths:
       - "backend/**"
+      - "web/**"
+      - ".dockerignore"
       - ".github/workflows/backend.yml"
 
 jobs:
@@ -23,5 +27,6 @@ jobs:
         with:
           dotnet-version: "10.0.x"
       - run: dotnet test
-      - name: Docker-Image bauen
-        run: docker build -t filomat-backend .
+      - name: Docker-Image bauen (mit Web-Oberfläche)
+        working-directory: .
+        run: docker build -f backend/Dockerfile -t filomat-backend .

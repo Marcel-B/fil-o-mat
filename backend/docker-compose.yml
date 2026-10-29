@@ -1,6 +1,9 @@
 services:
   filomat:
-    build: .
+    # Kontext ist der Wurzelordner, damit die Web-Oberfläche (web/) mit ins Image kommt
+    build:
+      context: ..
+      dockerfile: backend/Dockerfile
     ports:
       - "${FILOMAT_PORT:-8080}:8080"
     volumes:
