@@ -11,7 +11,7 @@ cd backend
 docker compose up -d --build
 ```
 
-Die API läuft dann auf Port 8080, die Datenbank liegt im Volume `filomat-data`.
+Die API läuft dann auf Port 8080, die Datenbank liegt im Volume `filomat-data`. Unter derselben Adresse (`http://<server>:8080/`) gibt es die Web-Oberfläche aus [`web/`](../web/README.md); das Image baut sie mit, daher baut `docker compose` aus dem Wurzelordner des Repos.
 
 Lokal zum Entwickeln:
 

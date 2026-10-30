@@ -4,6 +4,7 @@ Apps zur Verwaltung von Containern und deren Inhalten (Filamentspulen) mit RFID/
 
 - **Android**: Kotlin + Jetpack Compose in [`android-app/`](android-app/README.md)
 - **iOS**: Swift + SwiftUI + CoreNFC in [`ios-app/`](ios-app/README.md)
+- **Web**: Vue 3 + PrimeVue in [`web/`](web/README.md), läuft mit dem [Backend](backend/README.md) auf Port 8080 (ohne NFC)
 
 Beide Apps verwenden dasselbe Tag-Format (OpenSpool-JSON) und erkennen Tags über dieselbe UID.
 
