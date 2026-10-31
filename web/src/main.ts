@@ -10,6 +10,9 @@ import 'primeicons/primeicons.css'
 import './style.css'
 import App from './App.vue'
 import { router } from './router'
+import { i18n } from './i18n'
+import { primeLocales } from './locales/primevue'
+import './theme'
 
 // Messing wie im App-Symbol
 const Filomat = definePreset(Aura, {
@@ -32,27 +35,15 @@ const Filomat = definePreset(Aura, {
 
 createApp(App)
   .use(createPinia())
+  .use(i18n)
   .use(router)
   .use(PrimeVue, {
     theme: {
       preset: Filomat,
-      // Dunkel, wenn das System dunkel ist; die Klasse auf <html> richtet App.vue danach
+      // Dunkel mit der Klasse auf <html>, die theme.ts nach der Wahl in den Einstellungen setzt
       options: { darkModeSelector: '.dark', cssLayer: { name: 'primevue', order: 'theme, base, primevue' } },
     },
-    locale: {
-      accept: 'Ja',
-      reject: 'Nein',
-      cancel: 'Abbrechen',
-      choose: 'Wählen',
-      clear: 'Leeren',
-      apply: 'Übernehmen',
-      emptyMessage: 'Keine Einträge',
-      emptyFilterMessage: 'Nichts gefunden',
-      emptySearchMessage: 'Nichts gefunden',
-      searchMessage: '{0} Treffer',
-      selectionMessage: '{0} ausgewählt',
-      emptySelectionMessage: 'Nichts ausgewählt',
-    },
+    locale: primeLocales[i18n.global.locale.value],
   })
   .use(ToastService)
   .use(ConfirmationService)

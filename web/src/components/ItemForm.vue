@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api'
 import { brands, filamentTypes, preset, variants } from '@/presets'
 import { cssColor } from '@/format'
+import { intlLocale } from '@/i18n'
 
 export interface ItemFormState {
   type: string
@@ -23,6 +25,7 @@ export interface ItemFormState {
 const form = defineModel<ItemFormState>({ required: true })
 /** Beim Anlegen überschreiben die Presets die Temperaturen, beim Bearbeiten füllen sie nur leere Felder. */
 const props = defineProps<{ creating?: boolean }>()
+const { t } = useI18n()
 
 const typeOptions = computed(() =>
   form.value.type && !filamentTypes.includes(form.value.type) ? [...filamentTypes, form.value.type] : filamentTypes,
@@ -78,11 +81,11 @@ const pickerColor = computed({
   <div class="flex flex-col gap-6">
     <section class="grid gap-4 sm:grid-cols-2">
       <label class="flex min-w-0 flex-col gap-1 text-sm">
-        Typ *
-        <Select v-model="form.type" :options="typeOptions" editable placeholder="Bitte wählen" fluid />
+        {{ t('itemForm.type') }}
+        <Select v-model="form.type" :options="typeOptions" editable :placeholder="t('itemForm.choose')" fluid />
       </label>
       <label class="flex min-w-0 flex-col gap-1 text-sm">
-        Marke
+        {{ t('itemForm.brand') }}
         <AutoComplete
           v-model="form.brand"
           :suggestions="brandSuggestions"
@@ -94,7 +97,7 @@ const pickerColor = computed({
         />
       </label>
       <label class="flex min-w-0 flex-col gap-1 text-sm">
-        Variante
+        {{ t('itemForm.variant') }}
         <AutoComplete
           v-model="form.variant"
           :suggestions="variantSuggestions"
@@ -104,48 +107,47 @@ const pickerColor = computed({
         />
       </label>
       <div class="flex min-w-0 flex-col gap-1 text-sm">
-        <span>Farbe</span>
+        <span>{{ t('itemForm.color') }}</span>
         <div class="flex flex-wrap items-center gap-2">
           <ColorPicker v-model="pickerColor" format="hex" />
           <InputText v-model="form.colorHex" placeholder="FF0000" class="w-28 font-mono" />
-          <InputText v-model="form.color" placeholder="Name, z. B. Rot" class="min-w-36 flex-1" />
+          <InputText v-model="form.color" :placeholder="t('itemForm.colorName')" class="min-w-36 flex-1" />
         </div>
       </div>
     </section>
 
     <section>
-      <h3 class="mb-2 text-sm font-semibold text-muted-color">Temperaturen (°C)</h3>
+      <h3 class="mb-2 text-sm font-semibold text-muted-color">{{ t('itemForm.temperatures') }}</h3>
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
-        <label class="flex min-w-0 flex-col gap-1 text-sm">Düse min.<InputText v-model="form.minTemp" inputmode="numeric" /></label>
-        <label class="flex min-w-0 flex-col gap-1 text-sm">Düse max.<InputText v-model="form.maxTemp" inputmode="numeric" /></label>
-        <label class="flex min-w-0 flex-col gap-1 text-sm">Bett min.<InputText v-model="form.bedMinTemp" inputmode="numeric" /></label>
-        <label class="flex min-w-0 flex-col gap-1 text-sm">Bett max.<InputText v-model="form.bedMaxTemp" inputmode="numeric" /></label>
+        <label class="flex min-w-0 flex-col gap-1 text-sm">{{ t('itemForm.nozzleMin') }}<InputText v-model="form.minTemp" inputmode="numeric" /></label>
+        <label class="flex min-w-0 flex-col gap-1 text-sm">{{ t('itemForm.nozzleMax') }}<InputText v-model="form.maxTemp" inputmode="numeric" /></label>
+        <label class="flex min-w-0 flex-col gap-1 text-sm">{{ t('itemForm.bedMin') }}<InputText v-model="form.bedMinTemp" inputmode="numeric" /></label>
+        <label class="flex min-w-0 flex-col gap-1 text-sm">{{ t('itemForm.bedMax') }}<InputText v-model="form.bedMaxTemp" inputmode="numeric" /></label>
       </div>
     </section>
 
     <section>
-      <h3 class="mb-2 text-sm font-semibold text-muted-color">Sorte</h3>
+      <h3 class="mb-2 text-sm font-semibold text-muted-color">{{ t('itemForm.kind') }}</h3>
       <div class="grid grid-cols-2 gap-4 sm:grid-cols-4">
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          Füllgewicht neue Spule
-          <InputNumber locale="de-DE" v-model="form.netWeight" suffix=" g" :min="0" fluid />
+          {{ t('itemForm.netWeight') }}
+          <InputNumber :locale="intlLocale()" v-model="form.netWeight" suffix=" g" :min="0" fluid />
         </label>
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          Leere Spule
-          <InputNumber locale="de-DE" v-model="form.spoolWeight" suffix=" g" :min="0" fluid />
+          {{ t('itemForm.spoolWeight') }}
+          <InputNumber :locale="intlLocale()" v-model="form.spoolWeight" suffix=" g" :min="0" fluid />
         </label>
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          Volle Spulen im Vorrat
-          <InputNumber locale="de-DE" v-model="form.spoolsInStock" show-buttons :min="0" :max="99" fluid />
+          {{ t('itemForm.stock') }}
+          <InputNumber :locale="intlLocale()" v-model="form.spoolsInStock" show-buttons :min="0" :max="99" fluid />
         </label>
         <label class="flex min-w-0 flex-col gap-1 text-sm">
-          Lichtdurchlässigkeit (TD)
-          <InputNumber locale="de-DE" v-model="form.transmissionDistance" suffix=" mm" :min="0" :max-fraction-digits="2" fluid />
+          {{ t('itemForm.td') }}
+          <InputNumber :locale="intlLocale()" v-model="form.transmissionDistance" suffix=" mm" :min="0" :max-fraction-digits="2" fluid />
         </label>
       </div>
       <p class="mt-2 text-xs text-muted-color">
-        Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht,
-        wird automatisch eine aus dem Vorrat angebrochen. TD ist der Wert in mm, wie ihn z. B. ein TD-1 misst.
+        {{ t('itemForm.hint') }}
       </p>
     </section>
   </div>

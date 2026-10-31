@@ -1,3 +1,4 @@
+import { t } from './i18n'
 import type { ItemFormState } from './components/ItemForm.vue'
 import type { ItemInput } from './stores/data'
 import type { Item } from './types'
@@ -67,5 +68,5 @@ export function inputFromForm(form: ItemFormState, existing?: Item): ItemInput {
 
 /** Name für neue Sorten wie in den Apps: "<Marke> <Typ>". */
 export function defaultName(form: ItemFormState): string {
-  return `${form.brand.trim()} ${form.type.trim()}`.trim() || 'Filament'
+  return `${form.brand.trim()} ${form.type.trim()}`.trim() || t('common.filament')
 }

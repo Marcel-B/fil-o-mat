@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useDataStore } from '@/stores/data'
@@ -15,6 +16,7 @@ const store = useDataStore()
 const router = useRouter()
 const confirm = useConfirm()
 const toast = useToast()
+const { t } = useI18n()
 
 const container = computed(() => store.container(props.id))
 const printer = computed(() => store.printerOwning(props.id))
@@ -30,7 +32,7 @@ const tools = computed(() =>
     : [],
 )
 function toolName(tool: number) {
-  return printer.value ? placeName(printer.value.type, printer.value.tools, tool) || 'Eingelegt' : ''
+  return printer.value ? placeName(printer.value.type, printer.value.tools, tool) || t('containers.inserted') : ''
 }
 
 const editing = ref(false)
@@ -45,17 +47,17 @@ function remove() {
   const c = container.value
   if (!c) return
   confirm.require({
-    header: 'Container löschen',
-    message: `„${c.name}“ löschen? Was darin liegt, wandert nach „Lose“.`,
+    header: t('containers.deleteTitle'),
+    message: t('containers.deleteMessage', { name: c.name }),
     icon: 'pi pi-exclamation-triangle',
-    acceptProps: { label: 'Löschen', severity: 'danger' },
-    rejectProps: { label: 'Abbrechen', severity: 'secondary', outlined: true },
+    acceptProps: { label: t('common.delete'), severity: 'danger' },
+    rejectProps: { label: t('common.cancel'), severity: 'secondary', outlined: true },
     accept: async () => {
       try {
         await store.deleteContainer(c.id)
         router.replace({ name: 'containers' })
       } catch (e) {
-        toast.add({ severity: 'error', summary: 'Löschen ging nicht', detail: (e as Error).message, life: 6000 })
+        toast.add({ severity: 'error', summary: t('common.deleteFailed'), detail: (e as Error).message, life: 6000 })
       }
     },
   })
@@ -65,31 +67,31 @@ function remove() {
 <template>
   <div v-if="container" class="mx-auto flex max-w-4xl flex-col gap-6">
     <div class="flex flex-wrap items-center gap-3">
-      <Button icon="pi pi-arrow-left" text rounded aria-label="Zurück" @click="router.push({ name: 'containers' })" />
+      <Button icon="pi pi-arrow-left" text rounded :aria-label="t('common.back')" @click="router.push({ name: 'containers' })" />
       <div class="min-w-0 flex-1">
         <h1 class="text-2xl font-semibold">{{ container.name }}</h1>
         <div v-if="container.description" class="text-muted-color">{{ container.description }}</div>
       </div>
       <template v-if="!printer">
-        <Button label="Bearbeiten" icon="pi pi-pencil" text @click="editing = true" />
-        <Button v-if="!container.isStandard" label="Löschen" icon="pi pi-trash" severity="danger" text @click="remove" />
+        <Button :label="t('common.edit')" icon="pi pi-pencil" text @click="editing = true" />
+        <Button v-if="!container.isStandard" :label="t('common.delete')" icon="pi pi-trash" severity="danger" text @click="remove" />
       </template>
-      <RouterLink v-else to="/drucker"><Button label="Zum Drucker" icon="pi pi-print" text /></RouterLink>
+      <RouterLink v-else to="/drucker"><Button :label="t('containers.toPrinter')" icon="pi pi-print" text /></RouterLink>
     </div>
 
     <Card>
-      <template #title>{{ printer ? 'Im Drucker' : `Spulen (${spools.length})` }}</template>
+      <template #title>{{ printer ? t('containers.inPrinter') : t('containers.spools', { n: spools.length }) }}</template>
       <template #content>
         <ul class="divide-y divide-surface-200 dark:divide-surface-800">
           <template v-if="printer">
-            <li v-for="t in tools" :key="t.tool" class="flex items-center gap-3 py-3" :class="{ 'cursor-pointer': t.spool }" @click="t.spool && edit(t.spool)">
-              <span class="w-20 text-sm text-muted-color">{{ t.name }}</span>
-              <template v-if="t.spool">
-                <ColorDot :hex="store.item(t.spool.itemId)?.itemData?.color_hex" :size="20" />
-                <span class="flex-1">{{ displayTitle(store.item(t.spool.itemId)) }} <span class="font-mono">#{{ t.spool.number }}</span></span>
-                <span>{{ grams(t.spool.remainingWeight ?? store.item(t.spool.itemId)?.netWeight) }}</span>
+            <li v-for="tool in tools" :key="tool.tool" class="flex items-center gap-3 py-3" :class="{ 'cursor-pointer': tool.spool }" @click="tool.spool && edit(tool.spool)">
+              <span class="w-20 text-sm text-muted-color">{{ tool.name }}</span>
+              <template v-if="tool.spool">
+                <ColorDot :hex="store.item(tool.spool.itemId)?.itemData?.color_hex" :size="20" />
+                <span class="flex-1">{{ displayTitle(store.item(tool.spool.itemId)) }} <span class="font-mono">#{{ tool.spool.number }}</span></span>
+                <span>{{ grams(tool.spool.remainingWeight ?? store.item(tool.spool.itemId)?.netWeight) }}</span>
               </template>
-              <span v-else class="flex-1 text-muted-color">frei</span>
+              <span v-else class="flex-1 text-muted-color">{{ t('common.free') }}</span>
             </li>
           </template>
           <li v-for="spool in spools" :key="spool.id" class="flex cursor-pointer items-center gap-3 py-3" @click="edit(spool)">
@@ -99,21 +101,21 @@ function remove() {
               <span class="ml-1 text-sm text-muted-color">{{ store.item(spool.itemId)?.itemData?.color }}</span>
             </span>
             <span v-if="spool.remainingWeight != null">{{ grams(spool.remainingWeight) }}</span>
-            <span v-else class="text-muted-color">Rest unbekannt</span>
+            <span v-else class="text-muted-color">{{ t('common.remainingUnknown') }}</span>
           </li>
-          <li v-if="!printer && !spools.length" class="py-3 text-muted-color">Keine Spulen in diesem Container</li>
+          <li v-if="!printer && !spools.length" class="py-3 text-muted-color">{{ t('containers.empty') }}</li>
         </ul>
       </template>
     </Card>
 
     <Card>
-      <template #title>Informationen</template>
+      <template #title>{{ t('containers.info') }}</template>
       <template #content>
         <dl class="grid grid-cols-[auto_1fr] gap-x-6 gap-y-2 text-sm">
-          <dt class="text-muted-color">RFID-Tag</dt>
+          <dt class="text-muted-color">{{ t('containers.rfidTag') }}</dt>
           <dd class="font-mono break-all">{{ container.rfidTag }}</dd>
           <template v-if="container.capacity != null">
-            <dt class="text-muted-color">Menge</dt>
+            <dt class="text-muted-color">{{ t('common.quantity') }}</dt>
             <dd>{{ container.capacity }}</dd>
           </template>
         </dl>
@@ -124,6 +126,6 @@ function remove() {
     <SpoolDialog v-model:visible="spoolDialog" :spool="edited" show-item />
   </div>
   <div v-else-if="store.loaded" class="py-16 text-center text-muted-color">
-    Container nicht gefunden. <RouterLink :to="{ name: 'containers' }" class="underline">Zur Liste</RouterLink>
+    {{ t('containers.notFound') }} <RouterLink :to="{ name: 'containers' }" class="underline">{{ t('common.toList') }}</RouterLink>
   </div>
 </template>

@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { computed } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { cssColor } from '@/format'
 
 const props = withDefaults(defineProps<{ hex?: string | null; size?: number }>(), { hex: null, size: 16 })
+const { t } = useI18n()
 const color = computed(() => cssColor(props.hex))
 </script>
 
@@ -11,6 +13,6 @@ const color = computed(() => cssColor(props.hex))
     class="inline-block shrink-0 rounded-full border border-surface-300 dark:border-surface-600"
     :class="{ 'bg-[repeating-linear-gradient(45deg,transparent_0_3px,var(--p-surface-300)_3px_5px)]': !color }"
     :style="{ width: `${size}px`, height: `${size}px`, background: color ?? undefined }"
-    :title="color ?? 'Keine Farbe'"
+    :title="color ?? t('common.noColor')"
   />
 </template>

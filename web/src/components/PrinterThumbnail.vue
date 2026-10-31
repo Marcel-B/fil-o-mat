@@ -1,8 +1,10 @@
 <script setup lang="ts">
 import { onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { api } from '@/api'
 
 const props = defineProps<{ printerId: string; jobKey: string | null }>()
+const { t } = useI18n()
 const url = ref<string | null>(null)
 
 // Neu laden, sobald ein anderer Druck läuft; über fetch, damit der API-Schlüssel mitgeht
@@ -20,5 +22,5 @@ onUnmounted(() => url.value && URL.revokeObjectURL(url.value))
 </script>
 
 <template>
-  <img v-if="url" :src="url" alt="Vorschau" class="h-24 w-24 shrink-0 rounded-lg bg-surface-100 object-contain dark:bg-surface-800" />
+  <img v-if="url" :src="url" :alt="t('common.preview')" class="h-24 w-24 shrink-0 rounded-lg bg-surface-100 object-contain dark:bg-surface-800" />
 </template>

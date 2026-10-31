@@ -1,3 +1,5 @@
+import { t } from './i18n'
+
 // Zugriff auf das Backend. Die Oberfläche läuft auf demselben Server, daher relative Adressen.
 // Ist im Backend ein API-Schlüssel gesetzt (Filomat__ApiKey), wird er einmal eingegeben und im Browser gespeichert.
 
@@ -34,7 +36,7 @@ export class ApiError extends Error {
 
 /** Fehlertext aus einer Antwort: ValidationProblem, ProblemDetails oder reiner Text. */
 async function errorMessage(response: Response): Promise<string> {
-  if (response.status === 401) return 'Der API-Schlüssel fehlt oder ist falsch (Einstellungen).'
+  if (response.status === 401) return t('api.keyMissing')
   const text = await response.text()
   try {
     const body = JSON.parse(text)
@@ -45,7 +47,7 @@ async function errorMessage(response: Response): Promise<string> {
   } catch {
     // kein JSON
   }
-  return text || `Fehler ${response.status}`
+  return text || t('api.error', { status: response.status })
 }
 
 function headers(json: boolean): HeadersInit {
