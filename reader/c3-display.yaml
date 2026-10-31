@@ -24,6 +24,11 @@ font:
     id: small
     size: 10
     glyphs: " !\"#%&'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÄÖÜäöüß–…"
+  # Für kurze Texte (zwei Zeilen, die je in eine Zeile passen), sonst die kleine Schrift mit Umbruch
+  - file: "gfonts://Roboto Condensed"
+    id: large
+    size: 15
+    glyphs: " !\"#%&'()*+,-./0123456789:;<=>?ABCDEFGHIJKLMNOPQRSTUVWXYZ_abcdefghijklmnopqrstuvwxyzÄÖÜäöüß–…"
 
 globals:
   # Was das Display zeigt: Zeile 1 und 2
@@ -42,7 +47,18 @@ display:
     address: 0x3C
     update_interval: 500ms
     lambda: |-
-      // Zeile 2 bricht am letzten Leerzeichen um, das noch passt (nie mitten in einem Umlaut)
+      // Passen beide Zeilen in der großen Schrift auf die Breite, nur die zwei Zeilen groß
+      auto fits = [&](const std::string &text) {
+        int width, x_offset, baseline, height;
+        id(large).measure(text.c_str(), &width, &x_offset, &baseline, &height);
+        return width <= it.get_width();
+      };
+      if (fits(id(line1)) && fits(id(line2))) {
+        it.print(0, 0, id(large), id(line1).c_str());
+        it.print(0, 20, id(large), id(line2).c_str());
+        return;
+      }
+      // Sonst klein: Zeile 2 bricht am letzten Leerzeichen um, das noch passt (nie mitten in einem Umlaut)
       std::string a = id(line2), b;
       if (a.size() > 12) {
         size_t cut = a.rfind(' ', 12);
@@ -57,3 +73,8 @@ display:
       it.print(0, 0, id(small), id(line1).c_str());
       it.print(0, 13, id(small), a.c_str());
       it.print(0, 26, id(small), b.c_str());
+
+# Die kleine Antenne des C3-Boards verträgt die volle Sendeleistung nicht: sonst bricht die Verbindung schon beim
+# ersten Kontakt mit dem Router ab ("Probe Request Unsuccessful"). Wird mit dem wifi-Teil aus common.yaml zusammengeführt.
+wifi:
+  output_power: 8.5dB

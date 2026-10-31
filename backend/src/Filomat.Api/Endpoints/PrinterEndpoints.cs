@@ -98,7 +98,7 @@ public static class PrinterEndpoints
         {
             if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
             if (report.Slots is null)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["slots"] = ["Slots fehlen."] });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["slots"] = [L.T("Slots fehlen.")] });
             return TypedResults.Ok(await reader.ReportAsync(printer, report.Slots, cancellationToken));
         }).WithSummary("NFC-Leser am Drucker meldet, welches Musterplättchen in welchem Slot steckt (ganzer Stand, ab Slot 0)");
 
@@ -107,8 +107,8 @@ public static class PrinterEndpoints
         {
             if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
             var errors = new Dictionary<string, string[]>();
-            if (PrinterReader.NormalizeUid(tap.Tag) is null) errors["tag"] = ["Tag fehlt."];
-            if (tap.Slot < 0 || tap.Slot >= PrinterReader.MaxSlots) errors["slot"] = ["Slot ungültig."];
+            if (PrinterReader.NormalizeUid(tap.Tag) is null) errors["tag"] = [L.T("Tag fehlt.")];
+            if (tap.Slot < 0 || tap.Slot >= PrinterReader.MaxSlots) errors["slot"] = [L.T("Slot ungültig.")];
             if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
             return TypedResults.Ok(await reader.TapAsync(printer, tap.Slot, tap.Tag, cancellationToken));
         }).WithSummary("Tipp-Modus: Plättchen am Leser angetippt und Slot gewählt, die Spule kommt in diesen Slot");
@@ -128,9 +128,9 @@ public static class PrinterEndpoints
             string id, AssignConsumptionRequest request, FilomatDbContext db, SpoolStock spools) =>
         {
             if (await db.Consumptions.FindAsync(id) is not { } entry) return TypedResults.NotFound();
-            if (entry.ItemId is not null) return TypedResults.Conflict("Dieser Verbrauch ist bereits einer Spule zugeordnet.");
+            if (entry.ItemId is not null) return TypedResults.Conflict(L.T("Dieser Verbrauch ist bereits einer Spule zugeordnet."));
             if (await db.Items.FindAsync(request.ItemId) is not { } item)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["itemId"] = ["Filament nicht gefunden."] });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["itemId"] = [L.T("Filament nicht gefunden.")] });
 
             var open = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null).ToListAsync();
             var spool = request.SpoolId is not null
@@ -138,7 +138,7 @@ public static class PrinterEndpoints
                 : open.FirstOrDefault(s => s.PrinterId == entry.PrinterId && s.Tool == entry.Tool)
                     ?? (open.Count == 1 ? open[0] : null);
             if (request.SpoolId is not null && spool is null)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["spoolId"] = ["Spule nicht gefunden."] });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["spoolId"] = [L.T("Spule nicht gefunden.")] });
             spool ??= await spools.OpenAsync(item);
 
             entry.ItemId = item.Id;
@@ -157,17 +157,17 @@ public static class PrinterEndpoints
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            errors["baseUrl"] = ["Adresse muss mit http:// oder https:// beginnen."];
+            errors["baseUrl"] = [L.T("Adresse muss mit http:// oder https:// beginnen.")];
         if (request.Type == PrinterType.Bambu && string.IsNullOrWhiteSpace(request.ApiKey))
-            errors["apiKey"] = ["Zugangscode fehlt (am Drucker unter Einstellungen > WLAN)."];
+            errors["apiKey"] = [L.T("Zugangscode fehlt (am Drucker unter Einstellungen > WLAN).")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = Guid.NewGuid().ToString();
         var tag = string.IsNullOrWhiteSpace(request.RfidTag) ? $"PRINTER_{id}" : request.RfidTag.Trim();
         if (await db.Containers.AnyAsync(c => c.RfidTag == tag) || await db.Items.WithTag(tag).AnyAsync())
-            return TypedResults.Conflict("Dieses Tag ist bereits vergeben.");
+            return TypedResults.Conflict(L.T("Dieses Tag ist bereits vergeben."));
 
         var now = DateTime.UtcNow;
         var container = new Container
@@ -202,9 +202,9 @@ public static class PrinterEndpoints
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            errors["baseUrl"] = ["Adresse muss mit http:// oder https:// beginnen."];
+            errors["baseUrl"] = [L.T("Adresse muss mit http:// oder https:// beginnen.")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
 

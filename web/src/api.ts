@@ -1,4 +1,4 @@
-import { t } from './i18n'
+import { i18n, t } from './i18n'
 
 // Zugriff auf das Backend. Die Oberfläche läuft auf demselben Server, daher relative Adressen.
 // Ist im Backend ein API-Schlüssel gesetzt (Filomat__ApiKey), wird er einmal eingegeben und im Browser gespeichert.
@@ -54,6 +54,8 @@ function headers(json: boolean): HeadersInit {
   const result: Record<string, string> = {}
   if (json) result['Content-Type'] = 'application/json'
   if (sessionKey) result['X-Api-Key'] = sessionKey
+  // Hinweise und Fehlermeldungen des Backends in der gewählten Sprache
+  result['Accept-Language'] = i18n.global.locale.value
   return result
 }
 

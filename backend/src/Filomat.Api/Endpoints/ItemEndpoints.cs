@@ -78,21 +78,21 @@ public static class ItemEndpoints
         var tag = request.RfidTag?.Trim() ?? "";
         var name = request.Name?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (request.ContainerId is not null && !await db.Containers.AnyAsync(c => c.Id == request.ContainerId))
-            errors["containerId"] = ["Container nicht gefunden."];
-        if (request.TransmissionDistance is < 0) errors["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."];
+            errors["containerId"] = [L.T("Container nicht gefunden.")];
+        if (request.TransmissionDistance is < 0) errors["transmissionDistance"] = [L.T("Die Lichtdurchlässigkeit darf nicht negativ sein.")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString() : request.Id;
         if (await db.Items.AnyAsync(i => i.Id == id))
-            return TypedResults.Conflict($"Filament mit ID '{id}' existiert bereits.");
+            return TypedResults.Conflict(L.F("Filament mit ID '{0}' existiert bereits.", id));
         if (tag.Length > 0)
         {
             if (await db.Items.WithTag(tag).AnyAsync())
-                return TypedResults.Conflict("Dieses Tag gehört bereits zu einem Filament.");
+                return TypedResults.Conflict(L.T("Dieses Tag gehört bereits zu einem Filament."));
             if (await db.Containers.FirstOrDefaultAsync(c => c.RfidTag == tag) is { } container)
-                return TypedResults.Conflict($"Dieses Tag gehört zum Container '{container.Name}'.");
+                return TypedResults.Conflict(L.F("Dieses Tag gehört zum Container '{0}'.", container.Name));
         }
 
         var item = new Item
@@ -119,11 +119,11 @@ public static class ItemEndpoints
     {
         var name = request.Name?.Trim() ?? "";
         if (name.Length == 0)
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Name fehlt."] });
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = [L.T("Name fehlt.")] });
         if (request.TransmissionDistance is < 0)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["transmissionDistance"] = ["Die Lichtdurchlässigkeit darf nicht negativ sein."],
+                ["transmissionDistance"] = [L.T("Die Lichtdurchlässigkeit darf nicht negativ sein.")],
             });
         if (await db.Items.FindAsync(id) is not { } item) return TypedResults.NotFound();
 
@@ -149,7 +149,7 @@ public static class ItemEndpoints
         if (request.FromId == id)
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["fromId"] = ["Ein Filament lässt sich nicht mit sich selbst zusammenführen."],
+                ["fromId"] = [L.T("Ein Filament lässt sich nicht mit sich selbst zusammenführen.")],
             });
         if (await db.Items.FindAsync(id) is not { } target || await db.Items.FindAsync(request.FromId) is not { } source)
             return TypedResults.NotFound();
@@ -200,7 +200,7 @@ public static class ItemEndpoints
         if (request.ContainerId is not null && !await db.Containers.AnyAsync(c => c.Id == request.ContainerId))
             return TypedResults.ValidationProblem(new Dictionary<string, string[]>
             {
-                ["containerId"] = ["Container nicht gefunden."],
+                ["containerId"] = [L.T("Container nicht gefunden.")],
             });
 
         item.ContainerId = request.ContainerId;

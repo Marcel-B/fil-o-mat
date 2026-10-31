@@ -50,7 +50,7 @@ public static class StatsEndpoints
             }).ToList();
 
             var perPrinter = entries.GroupBy(c => c.PrinterId)
-                .Select(g => new PrinterStats(g.Key, printers.GetValueOrDefault(g.Key, "Gelöschter Drucker"), Totals(g.ToList())))
+                .Select(g => new PrinterStats(g.Key, printers.GetValueOrDefault(g.Key, L.T("Gelöschter Drucker")), Totals(g.ToList())))
                 .OrderByDescending(p => p.Totals.Grams)
                 .ToList();
 
@@ -58,7 +58,7 @@ public static class StatsEndpoints
                 .Select(g =>
                 {
                     var item = g.Key is null ? null : items.GetValueOrDefault(g.Key);
-                    return new ItemStats(g.Key, item?.Name ?? "Ohne Zuordnung", item?.ItemData?.Type, item?.ItemData?.ColorHex,
+                    return new ItemStats(g.Key, item?.Name ?? L.T("Ohne Zuordnung"), item?.ItemData?.Type, item?.ItemData?.ColorHex,
                         Math.Round(g.Sum(c => c.Grams), 1), g.Select(c => (c.PrinterId, c.JobId)).Distinct().Count());
                 })
                 .OrderByDescending(i => i.Grams)

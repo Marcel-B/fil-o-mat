@@ -161,10 +161,11 @@ public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier noti
 
     private async Task NotifyUnknownAsync(Printer printer, int slot, string tag, CancellationToken cancellationToken)
     {
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
         var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), slot);
-        await notifier.SendAsync($"{printer.Name}: unbekanntes Plättchen",
-            $"{(place.Length > 0 ? $"{place}: " : "")}Das Plättchen {tag} gehört zu keinem Filament. " +
-            "In der App unter Filament bearbeiten > Plättchen hinzufügen zuordnen und neu einstecken.",
+        await notifier.SendAsync(L.F("{0}: unbekanntes Plättchen", printer.Name),
+            (place.Length > 0 ? $"{place}: " : "") + L.F("Das Plättchen {0} gehört zu keinem Filament.", tag) + " " +
+            L.T("In der App unter Filament bearbeiten > Plättchen hinzufügen zuordnen und neu einstecken."),
             "question", cancellationToken: cancellationToken);
     }
 }

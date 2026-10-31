@@ -71,10 +71,10 @@ public static class SpoolEndpoints
         {
             if (choices.Take(token) is not { } choice || await db.Spools.FindAsync(choice.SpoolId) is not { EmptiedAt: null } spool
                 || await db.Printers.FindAsync(choice.PrinterId) is not { } printer)
-                return TypedResults.NotFound("Die Auswahl ist abgelaufen. Bitte in der App im Drucker wählen.");
+                return TypedResults.NotFound(L.T("Die Auswahl ist abgelaufen. Bitte in der App im Drucker wählen."));
             await stock.PlaceAsync(spool, printer.Id, choice.Tool);
             var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), choice.Tool);
-            return TypedResults.Ok($"#{spool.Number} steckt jetzt in {printer.Name}{(place.Length > 0 ? $" {place}" : "")}.");
+            return TypedResults.Ok(L.F("#{0} steckt jetzt in {1}.", spool.Number, place.Length > 0 ? $"{printer.Name} {place}" : printer.Name));
         }).WithTags("Spulen").WithSummary("Spule aus einer Meldung in einen Kopf legen").ExcludeFromDescription();
         return app;
     }
@@ -83,14 +83,14 @@ public static class SpoolEndpoints
         FilomatDbContext db, double? remainingWeight, string? printerId, int? tool, string? containerId)
     {
         var errors = new Dictionary<string, string[]>();
-        if (remainingWeight is < 0) errors["remainingWeight"] = ["Gewicht darf nicht negativ sein."];
+        if (remainingWeight is < 0) errors["remainingWeight"] = [L.T("Gewicht darf nicht negativ sein.")];
         if (printerId is not null)
         {
-            if (await db.Printers.FindAsync(printerId) is not { } printer) errors["printerId"] = ["Drucker nicht gefunden."];
-            else if (tool is { } t && (t < 0 || t >= PrinterResponse.From(printer).Tools)) errors["tool"] = ["Diesen Kopf hat der Drucker nicht."];
+            if (await db.Printers.FindAsync(printerId) is not { } printer) errors["printerId"] = [L.T("Drucker nicht gefunden.")];
+            else if (tool is { } t && (t < 0 || t >= PrinterResponse.From(printer).Tools)) errors["tool"] = [L.T("Diesen Kopf hat der Drucker nicht.")];
         }
         if (containerId is not null && !await db.Containers.AnyAsync(c => c.Id == containerId))
-            errors["containerId"] = ["Container nicht gefunden."];
+            errors["containerId"] = [L.T("Container nicht gefunden.")];
         return errors.Count > 0 ? errors : null;
     }
 }

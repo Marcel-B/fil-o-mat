@@ -1,9 +1,11 @@
+using System.Globalization;
 using Filomat.Api.Backup;
 using Filomat.Api.Data;
 using Filomat.Api.Catalog;
 using Filomat.Api.Endpoints;
 using Filomat.Api.Notifications;
 using Filomat.Api.Printers;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -50,6 +52,15 @@ var app = builder.Build();
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.UseExceptionHandler();
+// Texte für Apps und Web in der Sprache aus Accept-Language (de, en; sonst Deutsch). Nur die Sprache der Texte, Zahlen
+// und Datumsangaben formatiert der Server weiter unabhängig davon.
+app.UseRequestLocalization(options =>
+{
+    options.DefaultRequestCulture = new RequestCulture(CultureInfo.InvariantCulture, CultureInfo.GetCultureInfo(L.German));
+    options.SupportedCultures = [CultureInfo.InvariantCulture];
+    options.SupportedUICultures = L.Languages.Select(CultureInfo.GetCultureInfo).ToList();
+    options.RequestCultureProviders = [new AcceptLanguageHeaderRequestCultureProvider()];
+});
 // Web-Oberfläche (web/, im Docker-Image unter wwwroot)
 app.UseDefaultFiles();
 app.UseStaticFiles();

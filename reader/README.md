@@ -12,7 +12,7 @@ Ein ESP32 mit NFC-Leser meldet dem Backend, welches Musterplättchen in welchem 
 
 ## Einrichten
 
-1. ESPHome installieren: `pip install esphome` (oder das ESPHome-Dashboard in Docker).
+1. ESPHome installieren: auf dem Mac `brew install esphome`, sonst `pipx install esphome` (oder das ESPHome-Dashboard in Docker).
 2. `secrets.example.yaml` nach `secrets.yaml` kopieren und WLAN, Backend-Adresse und gegebenenfalls `Filomat:ApiKey` eintragen.
 3. In der Datei des Druckers `printer_id` setzen: die Id aus `GET /api/printers` (im Browser `http://<Backend>/api/printers`, Feld `id` beim Drucker). Für mehrere Drucker derselben Art pro Drucker eine kleine Datei anlegen, die die gemeinsame einbindet. So kommen Korrekturen mit `git pull` mit, z. B. `mk4s.yaml`:
 

@@ -48,17 +48,17 @@ public static class ContainerEndpoints
         var tag = request.RfidTag?.Trim() ?? "";
         var name = request.Name?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (tag.Length == 0) errors["rfidTag"] = ["RFID-Tag fehlt."];
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (tag.Length == 0) errors["rfidTag"] = [L.T("RFID-Tag fehlt.")];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = string.IsNullOrWhiteSpace(request.Id) ? Guid.NewGuid().ToString() : request.Id;
         if (await db.Containers.AnyAsync(c => c.Id == id))
-            return TypedResults.Conflict($"Container mit ID '{id}' existiert bereits.");
+            return TypedResults.Conflict(L.F("Container mit ID '{0}' existiert bereits.", id));
         if (await db.Containers.FirstOrDefaultAsync(c => c.RfidTag == tag) is { } other)
-            return TypedResults.Conflict($"Dieses Tag gehört bereits zum Container '{other.Name}'.");
+            return TypedResults.Conflict(L.F("Dieses Tag gehört bereits zum Container '{0}'.", other.Name));
         if (await db.Items.WithTag(tag).AnyAsync())
-            return TypedResults.Conflict("Dieses Tag gehört bereits zu einem Filament.");
+            return TypedResults.Conflict(L.T("Dieses Tag gehört bereits zu einem Filament."));
 
         var container = new Container
         {
@@ -79,7 +79,7 @@ public static class ContainerEndpoints
     {
         var name = request.Name?.Trim() ?? "";
         if (name.Length == 0)
-            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = ["Name fehlt."] });
+            return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["name"] = [L.T("Name fehlt.")] });
         if (await db.Containers.FindAsync(id) is not { } container) return TypedResults.NotFound();
 
         container.Name = name;
@@ -93,9 +93,9 @@ public static class ContainerEndpoints
     private static async Task<Results<NoContent, NotFound, BadRequest<string>>> DeleteAsync(string id, FilomatDbContext db)
     {
         if (await db.Containers.FindAsync(id) is not { } container) return TypedResults.NotFound();
-        if (container.IsStandard) return TypedResults.BadRequest("Standard-Container können nicht gelöscht werden.");
+        if (container.IsStandard) return TypedResults.BadRequest(L.T("Standard-Container können nicht gelöscht werden."));
         if (await db.Printers.FirstOrDefaultAsync(p => p.ContainerId == id) is { } printer)
-            return TypedResults.BadRequest($"Der Container gehört zum Drucker '{printer.Name}'. Bitte den Drucker entfernen.");
+            return TypedResults.BadRequest(L.F("Der Container gehört zum Drucker '{0}'. Bitte den Drucker entfernen.", printer.Name));
 
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == id)

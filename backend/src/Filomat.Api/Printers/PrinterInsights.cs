@@ -112,7 +112,9 @@ public static class PrinterInsights
                         enough = remaining >= rest;
                         if (enough == false)
                             hints.Add(new Hint(HintKind.SpoolShort, true, tool,
-                                $"{Prefix(place)}{label} hat noch {Grams(remaining)}, der Druck braucht {(status.JobGramsEstimated ? "geschätzt " : "")}noch {Grams(rest)}."));
+                                Prefix(place) + (status.JobGramsEstimated
+                                    ? L.F("{0} hat noch {1}, der Druck braucht geschätzt noch {2}.", label, Grams(remaining), Grams(rest))
+                                    : L.F("{0} hat noch {1}, der Druck braucht noch {2}.", label, Grams(remaining), Grams(rest)))));
                     }
                 }
             }
@@ -120,24 +122,24 @@ public static class PrinterInsights
             if (reported is not null)
             {
                 if (reported.TagUid is { } tag && spool is not null && !spool.Item.AllTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
-                    hints.Add(new Hint(HintKind.TagMismatch, true, tool, $"{Prefix(place)}Der Drucker erkennt ein anderes Tag als {label}."));
+                    hints.Add(new Hint(HintKind.TagMismatch, true, tool, Prefix(place) + L.F("Der Drucker erkennt ein anderes Tag als {0}.", label)));
                 else if (reported.Loaded == false && spool is not null)
-                    hints.Add(new Hint(HintKind.SlotEmpty, true, tool, $"{Prefix(place)}Laut Drucker leer, in der App steckt dort {label}."));
+                    hints.Add(new Hint(HintKind.SlotEmpty, true, tool, Prefix(place) + L.F("Laut Drucker leer, in der App steckt dort {0}.", label)));
                 else if (found is not null)
                     hints.Add(new Hint(HintKind.SpoolUnclear, true, tool, found.LooseNumbers.Count > 0
-                        ? $"{Prefix(place)}{found.Item.Name} erkannt. Welche Spule steckt dort? Lose liegen {string.Join(", ", found.LooseNumbers.Select(n => $"#{n}"))}."
-                        : $"{Prefix(place)}{found.Item.Name} erkannt, in der App steckt dort keine Spule."));
+                        ? Prefix(place) + L.F("{0} erkannt. Welche Spule steckt dort? Lose liegen {1}.", found.Item.Name, string.Join(", ", found.LooseNumbers.Select(n => $"#{n}")))
+                        : Prefix(place) + L.F("{0} erkannt, in der App steckt dort keine Spule.", found.Item.Name)));
                 else if (reported.Loaded == true && spool is null && reported.Type is not null)
                     hints.Add(new Hint(HintKind.SlotUnknown, false, tool,
-                        $"{Prefix(place)}{Describe(reported.Type, reported.ColorHex)} eingelegt, in der App ist dort nichts eingetragen."));
+                        Prefix(place) + L.F("{0} eingelegt, in der App ist dort nichts eingetragen.", Describe(reported.Type, reported.ColorHex))));
                 else if (reported.Loaded != false && spool is not null && reported.TagUid is null)
                 {
                     if (reported.Type is not null && itemType is not null && BaseType(reported.Type) != BaseType(itemType))
                         hints.Add(new Hint(HintKind.SlotMismatch, true, tool,
-                            $"{Prefix(place)}Der Drucker meldet {reported.Type}, in der App steckt dort {label} ({itemType})."));
+                            Prefix(place) + L.F("Der Drucker meldet {0}, in der App steckt dort {1} ({2}).", reported.Type, label, itemType)));
                     else if (Distance(Normalize(reported.ColorHex), itemColor) > ColorDistance)
                         hints.Add(new Hint(HintKind.SlotMismatch, false, tool,
-                            $"{Prefix(place)}Die Farbe im Drucker weicht von {label} ab."));
+                            Prefix(place) + L.F("Die Farbe im Drucker weicht von {0} ab.", label)));
                 }
             }
 
@@ -168,9 +170,9 @@ public static class PrinterInsights
             if (tooCold || target > (max ?? double.MaxValue) + TemperatureTolerance)
             {
                 var place = tools.FirstOrDefault(t => t.Tool == tool)?.Place ?? "";
-                var range = min is not null && max is not null ? $"{min:0}–{max:0} °C" : min is not null ? $"mindestens {min:0} °C" : $"höchstens {max:0} °C";
+                var range = min is not null && max is not null ? $"{min:0}–{max:0} °C" : min is not null ? L.F("mindestens {0:0} °C", min) : L.F("höchstens {0:0} °C", max);
                 yield return new Hint(HintKind.Temperature, true, tool,
-                    $"{Prefix(place)}{heater.Name} heizt auf {target:0} °C, {spool.Item.Name} #{spool.Spool.Number} will {range}. Falsches Profil?");
+                    Prefix(place) + L.F("{0} heizt auf {1:0} °C, {2} #{3} will {4}. Falsches Profil?", L.T(heater.Name), target, spool.Item.Name, spool.Spool.Number, range));
             }
         }
     }
@@ -189,14 +191,16 @@ public static class PrinterInsights
                 var limit = sensitive.Count > 0 ? HygroscopicLimit : DefaultLimit;
                 if (humidity > limit)
                     yield return new Hint(HintKind.Humidity, sensitive.Count > 0, null, sensitive.Count > 0
-                        ? $"{dryer.Name}: {humidity:0} % Feuchte, {string.Join(", ", sensitive)} sollte trocknen."
-                        : $"{dryer.Name}: {humidity:0} % Feuchte, das ist viel für Filament.");
+                        ? L.F("{0}: {1:0} % Feuchte, {2} sollte trocknen.", dryer.Name, humidity, string.Join(", ", sensitive))
+                        : L.F("{0}: {1:0} % Feuchte, das ist viel für Filament.", dryer.Name, humidity));
             }
             // Bambu ohne Prozentwert: Stufe 1 und 2 sind feucht
             else if (dryer.HumidityLevel is int level and <= 2)
             {
                 yield return new Hint(HintKind.Humidity, sensitive.Count > 0, null,
-                    $"{dryer.Name}: Feuchtestufe {level} von 5{(sensitive.Count > 0 ? $", {string.Join(", ", sensitive)} sollte trocknen" : "")}. Trockenmittel wechseln?");
+                    sensitive.Count > 0
+                        ? L.F("{0}: Feuchtestufe {1} von 5, {2} sollte trocknen. Trockenmittel wechseln?", dryer.Name, level, string.Join(", ", sensitive))
+                        : L.F("{0}: Feuchtestufe {1} von 5. Trockenmittel wechseln?", dryer.Name, level));
             }
         }
     }
@@ -205,7 +209,7 @@ public static class PrinterInsights
 
     /// <summary>"Kopf 2", "Slot 3" oder leer bei einem Kopf.</summary>
     public static string PlaceName(PrinterType type, int toolCount, int tool) =>
-        toolCount <= 1 ? "" : $"{(type is PrinterType.PrusaLink or PrinterType.Anycubic or PrinterType.Bambu ? "Slot" : "Kopf")} {tool + 1}";
+        toolCount <= 1 ? "" : type is PrinterType.PrusaLink or PrinterType.Anycubic or PrinterType.Bambu ? $"Slot {tool + 1}" : L.F("Kopf {0}", tool + 1);
 
     private static string Prefix(string place) => place.Length > 0 ? $"{place}: " : "";
 
