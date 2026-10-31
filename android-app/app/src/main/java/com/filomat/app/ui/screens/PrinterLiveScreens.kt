@@ -43,6 +43,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import com.filomat.app.i18n.tr
 
 /** Abstand, in dem offene Ansichten den Zustand der Drucker neu holen. */
 const val PRINTER_LIVE_INTERVAL_MS = 15_000L
@@ -75,7 +76,7 @@ fun PrinterStatusLine(live: PrinterLive) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(4.dp)) {
                 Icon(Icons.Default.Warning, contentDescription = null, tint = WarningColor, modifier = Modifier.size(16.dp))
                 Text(
-                    if (warnings.size == 1) warnings[0].text else "${warnings.size} Warnungen",
+                    if (warnings.size == 1) warnings[0].text else tr("%s Warnungen", warnings.size),
                     style = MaterialTheme.typography.bodySmall,
                     color = WarningColor,
                     maxLines = 2,
@@ -119,16 +120,16 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(printer?.name ?: live?.name ?: "Drucker") },
+                title = { Text(printer?.name ?: live?.name ?: tr("Drucker")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 },
                 actions = {
                     if (printer != null) {
                         IconButton(onClick = { editing = true }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Bearbeiten")
+                            Icon(Icons.Default.Edit, contentDescription = tr("Bearbeiten"))
                         }
                     }
                 }
@@ -145,15 +146,15 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
         ) {
             if (live == null) {
                 Text(
-                    "Das Backend hat den Drucker noch nicht abgefragt oder kennt keinen Zustand (ältere Version?).",
+                    tr("Das Backend hat den Drucker noch nicht abgefragt oder kennt keinen Zustand (ältere Version?)."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 return@Column
             }
             val status = live.status
-            SectionCard(footer = live.updatedDate?.let { "Abgefragt ${DateUtils.getRelativeTimeSpanString(it.time)}" }) {
+            SectionCard(footer = live.updatedDate?.let { tr("Abgefragt %s", DateUtils.getRelativeTimeSpanString(it.time)) }) {
                 Text(status.title, style = MaterialTheme.typography.titleMedium, color = stateColor(status))
-                if (status.hasJob && !status.jobName.isNullOrEmpty()) LabeledRow("Druck", status.jobName)
+                if (status.hasJob && !status.jobName.isNullOrEmpty()) LabeledRow(tr("Druck"), status.jobName)
                 val progress = status.progress
                 if (status.isActive && progress != null) {
                     LinearProgressIndicator(progress = (progress / 100).toFloat().coerceIn(0f, 1f), modifier = Modifier.fillMaxWidth())
@@ -163,9 +164,9 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                     }
                 }
                 if (status.hasJob && status.layer != null && (status.totalLayers ?: 0) > 0) {
-                    LabeledRow("Schicht", "${status.layer} von ${status.totalLayers}")
+                    LabeledRow(tr("Schicht"), tr("%s von %s", status.layer, status.totalLayers))
                 }
-                status.elapsedSeconds?.takeIf { it > 0 && status.hasJob }?.let { LabeledRow("Druckzeit", PrinterStatus.duration(it)) }
+                status.elapsedSeconds?.takeIf { it > 0 && status.hasJob }?.let { LabeledRow(tr("Druckzeit"), PrinterStatus.duration(it)) }
                 status.message?.takeIf { it.isNotEmpty() }?.let {
                     Text(
                         it,
@@ -178,7 +179,7 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                 if (image != null && status.hasJob) {
                     Image(
                         bitmap = image,
-                        contentDescription = "Vorschau",
+                        contentDescription = tr("Vorschau"),
                         modifier = Modifier
                             .fillMaxWidth()
                             .heightIn(max = 200.dp)
@@ -186,7 +187,7 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                 }
             }
             if (live.hints.isNotEmpty()) {
-                SectionCard("Hinweise") {
+                SectionCard(tr("Hinweise")) {
                     live.hints.forEach { hint ->
                         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                             Icon(
@@ -202,9 +203,9 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
             }
             if (live.tools.isNotEmpty()) {
                 val title = when {
-                    live.tools.size <= 1 -> "Spule"
-                    live.type == "Moonraker" || live.type == "SnapmakerU1" -> "Köpfe"
-                    else -> "Slots"
+                    live.tools.size <= 1 -> tr("Spule")
+                    live.type == "Moonraker" || live.type == "SnapmakerU1" -> tr("Köpfe")
+                    else -> tr("Slots")
                 }
                 SectionCard(title) {
                     live.tools.forEach { tool ->
@@ -225,12 +226,12 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                 }
             }
             if (status.heaters.isNotEmpty()) {
-                SectionCard("Temperaturen") {
+                SectionCard(tr("Temperaturen")) {
                     status.heaters.forEach { LabeledRow(it.name, it.text) }
                 }
             }
             if (status.dryers.isNotEmpty()) {
-                SectionCard("Trockenbox") {
+                SectionCard(tr("Trockenbox")) {
                     status.dryers.forEach { LabeledRow(it.name, it.text) }
                 }
             }
@@ -255,7 +256,7 @@ private fun LabeledRow(label: String, value: String) {
 private fun SpoolChoice(loose: List<Spool>, onChoose: (Spool) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     Box {
-        TextButton(onClick = { expanded = true }) { Text("Welche Spule steckt hier?") }
+        TextButton(onClick = { expanded = true }) { Text(tr("Welche Spule steckt hier?")) }
         DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
             loose.forEach { spool ->
                 DropdownMenuItem(
@@ -278,21 +279,21 @@ private fun ToolLiveRow(tool: ToolLive, isActive: Boolean) {
         Column(modifier = Modifier.weight(1f)) {
             if (tool.place.isNotEmpty()) {
                 Text(
-                    tool.place + if (isActive) " ▸ fördert" else "",
+                    tool.place + if (isActive) tr(" ▸ fördert") else "",
                     style = MaterialTheme.typography.labelSmall,
                     color = if (isActive) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
             Text(tool.title, color = if (tool.itemName == null) MaterialTheme.colorScheme.onSurfaceVariant else MaterialTheme.colorScheme.onSurface)
             tool.reported?.remainPercent?.let {
-                Text("Drucker meldet ${it.toInt()} % Rest", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                Text(tr("Drucker meldet %s %% Rest", it.toInt()), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
         Column(horizontalAlignment = Alignment.End) {
             tool.remainingGrams?.let { Text(gramsText(it)) }
             tool.neededGrams?.let {
                 Text(
-                    "braucht ${gramsText(it)}",
+                    tr("braucht %s", gramsText(it)),
                     style = MaterialTheme.typography.bodySmall,
                     color = if (tool.enough == false) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant
                 )
@@ -314,7 +315,7 @@ fun StatsScreen(navController: NavController) {
     LaunchedEffect(months) {
         val client = store.backend
         if (client == null) {
-            errorMessage = "Kein Backend verbunden."
+            errorMessage = tr("Kein Backend verbunden.")
             return@LaunchedEffect
         }
         try {
@@ -328,10 +329,10 @@ fun StatsScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Statistik") },
+                title = { Text(tr("Statistik")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 }
             )
@@ -346,7 +347,7 @@ fun StatsScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                listOf(3 to "3 Monate", 12 to "12 Monate", 24 to "2 Jahre").forEach { (value, label) ->
+                listOf(3 to tr("3 Monate"), 12 to tr("12 Monate"), 24 to tr("2 Jahre")).forEach { (value, label) ->
                     FilterChip(selected = months == value, onClick = { months = value }, label = { Text(label) })
                 }
             }
@@ -356,22 +357,22 @@ fun StatsScreen(navController: NavController) {
                 if (errorMessage == null) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 return@Column
             }
-            SectionCard("Gesamt") {
-                LabeledRow("Verbrauch", gramsText(current.totals.grams))
+            SectionCard(tr("Gesamt")) {
+                LabeledRow(tr("Verbrauch"), gramsText(current.totals.grams))
                 LabeledRow(
-                    "Drucke",
-                    if (current.totals.cancelled > 0) "${current.totals.jobs} (${current.totals.cancelled} abgebrochen)" else "${current.totals.jobs}"
+                    tr("Drucke"),
+                    if (current.totals.cancelled > 0) tr("%s (%s abgebrochen)", current.totals.jobs, current.totals.cancelled) else "${current.totals.jobs}"
                 )
-                if (current.totals.printSeconds > 0) LabeledRow("Druckzeit", PrinterStatus.duration(current.totals.printSeconds))
-                if (current.totals.cancelledGrams > 0) LabeledRow("Davon abgebrochen", gramsText(current.totals.cancelledGrams))
+                if (current.totals.printSeconds > 0) LabeledRow(tr("Druckzeit"), PrinterStatus.duration(current.totals.printSeconds))
+                if (current.totals.cancelledGrams > 0) LabeledRow(tr("Davon abgebrochen"), gramsText(current.totals.cancelledGrams))
             }
             if (current.totals.grams > 0) {
-                SectionCard("Verbrauch pro Monat") {
+                SectionCard(tr("Verbrauch pro Monat")) {
                     MonthBars(current, withYear = months > 12)
                 }
             }
             if (current.printers.isNotEmpty()) {
-                SectionCard("Drucker") {
+                SectionCard(tr("Drucker")) {
                     current.printers.forEach { printer ->
                         Column {
                             LabeledRow(printer.name, gramsText(printer.totals.grams))
@@ -381,14 +382,14 @@ fun StatsScreen(navController: NavController) {
                 }
             }
             if (current.items.isNotEmpty()) {
-                SectionCard("Sorten") {
+                SectionCard(tr("Sorten")) {
                     current.items.take(15).forEach { item ->
                         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                             ColorDot(item.colorHex, size = 24.dp, showsPlaceholder = false)
                             Column(modifier = Modifier.weight(1f)) {
                                 Text(item.name)
                                 Text(
-                                    if (item.jobs == 1) "1 Druck" else "${item.jobs} Drucke",
+                                    if (item.jobs == 1) tr("1 Druck") else tr("%s Drucke", item.jobs),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -399,7 +400,7 @@ fun StatsScreen(navController: NavController) {
                 }
             }
             if (current.types.size > 1) {
-                SectionCard("Material") {
+                SectionCard(tr("Material")) {
                     current.types.forEach { LabeledRow(it.type, gramsText(it.grams)) }
                 }
             }
@@ -408,8 +409,8 @@ fun StatsScreen(navController: NavController) {
 }
 
 private fun detail(totals: StatsTotals): String {
-    val parts = mutableListOf(if (totals.jobs == 1) "1 Druck" else "${totals.jobs} Drucke")
-    if (totals.cancelled > 0) parts += "${totals.cancelled} abgebrochen"
+    val parts = mutableListOf(if (totals.jobs == 1) tr("1 Druck") else tr("%s Drucke", totals.jobs))
+    if (totals.cancelled > 0) parts += tr("%s abgebrochen", totals.cancelled)
     if (totals.printSeconds > 0) parts += PrinterStatus.duration(totals.printSeconds)
     return parts.joinToString(" · ")
 }
@@ -418,7 +419,7 @@ private fun detail(totals: StatsTotals): String {
 @Composable
 private fun MonthBars(stats: StatsResponse, withYear: Boolean) {
     val max = stats.months.maxOfOrNull { it.grams }?.takeIf { it > 0 } ?: return
-    Text("max. ${gramsText(max)}", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+    Text(tr("max. %s", gramsText(max)), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
     Row(
         modifier = Modifier
             .fillMaxWidth()
@@ -474,13 +475,13 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
 
     AlertDialog(
         onDismissRequest = { if (!isWorking) onDismiss() },
-        title = { Text("Meldungen") },
+        title = { Text(tr("Meldungen")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = url,
                     onValueChange = { url = it },
-                    label = { Text("ntfy-Thema") },
+                    label = { Text(tr("ntfy-Thema")) },
                     placeholder = { Text("https://ntfy.sh/filomat-…") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -489,18 +490,18 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
                 OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },
-                    label = { Text(if (settings?.hasToken == true) "Token (leer = unverändert)" else "Token (optional)") },
+                    label = { Text(if (settings?.hasToken == true) tr("Token (leer = unverändert)") else tr("Token (optional)")) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    "Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren (klappt auch ohne Google-Dienste).",
+                    tr("Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren (klappt auch ohne Google-Dienste)."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (settings?.configured == true && settings?.fromApp == false) {
-                    Text("Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor.", style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor."), style = MaterialTheme.typography.bodySmall)
                 }
                 TextButton(enabled = !isWorking && settings?.configured == true, onClick = {
                     val client = store.backend ?: return@TextButton
@@ -509,13 +510,13 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
                         try {
                             client.sendTestNotification()
                             errorMessage = null
-                            message = "Testmeldung verschickt."
+                            message = tr("Testmeldung verschickt.")
                         } catch (e: Exception) {
                             errorMessage = ContainerStore.describe(e)
                         }
                         isWorking = false
                     }
-                }) { Text("Testmeldung schicken") }
+                }) { Text(tr("Testmeldung schicken")) }
                 if (isWorking) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
                 message?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                 errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -532,14 +533,14 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
                         )
                         token = ""
                         errorMessage = null
-                        message = if (url.isBlank()) "Adresse entfernt." else "Gesichert."
+                        message = if (url.isBlank()) tr("Adresse entfernt.") else tr("Gesichert.")
                     } catch (e: Exception) {
                         errorMessage = ContainerStore.describe(e)
                     }
                     isWorking = false
                 }
-            }) { Text("Sichern") }
+            }) { Text(tr("Sichern")) }
         },
-        dismissButton = { TextButton(enabled = !isWorking, onClick = onDismiss) { Text("Schließen") } }
+        dismissButton = { TextButton(enabled = !isWorking, onClick = onDismiss) { Text(tr("Schließen")) } }
     )
 }

@@ -22,6 +22,7 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import java.text.DateFormat
 import java.util.Date
+import com.filomat.app.i18n.tr
 
 /** Verbindung zum Fil-o-mat-Backend, über das alle Geräte dieselben Container und Filamente sehen. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -53,10 +54,10 @@ fun BackendScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Backend") },
+                title = { Text(tr("Backend")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 }
             )
@@ -72,11 +73,11 @@ fun BackendScreen(navController: NavController) {
         ) {
             Card(modifier = Modifier.fillMaxWidth()) {
                 Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Server", style = MaterialTheme.typography.titleMedium)
+                    Text(tr("Server"), style = MaterialTheme.typography.titleMedium)
                     OutlinedTextField(
                         value = serverUrl,
                         onValueChange = { serverUrl = it },
-                        label = { Text("Server-Adresse") },
+                        label = { Text(tr("Server-Adresse")) },
                         placeholder = { Text("http://nas.local:8080") },
                         singleLine = true,
                         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -85,13 +86,13 @@ fun BackendScreen(navController: NavController) {
                     OutlinedTextField(
                         value = apiKey,
                         onValueChange = { apiKey = it },
-                        label = { Text("API-Schlüssel (optional)") },
+                        label = { Text(tr("API-Schlüssel (optional)")) },
                         singleLine = true,
                         visualTransformation = PasswordVisualTransformation(),
                         modifier = Modifier.fillMaxWidth()
                     )
                     Text(
-                        "Beim Verbinden werden die Daten dieses Geräts hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen, z. B. Container aus der iOS-App. Danach wird jede Änderung sofort übertragen.",
+                        tr("Beim Verbinden werden die Daten dieses Geräts hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen, z. B. Container aus der iOS-App. Danach wird jede Änderung sofort übertragen."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -103,8 +104,8 @@ fun BackendScreen(navController: NavController) {
                                 val result = store.connect(serverUrl, apiKey) ?: return@launch
                                 val now = store.current()
                                 resultMessage = buildString {
-                                    append("Hochgeladen: ${result.containers} Container, ${result.items} Filamente. ")
-                                    append("Jetzt ${now.containers.size} Container und ${now.items.size} Filamente.")
+                                    append(tr("Hochgeladen: %s Container, %s Filamente. ", result.containers, result.items))
+                                    append(tr("Jetzt %s Container und %s Filamente.", now.containers.size, now.items.size))
                                     result.skipped.forEach { append("\n• ").append(it) }
                                 }
                             }
@@ -115,7 +116,7 @@ fun BackendScreen(navController: NavController) {
                             CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text(if (sync.connected) "Erneut abgleichen" else "Verbinden und abgleichen")
+                        Text(if (sync.connected) tr("Erneut abgleichen") else tr("Verbinden und abgleichen"))
                     }
                     if (sync.connected) {
                         OutlinedButton(
@@ -127,16 +128,16 @@ fun BackendScreen(navController: NavController) {
                             },
                             colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.error),
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Verbindung trennen") }
+                        ) { Text(tr("Verbindung trennen")) }
                     }
                 }
             }
 
-            resultMessage?.let { InfoCard("Ergebnis", it) }
-            sync.error?.let { InfoCard("Fehler", it, isError = true) }
-            sync.compatibility?.message?.let { InfoCard("Version", it, isError = true) }
+            resultMessage?.let { InfoCard(tr("Ergebnis"), it) }
+            sync.error?.let { InfoCard(tr("Fehler"), it, isError = true) }
+            sync.compatibility?.message?.let { InfoCard(tr("Version"), it, isError = true) }
             sync.lastSyncedAt?.takeIf { sync.connected }?.let {
-                InfoCard("Letzter Abgleich", DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)))
+                InfoCard(tr("Letzter Abgleich"), DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT).format(Date(it)))
             }
 
             sync.updateStatus?.let { update ->
@@ -172,8 +173,8 @@ fun BackendScreen(navController: NavController) {
     if (confirmingUpdate) {
         AlertDialog(
             onDismissRequest = { confirmingUpdate = false },
-            title = { Text("Backend aktualisieren?") },
-            text = { Text("Der Server holt die neue Version, baut sie und startet das Backend neu. Das dauert ein paar Minuten; so lange ist kein Abgleich möglich.") },
+            title = { Text(tr("Backend aktualisieren?")) },
+            text = { Text(tr("Der Server holt die neue Version, baut sie und startet das Backend neu. Das dauert ein paar Minuten; so lange ist kein Abgleich möglich.")) },
             confirmButton = {
                 TextButton(onClick = {
                     confirmingUpdate = false
@@ -185,9 +186,9 @@ fun BackendScreen(navController: NavController) {
                             updateError = ContainerStore.describe(e)
                         }
                     }
-                }) { Text("Jetzt aktualisieren") }
+                }) { Text(tr("Jetzt aktualisieren")) }
             },
-            dismissButton = { TextButton(onClick = { confirmingUpdate = false }) { Text("Abbrechen") } }
+            dismissButton = { TextButton(onClick = { confirmingUpdate = false }) { Text(tr("Abbrechen")) } }
         )
     }
 }
@@ -213,20 +214,20 @@ private fun UpdateCard(
     val dateFormat = remember { DateFormat.getDateTimeInstance(DateFormat.MEDIUM, DateFormat.SHORT) }
     fun describe(sha: String, date: Long?): String {
         val short = sha.take(7)
-        return if (date == null) short else "$short vom ${dateFormat.format(Date(date))}"
+        return if (date == null) short else tr("%s vom %s", short, dateFormat.format(Date(date)))
     }
     Card(modifier = Modifier.fillMaxWidth()) {
         Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
             Text(
-                if (update.updateAvailable && !update.isUpdating) "Neue Version (${update.commits.size} Commits)" else "Version",
+                if (update.updateAvailable && !update.isUpdating) tr("Neue Version (%s Commits)", update.commits.size) else tr("Version"),
                 style = MaterialTheme.typography.titleMedium
             )
             update.currentVersion?.let {
-                Text("Läuft: ${describe(it, update.currentDate)}", style = MaterialTheme.typography.bodyMedium)
+                Text(tr("Läuft: %s", describe(it, update.currentDate)), style = MaterialTheme.typography.bodyMedium)
             }
             when {
                 update.isUpdating -> Row(verticalAlignment = Alignment.CenterVertically) {
-                    Text("Wird aktualisiert …", modifier = Modifier.weight(1f))
+                    Text(tr("Wird aktualisiert …"), modifier = Modifier.weight(1f))
                     CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
                 }
                 update.updateAvailable -> {
@@ -240,10 +241,10 @@ private fun UpdateCard(
                             )
                         }
                     }
-                    Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text("Aktualisieren …") }
+                    Button(onClick = onInstall, modifier = Modifier.fillMaxWidth()) { Text(tr("Aktualisieren …")) }
                 }
                 else -> Text(
-                    "Das Backend ist auf dem neuesten Stand.",
+                    tr("Das Backend ist auf dem neuesten Stand."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
@@ -258,12 +259,12 @@ private fun UpdateCard(
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
                     }
-                    Text("Nach neuer Version suchen")
+                    Text(tr("Nach neuer Version suchen"))
                 }
             }
             update.checkedAt?.let {
                 Text(
-                    "Zuletzt geprüft ${dateFormat.format(Date(it))}, Branch ${update.branch ?: "?"}.",
+                    tr("Zuletzt geprüft %s, Branch %s.", dateFormat.format(Date(it)), update.branch ?: "?"),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )

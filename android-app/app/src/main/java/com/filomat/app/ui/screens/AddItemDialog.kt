@@ -21,6 +21,7 @@ import com.filomat.app.data.ContainerStore
 import com.filomat.app.data.Item
 import com.filomat.app.data.ItemJsonData
 import com.filomat.app.nfc.NFCReader
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -54,7 +55,7 @@ fun AddItemDialog(
                 
                 // Prüfe ob Tag gültig ist
                 if (tag.isBlank()) {
-                    errorMessage = "Ungültiger RFID-Tag."
+                    errorMessage = tr("Ungültiger RFID-Tag.")
                     isScanning = false
                     nfcReader.stopScanning()
                     return@startScanningForItem
@@ -73,14 +74,14 @@ fun AddItemDialog(
                         
                         if (existingItem.containerId == containerId) {
                             // Item ist bereits in diesem Container
-                            errorMessage = "Dieses Filament ist bereits in diesem Container."
+                            errorMessage = tr("Dieses Filament ist bereits in diesem Container.")
                             isScanning = false
                             nfcReader.stopScanning()
                         } else if (existingItem.containerId != null) {
                             // Item ist in einem anderen Container - umziehen
                             // Verwende atomare Verschiebe-Funktion, um Datenverlust zu vermeiden
                             containerStore.moveItemToContainer(existingItem.id, existingItem.containerId, containerId)
-                            statusMessage = "Filament wurde in diesen Container verschoben."
+                            statusMessage = tr("Filament wurde in diesen Container verschoben.")
                             isScanning = false
                             nfcReader.stopScanning()
                             // Dialog nach kurzer Verzögerung schließen
@@ -89,7 +90,7 @@ fun AddItemDialog(
                         } else {
                             // Item existiert, ist aber in keinem Container
                             containerStore.addItemToContainer(existingItem.id, containerId)
-                            statusMessage = "Filament wurde hinzugefügt."
+                            statusMessage = tr("Filament wurde hinzugefügt.")
                             isScanning = false
                             nfcReader.stopScanning()
                             delay(1500)
@@ -98,9 +99,9 @@ fun AddItemDialog(
                     } else {
                         // Item existiert nicht - erstelle es
                         val name = if (itemData != null) {
-                            "${itemData.brand ?: ""} ${itemData.type ?: ""}".trim().ifEmpty { "Filament" }
+                            "${itemData.brand ?: ""} ${itemData.type ?: ""}".trim().ifEmpty { tr("Filament") }
                         } else {
-                            "Filament"
+                            tr("Filament")
                         }
                         
                         val newItem = Item(
@@ -114,7 +115,7 @@ fun AddItemDialog(
                         // Füge Item hinzu - addItemToContainer wird nicht benötigt, da containerId bereits gesetzt ist
                         // addItem fügt das Item automatisch zum Container hinzu, wenn containerId gesetzt ist
                         containerStore.addItem(newItem)
-                        statusMessage = "Filament wurde erstellt und hinzugefügt."
+                        statusMessage = tr("Filament wurde erstellt und hinzugefügt.")
                         isScanning = false
                         nfcReader.stopScanning()
                         delay(1500)
@@ -134,7 +135,7 @@ fun AddItemDialog(
             nfcReader.stopScanning()
             onDismiss()
         },
-        title = { Text("Filament scannen") },
+        title = { Text(tr("Filament scannen")) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -145,7 +146,7 @@ fun AddItemDialog(
                     CircularProgressIndicator(modifier = Modifier.size(48.dp))
                     Spacer(modifier = Modifier.height(16.dp))
                     Text(
-                        text = "Bitte halten Sie ein Filament-Tag an Ihr Gerät.",
+                        text = tr("Bitte halten Sie ein Filament-Tag an Ihr Gerät."),
                         style = MaterialTheme.typography.bodyMedium,
                         textAlign = TextAlign.Center
                     )
@@ -194,7 +195,7 @@ fun AddItemDialog(
                     },
                     enabled = true
                 ) {
-                    Text("Abbrechen")
+                    Text(tr("Abbrechen"))
                 }
             }
         },
@@ -263,7 +264,7 @@ private fun ItemStatusCardSimple(item: Item) {
                 modifier = Modifier.weight(1f)
             ) {
                 Text(
-                    text = "Filament erkannt",
+                    text = tr("Filament erkannt"),
                     style = MaterialTheme.typography.titleSmall
                 )
                 Text(
@@ -276,7 +277,7 @@ private fun ItemStatusCardSimple(item: Item) {
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Text(
-                        text = "Farbe:",
+                        text = tr("Farbe:"),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.filomat.app.i18n.tr
 
 /** Zustand eines Druckers mit den Spulen der App und Hinweisen (`/api/printers/status`). */
 @Serializable
@@ -46,18 +47,18 @@ data class PrinterStatus(
 
     val title: String
         get() = when (state) {
-            "Printing" -> "Druckt"
-            "Paused" -> "Pausiert"
-            "Finished" -> "Fertig"
-            "Cancelled" -> "Abgebrochen"
-            "Error" -> "Fehler"
-            "Offline" -> "Nicht erreichbar"
-            else -> "Bereit"
+            "Printing" -> tr("Druckt")
+            "Paused" -> tr("Pausiert")
+            "Finished" -> tr("Fertig")
+            "Cancelled" -> tr("Abgebrochen")
+            "Error" -> tr("Fehler")
+            "Offline" -> tr("Nicht erreichbar")
+            else -> tr("Bereit")
         }
 
     /** "noch 1:23 h" bzw. "noch 12 min" */
     val remainingText: String?
-        get() = remainingSeconds?.takeIf { isActive && it > 0 }?.let { "noch " + duration(it) }
+        get() = remainingSeconds?.takeIf { isActive && it > 0 }?.let { tr("noch %s", duration(it)) }
 
     /** "Druckt benchy · 45 % · noch 32 min" */
     val summary: String
@@ -109,7 +110,7 @@ data class DryerReport(
 ) {
     val text: String
         get() = listOfNotNull(
-            humidityPercent?.let { "${Math.round(it)} % Feuchte" } ?: humidityLevel?.let { "Feuchtestufe $it/5" },
+            humidityPercent?.let { tr("%s %% Feuchte", Math.round(it)) } ?: humidityLevel?.let { tr("Feuchtestufe %s/5", it) },
             temperature?.let { "${Math.round(it)} °C" }
         ).joinToString(" · ")
 }
@@ -134,7 +135,7 @@ data class ToolLive(
         get() = when {
             itemName != null -> spoolNumber?.let { "$itemName #$it" } ?: "$itemName #?"
             reported?.type != null && reported.loaded != false -> reported.type
-            else -> "leer"
+            else -> tr("leer")
         }
 }
 

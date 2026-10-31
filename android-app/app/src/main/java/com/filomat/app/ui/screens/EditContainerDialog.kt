@@ -6,6 +6,7 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.filomat.app.data.Container
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -19,7 +20,7 @@ fun EditContainerDialog(
     
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Container bearbeiten") },
+        title = { Text(tr("Container bearbeiten")) },
         text = {
             Column(
                 modifier = Modifier.fillMaxWidth(),
@@ -28,7 +29,7 @@ fun EditContainerDialog(
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
+                    label = { Text(tr("Name")) },
                     modifier = Modifier.fillMaxWidth(),
                     singleLine = true
                 )
@@ -36,14 +37,14 @@ fun EditContainerDialog(
                 OutlinedTextField(
                     value = description,
                     onValueChange = { description = it },
-                    label = { Text("Beschreibung") },
+                    label = { Text(tr("Beschreibung")) },
                     modifier = Modifier.fillMaxWidth()
                 )
                 
                 OutlinedTextField(
                     value = container.rfidTag,
                     onValueChange = { },
-                    label = { Text("RFID-Tag") },
+                    label = { Text(tr("RFID-Tag")) },
                     modifier = Modifier.fillMaxWidth(),
                     enabled = false,
                     singleLine = true
@@ -61,12 +62,12 @@ fun EditContainerDialog(
                 },
                 enabled = name.isNotBlank()
             ) {
-                Text("Speichern")
+                Text(tr("Speichern"))
             }
         },
         dismissButton = {
             TextButton(onClick = onDismiss) {
-                Text("Abbrechen")
+                Text(tr("Abbrechen"))
             }
         }
     )

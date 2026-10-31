@@ -20,6 +20,7 @@ import androidx.navigation.NavController
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
+import com.filomat.app.i18n.tr
 
 /** Scannen-Tab: eine Liste der Dinge, die man mit einem Tag tun kann. Jede führt in einen eigenen Ablauf. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -30,7 +31,7 @@ fun ScanScreen(navController: NavController) {
     val sync by store.sync.collectAsState()
 
     Scaffold(
-        topBar = { TopAppBar(title = { Text("Scannen") }) },
+        topBar = { TopAppBar(title = { Text(tr("Scannen")) }) },
         bottomBar = { MainNavigationBar(navController, MainTab.SCAN) }
     ) { padding ->
         LazyColumn(
@@ -40,27 +41,27 @@ fun ScanScreen(navController: NavController) {
             contentPadding = PaddingValues(16.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            item { SectionTitle("Nachsehen") }
+            item { SectionTitle(tr("Nachsehen")) }
             item {
-                ScanActionRow("Filament-Tag lesen", "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß", Icons.Default.Info) {
+                ScanActionRow(tr("Filament-Tag lesen"), tr("Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß"), Icons.Default.Info) {
                     navController.navigate("read")
                 }
             }
             item {
-                ScanActionRow("Container ansehen", "Container scannen und sehen, was darin liegt", Icons.Default.Archive) {
+                ScanActionRow(tr("Container ansehen"), tr("Container scannen und sehen, was darin liegt"), Icons.Default.Archive) {
                     navController.navigate("scan/container")
                 }
             }
 
-            item { SectionTitle("Filament bewegen") }
+            item { SectionTitle(tr("Filament bewegen")) }
             item {
-                ScanActionRow("Einlagern", "Filament scannen, dann den Container", Icons.Default.Download) {
+                ScanActionRow(tr("Einlagern"), tr("Filament scannen, dann den Container"), Icons.Default.Download) {
                     navController.navigate("scan/place/container")
                 }
             }
             item {
                 ScanActionRow(
-                    "In Drucker einlegen", "Filament scannen, dann Drucker und Kopf wählen", Icons.Default.Print,
+                    tr("In Drucker einlegen"), tr("Filament scannen, dann Drucker und Kopf wählen"), Icons.Default.Print,
                     enabled = sync.connected
                 ) {
                     navController.navigate("scan/place/printer")
@@ -69,21 +70,21 @@ fun ScanScreen(navController: NavController) {
             if (!sync.connected) {
                 item {
                     Text(
-                        "Spulen in Druckern verwaltet das Backend. Verbinde es über das Wolken-Symbol in der Container-Liste.",
+                        tr("Spulen in Druckern verwaltet das Backend. Verbinde es über das Wolken-Symbol in der Container-Liste."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
 
-            item { SectionTitle("Vorrat") }
+            item { SectionTitle(tr("Vorrat")) }
             item {
-                ScanActionRow("Vorrat", "Volle und angebrochene Spulen je Sorte, was nachgekauft werden sollte", Icons.Default.Inventory) {
+                ScanActionRow(tr("Vorrat"), tr("Volle und angebrochene Spulen je Sorte, was nachgekauft werden sollte"), Icons.Default.Inventory) {
                     navController.navigate("stock")
                 }
             }
             item {
-                ScanActionRow("Lichtdurchlässigkeit erfassen", "Musterplättchen scannen und den TD-Wert eintragen", Icons.Default.WbSunny) {
+                ScanActionRow(tr("Lichtdurchlässigkeit erfassen"), tr("Musterplättchen scannen und den TD-Wert eintragen"), Icons.Default.WbSunny) {
                     navController.navigate("scan/transmission")
                 }
             }

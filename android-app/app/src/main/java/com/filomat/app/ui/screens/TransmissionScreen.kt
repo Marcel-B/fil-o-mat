@@ -24,6 +24,7 @@ import com.filomat.app.ui.components.SectionCard
 import com.filomat.app.ui.components.TransmissionField
 import com.filomat.app.ui.components.rememberNfcReader
 import kotlinx.coroutines.launch
+import com.filomat.app.i18n.tr
 
 /** Musterplättchen scannen und die gemessene Lichtdurchlässigkeit (TD) eintragen. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -42,10 +43,10 @@ fun TransmissionScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Lichtdurchlässigkeit") },
+                title = { Text(tr("Lichtdurchlässigkeit")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 }
             )
@@ -59,12 +60,12 @@ fun TransmissionScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ScanButton(reader, if (itemId == null) "Musterplättchen scannen" else "Nächstes scannen") { tag ->
+            ScanButton(reader, if (itemId == null) tr("Musterplättchen scannen") else tr("Nächstes scannen")) { tag ->
                 val tagId = tag.tagId.trim()
                 savedMessage = null
                 val container = state.findContainerByTag(tagId)
                 if (container != null) {
-                    errorMessage = "Das ist der Container „${container.name}“. Scanne das Musterplättchen."
+                    errorMessage = tr("Das ist der Container „%s“. Scanne das Musterplättchen.", container.name)
                     return@ScanButton
                 }
                 val item = state.findItemByTag(tagId)
@@ -75,7 +76,7 @@ fun TransmissionScreen(navController: NavController) {
                 errorMessage = null
             }
             Text(
-                "TD (Transmission Distance, HueForge) in mm, wie ihn z. B. ein TD-1 anzeigt. Je höher, desto mehr Licht lässt das Filament durch.",
+                tr("TD (Transmission Distance, HueForge) in mm, wie ihn z. B. ein TD-1 anzeigt. Je höher, desto mehr Licht lässt das Filament durch."),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
@@ -90,7 +91,7 @@ fun TransmissionScreen(navController: NavController) {
             val item = itemId?.let { state.item(it) }
             if (item != null) {
                 SectionCard {
-                    ItemHeader(item, item.transmissionText()?.let { "Bisher: $it" } ?: "Noch nicht gemessen")
+                    ItemHeader(item, item.transmissionText()?.let { tr("Bisher: %s", it) } ?: tr("Noch nicht gemessen"))
                     TransmissionField(value) { value = it }
                     Button(
                         enabled = GramText.parse(value) != null,
@@ -102,7 +103,7 @@ fun TransmissionScreen(navController: NavController) {
                             value = ""
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Speichern") }
+                    ) { Text(tr("Speichern")) }
                 }
             }
 
