@@ -51,6 +51,8 @@ public class BackupTests
         Assert.True(status!.Configured);
         Assert.True(status.Last!.Success);
         Assert.Equal(2, status.Last.Archives.Count);
+        // Für den Alarm „Sicherung zu alt“; prozessweit, darum nur: nicht älter als diese Sicherung
+        Assert.True(Filomat.Api.Monitoring.FilomatMetrics.BackupLastSuccess.Value >= status.Last.FinishedAt / 1000.0 - 1);
     }
 
     [Fact]

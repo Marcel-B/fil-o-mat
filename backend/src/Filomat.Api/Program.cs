@@ -3,10 +3,12 @@ using Filomat.Api.Backup;
 using Filomat.Api.Data;
 using Filomat.Api.Catalog;
 using Filomat.Api.Endpoints;
+using Filomat.Api.Monitoring;
 using Filomat.Api.Notifications;
 using Filomat.Api.Printers;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -46,12 +48,32 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CloudBackup>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudBackup>());
 builder.Services.AddOpenApi();
+// Monitoring (Tonwerk-AI, deploy/monitoring/): /metrics und Logzeilen an Loki, beides aus, solange nicht eingestellt
+var monitoring = MonitoringOptions.Load(builder.Configuration);
+if (monitoring.LokiConfigured)
+{
+    var shipper = new LokiShipper(monitoring);
+    builder.Services.AddSingleton(shipper);
+    builder.Services.AddHostedService(_ => new LokiShipperService(shipper));
+    builder.Logging.AddProvider(new LokiLoggerProvider(shipper));
+}
 
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app.Services);
 
 app.UseExceptionHandler();
+if (monitoring.Metrics)
+{
+    // Bestand frisch zählen, im Scope genau dieser Anfrage
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path == "/metrics")
+            await FilomatMetrics.RefreshAsync(context.RequestServices.GetRequiredService<FilomatDbContext>(), context.RequestAborted);
+        await next(context);
+    });
+    app.UseHttpMetrics();
+}
 // Texte für Apps und Web in der Sprache aus Accept-Language (de, en; sonst Deutsch). Nur die Sprache der Texte, Zahlen
 // und Datumsangaben formatiert der Server weiter unabhängig davon.
 app.UseRequestLocalization(options =>
@@ -82,7 +104,12 @@ if (!string.IsNullOrEmpty(apiKey))
     api.AddEndpointFilter(async (context, next) =>
         context.HttpContext.Request.Headers["X-Api-Key"] == apiKey
             ? await next(context)
-            : TypedResults.Unauthorized());
+            : Rejected());
+    static IResult Rejected()
+    {
+        FilomatMetrics.ApiKeyRejected.Inc();
+        return TypedResults.Unauthorized();
+    }
 }
 
 api.MapContainerEndpoints();
@@ -100,6 +127,12 @@ api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken canc
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
 app.MapSpoolChoiceEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
+// Nicht hinter dem API-Schlüssel: Prometheus fragt ohne an, und es stehen nur Zahlen darin, keine Namen
+if (monitoring.Metrics) app.MapMetrics().ExcludeFromDescription();
+// Sonst fiele /metrics auf die Web-Oberfläche zurück und Prometheus läse eine Seite statt eines Fehlers
+else app.MapGet("/metrics", () => TypedResults.NotFound()).ExcludeFromDescription();
+app.Logger.LogInformation("Monitoring: /metrics {Metrics}, Loki {Loki}",
+    monitoring.Metrics ? "an" : "aus", monitoring.LokiPushUrl ?? "aus");
 // Unbekannte /api-Pfade bleiben 404; alles andere sind Seiten der Web-Oberfläche (Vue-Router im Browser)
 api.MapFallback(() => TypedResults.NotFound()).ExcludeFromDescription();
 app.MapFallbackToFile("index.html");

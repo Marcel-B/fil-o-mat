@@ -32,6 +32,8 @@ dotnet test
 | `Ntfy:Url`, `Ntfy:Token` | `Ntfy__Url`, `Ntfy__Token` (in `backend/.env`: `NTFY_URL`, `NTFY_TOKEN`) | Meldungen über ntfy, falls in der App keine Adresse eingestellt ist; siehe unten |
 | `Ntfy:Language` | `Ntfy__Language` | Sprache der Meldungen (`de`, `en`), solange sie nicht in einer App gespeichert wurde; Standard `de` |
 | `Filomat:PublicUrl` | `Filomat__PublicUrl` | Adresse, unter der das Handy das Backend erreicht, für die Knöpfe in ntfy-Meldungen; ohne gilt die Adresse, mit der die App zuletzt zugegriffen hat |
+| `Monitoring:Metrics` | `Monitoring__Metrics` (in `backend/.env`: `MONITORING_METRICS`) | `true` schaltet `/metrics` für Prometheus ein; Standard aus, dann 404 |
+| `Monitoring:Loki:Url`, `Monitoring:Loki:Host` | `Monitoring__Loki__Url`, `Monitoring__Loki__Host` (in `backend/.env`: `MONITORING_LOKI_URL`, `MONITORING_LOKI_HOST`) | Logzeilen zusätzlich an Loki, z. B. `http://monitoring:3100`; leer heißt aus. Host ist das Label `host`, ohne gilt der Rechnername |
 | `Backup:At` | `Backup__At` | Uhrzeit der nächtlichen Sicherung, Standard `03:00` (`Backup:TimeZone`, Standard `Europe/Berlin`); leer für nur manuelle |
 
 ## API
@@ -164,6 +166,28 @@ docker run --rm -v backend_filomat-data:/data -v "$PWD":/in alpine sh -c \
   'cp /in/filomat.db /data/ && rm -f /data/filomat.db-wal /data/filomat.db-shm && chown 1654:1654 /data/filomat.db'
 docker compose up -d
 ```
+
+## Überwachung
+
+Für den Monitoring-Stack aus Tonwerk-AI (`deploy/monitoring/`, Prometheus, Loki, Grafana). `GET /metrics` liegt nicht hinter dem API-Schlüssel, denn Prometheus fragt ohne an; darin stehen nur Zahlen. Druckernamen kommen nie in ein Label, nur der Druckertyp (`moonraker`, `snapmaker_u1`, `prusalink`, `anycubic`, `bambu`).
+
+| Messwert | Art | Labels | Bedeutung |
+|---|---|---|---|
+| `filomat_printer_syncs_total` | Zähler | `type`, `result` | Abgleiche: `ok`, `unreachable` (Drucker aus oder nicht im Netz), `failed` (unlesbare Antwort oder Fehler im Backend) |
+| `filomat_printer_sync_duration_seconds` | Histogramm | `type` | Dauer eines Abgleichs |
+| `filomat_printers` | Gauge | `type`, `state` | Drucker nach letztem Abgleich: `reachable`, `unreachable`, `disabled` |
+| `filomat_print_jobs_total` | Zähler | `type` | neu gebuchte Drucke |
+| `filomat_filament_used_grams_total` | Zähler | `type` | gebuchter Verbrauch in Gramm |
+| `filomat_spools` | Gauge | `state` | `full` (ungeöffnet im Lager), `in_use`, `low` (fast leer, dieselbe Schwelle wie die Meldungen), `empty` |
+| `filomat_containers`, `filomat_items` | Gauge | – | Container und Filamentsorten |
+| `filomat_notifications_total` | Zähler | `result` | Meldungen über ntfy, `ok` oder `failed` |
+| `filomat_backup_runs_total` | Zähler | `result` | Nextcloud-Sicherungen, `ok` oder `failed` |
+| `filomat_backup_last_success_timestamp_seconds` | Gauge | – | Ende der letzten erfolgreichen Sicherung; fehlt, solange es keine gab |
+| `filomat_api_key_rejected_total` | Zähler | – | `/api`-Aufrufe mit fehlendem oder falschem `X-Api-Key` |
+
+Dazu `http_request_duration_seconds` und `http_requests_received_total` von prometheus-net sowie `process_*` und `dotnet_*`. Die Logzeilen gehen mit `app=filomat`, `host`, `level` und `source` (`printers`, `backup`, `notifications`, `server`) an Loki; ist Loki weg, werden sie verworfen, `docker compose logs` bleibt.
+
+Einschalten im Proxmox-Container: [`deploy/proxmox/monitoring-einrichten.sh`](../deploy/proxmox/monitoring-einrichten.sh) in der Proxmox-Shell. Es holt den neuesten Stand, setzt die drei Zeilen in `backend/.env`, baut neu, prüft `/metrics` und Loki und nennt den Aufruf, der das Ziel beim Monitoring einträgt.
 
 ## Datenbank-Migrationen
 

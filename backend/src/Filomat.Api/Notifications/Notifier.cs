@@ -2,6 +2,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using Filomat.Api.Data;
 using Filomat.Api.Domain;
+using Filomat.Api.Monitoring;
 using Filomat.Api.Printers;
 using Microsoft.EntityFrameworkCore;
 
@@ -83,6 +84,7 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
                 try
                 {
                     await PostAsync(settings, title, message, tags, priority, actions, attachment, cancellationToken);
+                    FilomatMetrics.Notifications.WithLabels("ok").Inc();
                     return true;
                 }
                 catch (HttpRequestException ex) when (ex.StatusCode is not null)
@@ -92,11 +94,13 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
                 }
             }
             await PostAsync(settings, title, message, tags, priority, actions, null, cancellationToken);
+            FilomatMetrics.Notifications.WithLabels("ok").Inc();
             return true;
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException && !cancellationToken.IsCancellationRequested)
         {
             logger.LogWarning(ex, "Meldung über ntfy fehlgeschlagen");
+            FilomatMetrics.Notifications.WithLabels("failed").Inc();
             if (throwOnError) throw;
             return false;
         }
