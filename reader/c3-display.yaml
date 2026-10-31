@@ -57,3 +57,8 @@ display:
       it.print(0, 0, id(small), id(line1).c_str());
       it.print(0, 13, id(small), a.c_str());
       it.print(0, 26, id(small), b.c_str());
+
+# Die kleine Antenne des C3-Boards verträgt die volle Sendeleistung nicht: sonst bricht die Verbindung schon beim
+# ersten Kontakt mit dem Router ab ("Probe Request Unsuccessful"). Wird mit dem wifi-Teil aus common.yaml zusammengeführt.
+wifi:
+  output_power: 8.5dB
