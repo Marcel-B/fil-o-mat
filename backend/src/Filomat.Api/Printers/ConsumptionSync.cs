@@ -1,6 +1,8 @@
 using Filomat.Api.Data;
 using Filomat.Api.Domain;
+using Filomat.Api.Monitoring;
 using Filomat.Api.Notifications;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -21,12 +23,32 @@ public class ConsumptionSync(
 
     public async Task<int> SyncAsync(Printer printer, CancellationToken cancellationToken = default)
     {
+        var type = FilomatMetrics.TypeLabel(printer.Type);
+        var started = Stopwatch.GetTimestamp();
+        // Was nicht als unerreichbar abgefangen wird (Datenbank, Programmfehler), zählt als failed
+        var result = "failed";
+        try
+        {
+            (var recorded, result) = await SyncOnceAsync(printer, cancellationToken);
+            return recorded;
+        }
+        finally
+        {
+            FilomatMetrics.PrinterSyncs.WithLabels(type, result).Inc();
+            FilomatMetrics.PrinterSyncDuration.WithLabels(type).Observe(Stopwatch.GetElapsedTime(started).TotalSeconds);
+        }
+    }
+
+    private async Task<(int Recorded, string Result)> SyncOnceAsync(Printer printer, CancellationToken cancellationToken)
+    {
         var adapter = adapters.FirstOrDefault(a => a.Type == printer.Type)
             ?? throw new InvalidOperationException($"Kein Adapter für Druckertyp {printer.Type}.");
 
         var since = (printer.LastJobEndedAt ?? printer.CreatedAt) - Overlap;
         var recorded = new List<PrintJob>();
         var reachable = false;
+        var result = "ok";
+        double grams = 0;
         try
         {
             var currentTools = await adapter.GetToolStateAsync(printer, cancellationToken);
@@ -48,9 +70,9 @@ public class ConsumptionSync(
 
                 // Pro Kopf buchen, wenn der Drucker die Spulen erkennt oder mehrere Slots meldet (z. B. MMU3)
                 if (job.SlicedGramsPerFilament is { Count: > 0 } perFilament && (toolsDuringPrint is not null || perFilament.Count > 1))
-                    await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
+                    grams += await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
                 else
-                    await RecordAsync(printer, job, cancellationToken);
+                    grams += await RecordAsync(printer, job, cancellationToken);
                 recorded.Add(job);
                 if (printer.LastJobEndedAt is null || job.EndedAt > printer.LastJobEndedAt)
                     printer.LastJobEndedAt = job.EndedAt;
@@ -64,15 +86,23 @@ public class ConsumptionSync(
             logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
             printer.LastSyncError = ex.Message;
             live.SetOffline(printer, ex.Message);
+            // Unlesbare Antwort: Der Drucker antwortet, aber nicht so, wie der Adapter es erwartet
+            result = ex is JsonException ? "failed" : "unreachable";
         }
 
         printer.LastSyncAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        if (recorded.Count > 0)
+        {
+            var type = FilomatMetrics.TypeLabel(printer.Type);
+            FilomatMetrics.PrintJobs.WithLabels(type).Inc(recorded.Count);
+            FilomatMetrics.FilamentUsedGrams.WithLabels(type).Inc(grams);
+        }
 
         foreach (var job in recorded) await NotifyFinishedAsync(printer, job, cancellationToken);
         // Zustand nach dem Abgleich, damit die Restgewichte schon stimmen; Anycubic und Bambu antworten aus dem Abgleich
         if (reachable) await live.RefreshAsync(printer, adapter, cancellationToken);
-        return recorded.Count;
+        return (recorded.Count, result);
     }
 
     /// <summary>Meldet einen beendeten Druck mit Verbrauch und Restgewicht der Spulen.</summary>
@@ -105,8 +135,7 @@ public class ConsumptionSync(
             else if (spool.RemainingWeight is { } remaining)
             {
                 line += L.F(", noch {0:0} g", remaining);
-                // Fast leer: unter 10 % der vollen Spule oder unter 50 g
-                if (remaining < Math.Max(50, (item.NetWeight ?? 0) * 0.1))
+                if (SpoolLevel.IsLow(remaining, item.NetWeight))
                 {
                     line += L.T(" (fast leer)");
                     low = true;
@@ -128,7 +157,7 @@ public class ConsumptionSync(
             low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken, image: token => live.GetPhotoAsync(printer, token));
     }
 
-    private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
+    private async Task<double> RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
     {
         var item = await ItemAtToolAsync(printer, 0, fallbackToContainer: true, cancellationToken);
         var grams = Math.Round(FilamentMath.GramsForJob(job, item?.ItemData?.Type), 2);
@@ -149,6 +178,7 @@ public class ConsumptionSync(
             RecordedAt = DateTime.UtcNow,
             DurationSeconds = job.DurationSeconds,
         });
+        return grams;
     }
 
     /// <summary>
@@ -187,7 +217,7 @@ public class ConsumptionSync(
     /// Bucht jeden Werkzeugkopf einzeln: auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat, oder
     /// (ohne Tag, z. B. MMU3 oder U1-Kopf ohne Plättchen) auf die Spule, die in der App an diesem Kopf eingelegt ist.
     /// </summary>
-    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
+    private async Task<double> RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
     {
         // Abgebrochene Drucke: anteilig nach tatsächlich verbrauchter Länge
         var ratio = job.SlicedLengthMm is > 0 && job.LengthMm > 0
@@ -206,6 +236,7 @@ public class ConsumptionSync(
                 : (grams, length);
         }
 
+        double total = 0;
         foreach (var (extruder, usage) in perExtruder)
         {
             var tag = tools?.TagFor(extruder);
@@ -215,6 +246,7 @@ public class ConsumptionSync(
                 : tag is null ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: false, cancellationToken)
                 : await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
+            total += grams;
             var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption
             {
@@ -234,6 +266,7 @@ public class ConsumptionSync(
                 DurationSeconds = job.DurationSeconds,
             });
         }
+        return total;
     }
 
     /// <summary>

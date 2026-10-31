@@ -18,6 +18,10 @@ services:
       # Optional: Meldungen über ntfy, falls in der App keine Adresse eingestellt ist
       Ntfy__Url: "${NTFY_URL:-}"
       Ntfy__Token: "${NTFY_TOKEN:-}"
+      # Optional: /metrics für Prometheus und Logzeilen an Loki (siehe README, „Überwachung“)
+      Monitoring__Metrics: "${MONITORING_METRICS:-false}"
+      Monitoring__Loki__Url: "${MONITORING_LOKI_URL:-}"
+      Monitoring__Loki__Host: "${MONITORING_LOKI_HOST:-}"
       TZ: Europe/Berlin
     restart: unless-stopped
 
