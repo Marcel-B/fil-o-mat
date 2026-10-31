@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useDataStore } from '@/stores/data'
@@ -13,19 +14,22 @@ const emit = defineEmits<{ edit: []; tool: [tool: ToolLive]; synced: [] }>()
 const store = useDataStore()
 const toast = useToast()
 const confirm = useConfirm()
+const { t } = useI18n()
 
-const states: Record<PrintState, { label: string; severity: string }> = {
-  Idle: { label: 'Bereit', severity: 'secondary' },
-  Printing: { label: 'Druckt', severity: 'info' },
-  Paused: { label: 'Pausiert', severity: 'warn' },
-  Finished: { label: 'Fertig', severity: 'success' },
-  Cancelled: { label: 'Abgebrochen', severity: 'warn' },
-  Error: { label: 'Fehler', severity: 'danger' },
-  Offline: { label: 'Nicht erreichbar', severity: 'contrast' },
+const severities: Record<PrintState, string> = {
+  Idle: 'secondary',
+  Printing: 'info',
+  Paused: 'warn',
+  Finished: 'success',
+  Cancelled: 'warn',
+  Error: 'danger',
+  Offline: 'contrast',
 }
 
 const status = computed(() => props.live?.status)
-const state = computed(() => (status.value ? states[status.value.state] : null))
+const state = computed(() =>
+  status.value ? { label: t(`printers.states.${status.value.state}`), severity: severities[status.value.state] } : null,
+)
 const typeLabel: Record<string, string> = {
   SnapmakerU1: 'Snapmaker U1',
   Moonraker: 'Klipper',
@@ -67,12 +71,12 @@ async function sync() {
     const result = await store.syncPrinter(props.printer.id)
     toast.add(
       result.error
-        ? { severity: 'error', summary: 'Abgleich ging nicht', detail: result.error, life: 6000 }
-        : { severity: 'success', summary: `${props.printer.name} abgeglichen`, detail: result.recorded ? `${result.recorded} Drucke gebucht` : 'Keine neuen Drucke', life: 3000 },
+        ? { severity: 'error', summary: t('printers.syncFailed'), detail: result.error, life: 6000 }
+        : { severity: 'success', summary: t('printers.synced', { name: props.printer.name }), detail: t('printers.recorded', result.recorded), life: 3000 },
     )
     emit('synced')
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Abgleich ging nicht', detail: (e as Error).message, life: 6000 })
+    toast.add({ severity: 'error', summary: t('printers.syncFailed'), detail: (e as Error).message, life: 6000 })
   } finally {
     syncing.value = false
   }
@@ -80,22 +84,22 @@ async function sync() {
 
 function remove() {
   confirm.require({
-    header: 'Drucker entfernen',
-    message: `„${props.printer.name}“ entfernen? Eingelegte Spulen wandern ins Lager, der Verbrauch bleibt.`,
+    header: t('printers.removeTitle'),
+    message: t('printers.removeMessage', { name: props.printer.name }),
     icon: 'pi pi-exclamation-triangle',
-    acceptProps: { label: 'Entfernen', severity: 'danger' },
-    rejectProps: { label: 'Abbrechen', severity: 'secondary', outlined: true },
-    accept: () => store.deletePrinter(props.printer.id).catch((e) => toast.add({ severity: 'error', summary: 'Ging nicht', detail: e.message, life: 6000 })),
+    acceptProps: { label: t('common.remove'), severity: 'danger' },
+    rejectProps: { label: t('common.cancel'), severity: 'secondary', outlined: true },
+    accept: () => store.deletePrinter(props.printer.id).catch((e) => toast.add({ severity: 'error', summary: t('common.failed'), detail: e.message, life: 6000 })),
   })
 }
 
 const menu = ref()
-const menuItems = [
-  { label: 'Jetzt abgleichen', icon: 'pi pi-sync', command: sync },
-  { label: 'Bearbeiten', icon: 'pi pi-pencil', command: () => emit('edit') },
+const menuItems = computed(() => [
+  { label: t('printers.syncNow'), icon: 'pi pi-sync', command: sync },
+  { label: t('common.edit'), icon: 'pi pi-pencil', command: () => emit('edit') },
   { separator: true },
-  { label: 'Entfernen', icon: 'pi pi-trash', command: remove },
-]
+  { label: t('common.remove'), icon: 'pi pi-trash', command: remove },
+])
 </script>
 
 <template>
@@ -106,9 +110,9 @@ const menuItems = [
           <div class="truncate text-lg font-semibold">{{ printer.name }}</div>
           <div class="text-xs text-muted-color">{{ typeLabel[printer.type] }} · {{ printer.baseUrl }}</div>
         </div>
-        <Tag v-if="!printer.enabled" value="Aus" severity="secondary" />
+        <Tag v-if="!printer.enabled" :value="t('printers.off')" severity="secondary" />
         <Tag v-if="state" :value="state.label" :severity="state.severity" />
-        <Button icon="pi pi-ellipsis-v" text rounded aria-label="Aktionen" :loading="syncing" @click="menu.toggle($event)" />
+        <Button icon="pi pi-ellipsis-v" text rounded :aria-label="t('printers.actions')" :loading="syncing" @click="menu.toggle($event)" />
         <Menu ref="menu" :model="menuItems" popup />
       </div>
     </template>
@@ -118,12 +122,12 @@ const menuItems = [
         <div v-if="status && (status.isActive || status.state === 'Finished' || status.state === 'Cancelled')" class="flex gap-4">
           <PrinterThumbnail v-if="status.hasThumbnail" :printer-id="printer.id" :job-key="status.jobKey" />
           <div class="flex min-w-0 flex-1 flex-col gap-2">
-            <div class="truncate font-medium" :title="status.jobName ?? ''">{{ status.jobName ?? 'Druck' }}</div>
+            <div class="truncate font-medium" :title="status.jobName ?? ''">{{ status.jobName ?? t('printers.job') }}</div>
             <ProgressBar :value="Math.round(status.progress ?? 0)" class="!h-4" />
             <div class="flex flex-wrap gap-x-4 text-sm text-muted-color">
-              <span v-if="status.remainingSeconds != null && status.isActive">noch {{ duration(status.remainingSeconds) }}</span>
-              <span v-if="status.elapsedSeconds != null">läuft seit {{ duration(status.elapsedSeconds) }}</span>
-              <span v-if="status.layer != null">Schicht {{ status.layer }}<template v-if="status.totalLayers">/{{ status.totalLayers }}</template></span>
+              <span v-if="status.remainingSeconds != null && status.isActive">{{ t('printers.remaining', { time: duration(status.remainingSeconds) }) }}</span>
+              <span v-if="status.elapsedSeconds != null">{{ t('printers.elapsed', { time: duration(status.elapsedSeconds) }) }}</span>
+              <span v-if="status.layer != null">{{ t('printers.layer', { layer: status.layer }) }}<template v-if="status.totalLayers">/{{ status.totalLayers }}</template></span>
             </div>
           </div>
         </div>
@@ -143,33 +147,33 @@ const menuItems = [
         <!-- Köpfe bzw. Slots -->
         <ul class="divide-y divide-surface-200 rounded-lg border border-surface-200 dark:divide-surface-800 dark:border-surface-800">
           <li
-            v-for="t in tools"
-            :key="t.tool"
+            v-for="tool in tools"
+            :key="tool.tool"
             class="flex cursor-pointer items-center gap-3 px-3 py-2 hover:bg-surface-50 dark:hover:bg-surface-800/50"
-            :class="{ 'bg-primary-50 dark:bg-primary-900/20': status?.isActive && status.activeTool === t.tool }"
-            @click="emit('tool', t)"
+            :class="{ 'bg-primary-50 dark:bg-primary-900/20': status?.isActive && status.activeTool === tool.tool }"
+            @click="emit('tool', tool)"
           >
-            <span v-if="printer.tools > 1" class="w-14 text-xs text-muted-color">{{ t.place || `#${t.tool + 1}` }}</span>
-            <ColorDot :hex="t.colorHex" :size="20" />
+            <span v-if="printer.tools > 1" class="w-14 text-xs text-muted-color">{{ tool.place || `#${tool.tool + 1}` }}</span>
+            <ColorDot :hex="tool.colorHex" :size="20" />
             <div class="min-w-0 flex-1">
-              <div v-if="t.spoolId" class="truncate text-sm">
-                {{ t.itemName }} <span class="font-mono">#{{ t.spoolNumber }}</span>
+              <div v-if="tool.spoolId" class="truncate text-sm">
+                {{ tool.itemName }} <span class="font-mono">#{{ tool.spoolNumber }}</span>
               </div>
-              <div v-else-if="t.itemName" class="truncate text-sm text-orange-500">{{ t.itemName }} – welche Spule?</div>
-              <div v-else class="text-sm text-muted-color">frei</div>
-              <div v-if="t.reported && (t.reported.type || t.reported.colorHex)" class="flex items-center gap-1 text-xs text-muted-color">
-                Drucker: {{ t.reported.type }}
-                <ColorDot v-if="t.reported.colorHex" :hex="t.reported.colorHex" :size="10" />
-                <template v-if="t.reported.remainPercent != null"> · {{ Math.round(t.reported.remainPercent) }} %</template>
+              <div v-else-if="tool.itemName" class="truncate text-sm text-orange-500">{{ t('printers.whichSpool', { name: tool.itemName }) }}</div>
+              <div v-else class="text-sm text-muted-color">{{ t('common.free') }}</div>
+              <div v-if="tool.reported && (tool.reported.type || tool.reported.colorHex)" class="flex items-center gap-1 text-xs text-muted-color">
+                {{ t('printers.reported', { type: tool.reported.type }) }}
+                <ColorDot v-if="tool.reported.colorHex" :hex="tool.reported.colorHex" :size="10" />
+                <template v-if="tool.reported.remainPercent != null"> · {{ Math.round(tool.reported.remainPercent) }} %</template>
               </div>
             </div>
             <div class="text-right text-sm">
-              <div v-if="t.spoolId">{{ grams(t.remainingGrams) }}</div>
-              <div v-if="t.neededGrams != null" class="text-xs" :class="t.enough === false ? 'font-semibold text-red-500' : 'text-muted-color'">
-                braucht {{ grams(t.neededGrams) }}
+              <div v-if="tool.spoolId">{{ grams(tool.remainingGrams) }}</div>
+              <div v-if="tool.neededGrams != null" class="text-xs" :class="tool.enough === false ? 'font-semibold text-red-500' : 'text-muted-color'">
+                {{ t('printers.needs', { grams: grams(tool.neededGrams) }) }}
               </div>
             </div>
-            <i v-if="dryerFor(t.tool)?.humidityPercent != null" v-tooltip="dryerFor(t.tool)!.name" class="pi pi-cloud text-xs text-muted-color" />
+            <i v-if="dryerFor(tool.tool)?.humidityPercent != null" v-tooltip="dryerFor(tool.tool)!.name" class="pi pi-cloud text-xs text-muted-color" />
           </li>
         </ul>
 
@@ -177,7 +181,7 @@ const menuItems = [
           <span v-for="d in status.dryers" :key="d.name" class="rounded-md bg-surface-100 px-2 py-1 dark:bg-surface-800">
             <i class="pi pi-cloud mr-1" />{{ d.name }}:
             <template v-if="d.humidityPercent != null">{{ Math.round(d.humidityPercent) }} %</template>
-            <template v-else-if="d.humidityLevel != null">Stufe {{ d.humidityLevel }}/5</template>
+            <template v-else-if="d.humidityLevel != null">{{ t('printers.humidityLevel', { level: d.humidityLevel }) }}</template>
             <template v-if="d.temperature != null"> · {{ Math.round(d.temperature) }} °C</template>
           </span>
         </div>
@@ -192,8 +196,8 @@ const menuItems = [
     </template>
     <template #footer>
       <div class="flex flex-wrap gap-x-4 text-xs text-muted-color">
-        <span>Abgleich {{ ago(printer.lastSyncAt) }}</span>
-        <span v-if="printer.readerSeenAt">NFC-Leser {{ ago(printer.readerSeenAt) }}</span>
+        <span>{{ t('printers.lastSync', { ago: ago(printer.lastSyncAt) }) }}</span>
+        <span v-if="printer.readerSeenAt">{{ t('printers.readerSeen', { ago: ago(printer.readerSeenAt) }) }}</span>
         <span v-if="printer.lastSyncError" class="text-red-500">{{ printer.lastSyncError }}</span>
       </div>
     </template>

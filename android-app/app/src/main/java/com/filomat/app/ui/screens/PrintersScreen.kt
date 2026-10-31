@@ -33,6 +33,7 @@ import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import com.filomat.app.i18n.tr
 
 /** Drucker im Backend: anlegen, bearbeiten, abgleichen, entfernen. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -78,17 +79,17 @@ fun PrintersScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Drucker") },
+                title = { Text(tr("Drucker")) },
                 actions = {
                     if (sync.connected) {
                         IconButton(onClick = { navController.navigate("stats") }) {
-                            Icon(Icons.Default.BarChart, contentDescription = "Statistik")
+                            Icon(Icons.Default.BarChart, contentDescription = tr("Statistik"))
                         }
                         IconButton(onClick = { showingNotifications = true }) {
-                            Icon(Icons.Default.Notifications, contentDescription = "Meldungen")
+                            Icon(Icons.Default.Notifications, contentDescription = tr("Meldungen"))
                         }
                         IconButton(onClick = { load() }, enabled = !isLoading) {
-                            Icon(Icons.Default.Sync, contentDescription = "Neu laden")
+                            Icon(Icons.Default.Sync, contentDescription = tr("Neu laden"))
                         }
                     }
                 }
@@ -98,7 +99,7 @@ fun PrintersScreen(navController: NavController) {
         floatingActionButton = {
             if (sync.connected) {
                 FloatingActionButton(onClick = { showingAdd = true }) {
-                    Icon(Icons.Default.Add, contentDescription = "Drucker hinzufügen")
+                    Icon(Icons.Default.Add, contentDescription = tr("Drucker hinzufügen"))
                 }
             }
         }
@@ -113,8 +114,8 @@ fun PrintersScreen(navController: NavController) {
             if (!sync.connected) {
                 item {
                     EmptyHint(
-                        "Kein Backend verbunden",
-                        "Drucker werden im Backend verwaltet. Verbinde es über das Wolken-Symbol in der Container-Liste."
+                        tr("Kein Backend verbunden"),
+                        tr("Drucker werden im Backend verwaltet. Verbinde es über das Wolken-Symbol in der Container-Liste.")
                     )
                 }
             }
@@ -122,7 +123,7 @@ fun PrintersScreen(navController: NavController) {
             errorMessage?.let { item { Text(it, color = MaterialTheme.colorScheme.error) } }
             if (sync.connected && printers.isEmpty() && errorMessage == null && !isLoading) {
                 item {
-                    EmptyHint("Keine Drucker", "Füge einen Drucker hinzu, damit sein Verbrauch automatisch abgezogen wird.")
+                    EmptyHint(tr("Keine Drucker"), tr("Füge einen Drucker hinzu, damit sein Verbrauch automatisch abgezogen wird."))
                 }
             }
             items(printers, key = { it.id }) { printer ->
@@ -170,8 +171,8 @@ fun PrintersScreen(navController: NavController) {
     printerToDelete?.let { printer ->
         AlertDialog(
             onDismissRequest = { printerToDelete = null },
-            title = { Text("Drucker entfernen") },
-            text = { Text("'${printer.name}' und sein Container werden entfernt. Eingelegte Spulen wandern nach „Lose“, ihr Verbrauch bleibt erhalten.") },
+            title = { Text(tr("Drucker entfernen")) },
+            text = { Text(tr("'%s' und sein Container werden entfernt. Eingelegte Spulen wandern nach „Lose“, ihr Verbrauch bleibt erhalten.", printer.name)) },
             confirmButton = {
                 TextButton(onClick = {
                     printerToDelete = null
@@ -183,9 +184,9 @@ fun PrintersScreen(navController: NavController) {
                             errorMessage = ContainerStore.describe(e)
                         }
                     }
-                }) { Text("Entfernen", color = MaterialTheme.colorScheme.error) }
+                }) { Text(tr("Entfernen"), color = MaterialTheme.colorScheme.error) }
             },
-            dismissButton = { TextButton(onClick = { printerToDelete = null }) { Text("Abbrechen") } }
+            dismissButton = { TextButton(onClick = { printerToDelete = null }) { Text(tr("Abbrechen")) } }
         )
     }
 }
@@ -220,8 +221,8 @@ private fun PrinterCard(
             Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(printer.name, style = MaterialTheme.typography.titleMedium)
                 Text(
-                    (if (printer.enabled) "" else "Pausiert · ") +
-                    if (printer.toolCount > 1) "${printer.typeTitle} · ${printer.toolCount} Köpfe · ${printer.baseUrl}"
+                    (if (printer.enabled) "" else tr("Pausiert · ")) +
+                    if (printer.toolCount > 1) tr("%s · %s Köpfe · %s", printer.typeTitle, printer.toolCount, printer.baseUrl)
                     else "${printer.typeTitle} · ${printer.baseUrl}",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
@@ -236,7 +237,7 @@ private fun PrinterCard(
                     }
                 } else if (lastSync != null) {
                     Text(
-                        "Zuletzt abgeglichen ${DateUtils.getRelativeTimeSpanString(lastSync.time)}",
+                        tr("Zuletzt abgeglichen %s", DateUtils.getRelativeTimeSpanString(lastSync.time)),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -246,14 +247,14 @@ private fun PrinterCard(
                 CircularProgressIndicator(modifier = Modifier.size(24.dp), strokeWidth = 2.dp)
             } else {
                 IconButton(onClick = onSync) {
-                    Icon(Icons.Default.Sync, contentDescription = "Abgleichen", tint = MaterialTheme.colorScheme.primary)
+                    Icon(Icons.Default.Sync, contentDescription = tr("Abgleichen"), tint = MaterialTheme.colorScheme.primary)
                 }
             }
             IconButton(onClick = onEdit) {
-                Icon(Icons.Default.Edit, contentDescription = "Bearbeiten")
+                Icon(Icons.Default.Edit, contentDescription = tr("Bearbeiten"))
             }
             IconButton(onClick = onDelete) {
-                Icon(Icons.Default.Delete, contentDescription = "Entfernen", tint = MaterialTheme.colorScheme.error)
+                Icon(Icons.Default.Delete, contentDescription = tr("Entfernen"), tint = MaterialTheme.colorScheme.error)
             }
         }
     }
@@ -279,14 +280,14 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text(if (printer == null) "Drucker hinzufügen" else "Drucker bearbeiten") },
+        title = { Text(if (printer == null) tr("Drucker hinzufügen") else tr("Drucker bearbeiten")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
-                    label = { Text("Name") },
-                    placeholder = { Text("z. B. Snapmaker U1") },
+                    label = { Text(tr("Name")) },
+                    placeholder = { Text(tr("z. B. Snapmaker U1")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -296,7 +297,7 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                         onValueChange = {},
                         readOnly = true,
                         enabled = false,
-                        label = { Text("Typ") },
+                        label = { Text(tr("Typ")) },
                         modifier = Modifier.fillMaxWidth()
                     )
                 } else ExposedDropdownMenuBox(expanded = typeExpanded, onExpandedChange = { typeExpanded = it }) {
@@ -304,7 +305,7 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                         value = type.title,
                         onValueChange = {},
                         readOnly = true,
-                        label = { Text("Typ") },
+                        label = { Text(tr("Typ")) },
                         trailingIcon = { Icon(Icons.Default.ArrowDropDown, contentDescription = null) },
                         modifier = Modifier
                             .fillMaxWidth()
@@ -322,7 +323,7 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                 OutlinedTextField(
                     value = baseUrl,
                     onValueChange = { baseUrl = it },
-                    label = { Text("Adresse") },
+                    label = { Text(tr("Adresse")) },
                     placeholder = { Text(type.addressHint) },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
@@ -334,7 +335,7 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                     label = {
                         Text(
                             if (printer?.hasApiKey == true) {
-                                "Neuer ${if (type.requiresKey) "Zugangscode" else "API-Schlüssel"} (leer = unverändert)"
+                                if (type.requiresKey) tr("Neuer Zugangscode (leer = unverändert)") else tr("Neuer API-Schlüssel (leer = unverändert)")
                             } else type.keyLabel
                         )
                     },
@@ -344,10 +345,10 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                     modifier = Modifier.fillMaxWidth()
                 )
                 if (printer?.hasApiKey == true && !type.requiresKey) {
-                    SwitchRow("API-Schlüssel entfernen", removeApiKey) { removeApiKey = it }
+                    SwitchRow(tr("API-Schlüssel entfernen"), removeApiKey) { removeApiKey = it }
                 }
                 if (printer != null) {
-                    SwitchRow("Automatisch abgleichen", enabled) { enabled = it }
+                    SwitchRow(tr("Automatisch abgleichen"), enabled) { enabled = it }
                 }
                 Text(type.setupHint, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
                 if (isSaving) LinearProgressIndicator(modifier = Modifier.fillMaxWidth())
@@ -388,9 +389,9 @@ internal fun PrinterDialog(store: ContainerStore, printer: Printer?, onDismiss: 
                     }
                     isSaving = false
                 }
-            }) { Text(if (printer == null) "Hinzufügen" else "Sichern") }
+            }) { Text(if (printer == null) tr("Hinzufügen") else tr("Sichern")) }
         },
-        dismissButton = { TextButton(enabled = !isSaving, onClick = onDismiss) { Text("Abbrechen") } }
+        dismissButton = { TextButton(enabled = !isSaving, onClick = onDismiss) { Text(tr("Abbrechen")) } }
     )
 }
 

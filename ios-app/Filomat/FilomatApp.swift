@@ -8,6 +8,7 @@ struct FilomatApp: App {
         return store
     }()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
 
     static let refreshInterval: Duration = .seconds(120)
 
@@ -15,6 +16,7 @@ struct FilomatApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .preferredColorScheme(appearance.colorScheme)
                 // Beim Öffnen und danach alle 2 Minuten den Stand holen, solange die App im Vordergrund ist
                 // (das Backend fragt die Drucker im selben Takt ab)
                 .task(id: scenePhase) {

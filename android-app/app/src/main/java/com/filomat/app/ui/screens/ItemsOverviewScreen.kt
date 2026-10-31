@@ -31,6 +31,7 @@ import com.filomat.app.ui.components.MainTab
 import com.filomat.app.data.Item
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.ui.components.GramText
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -74,7 +75,7 @@ fun ItemsOverviewScreen(
         
         // Gruppiere nach type
         filtered.groupBy { item ->
-            item.itemData?.type ?: "Ohne Typ"
+            item.itemData?.type ?: tr("Ohne Typ")
         }.toList().sortedBy { it.first }
     }
     
@@ -82,11 +83,11 @@ fun ItemsOverviewScreen(
     
     Scaffold(
         topBar = {
-            TopAppBar(title = { Text("Filamente") })
+            TopAppBar(title = { Text(tr("Filamente")) })
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showingCreateFilament = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Filament erstellen")
+                Icon(Icons.Default.Add, contentDescription = tr("Filament erstellen"))
             }
         },
         bottomBar = { MainNavigationBar(navController, MainTab.ITEMS) }
@@ -103,9 +104,9 @@ fun ItemsOverviewScreen(
                 modifier = Modifier
                     .fillMaxWidth()
                     .padding(16.dp),
-                placeholder = { Text("Suchen...") },
+                placeholder = { Text(tr("Suchen...")) },
                 leadingIcon = {
-                    Icon(Icons.Default.Search, contentDescription = "Suchen")
+                    Icon(Icons.Default.Search, contentDescription = tr("Suchen"))
                 },
                 singleLine = true
             )
@@ -116,7 +117,7 @@ fun ItemsOverviewScreen(
                     contentAlignment = Alignment.Center
                 ) {
                     Text(
-                        text = if (searchQuery.isBlank()) "Keine Filamente vorhanden" else "Keine Ergebnisse gefunden",
+                        text = if (searchQuery.isBlank()) tr("Keine Filamente vorhanden") else tr("Keine Ergebnisse gefunden"),
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -188,9 +189,9 @@ fun ItemsOverviewScreen(
                 showingDeleteDialog = false
                 itemToDelete = null
             },
-            title = { Text("Filament löschen") },
+            title = { Text(tr("Filament löschen")) },
             text = {
-                Text("Möchten Sie das Filament '${itemToDelete!!.getDisplayTitle()}' wirklich löschen?")
+                Text(tr("Möchten Sie das Filament '%s' wirklich löschen?", itemToDelete!!.getDisplayTitle()))
             },
             confirmButton = {
                 TextButton(
@@ -202,7 +203,7 @@ fun ItemsOverviewScreen(
                         }
                     }
                 ) {
-                    Text("Löschen", color = MaterialTheme.colorScheme.error)
+                    Text(tr("Löschen"), color = MaterialTheme.colorScheme.error)
                 }
             },
             dismissButton = {
@@ -212,7 +213,7 @@ fun ItemsOverviewScreen(
                         itemToDelete = null
                     }
                 ) {
-                    Text("Abbrechen")
+                    Text(tr("Abbrechen"))
                 }
             }
         )
@@ -415,7 +416,7 @@ fun ItemOverviewCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Typ:",
+                                    text = tr("Typ:"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -433,7 +434,7 @@ fun ItemOverviewCard(
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Text(
-                                    text = "Marke:",
+                                    text = tr("Marke:"),
                                     style = MaterialTheme.typography.bodySmall,
                                     color = MaterialTheme.colorScheme.onSurfaceVariant
                                 )
@@ -450,7 +451,7 @@ fun ItemOverviewCard(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Container:",
+                                text = tr("Container:"),
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurfaceVariant
                             )
@@ -461,16 +462,16 @@ fun ItemOverviewCard(
                         }
 
                         if (spools.isNotEmpty()) {
-                            OverviewField("Angebrochen:", spools.joinToString(", ") { spool ->
+                            OverviewField(tr("Angebrochen:"), spools.joinToString(", ") { spool ->
                                 spool.remainingWeight?.let { "#${spool.number} ${GramText.label(it)}" } ?: "#${spool.number}"
                             })
                         }
                         item.spoolsInStock?.takeIf { it > 0 }?.let { stock ->
-                            OverviewField("Vorrat:", if (stock == 1) "1 Spule" else "$stock Spulen")
+                            OverviewField(tr("Vorrat:"), if (stock == 1) tr("1 Spule") else tr("%s Spulen", stock))
                         }
-                        item.transmissionText()?.let { OverviewField("TD:", it) }
+                        item.transmissionText()?.let { OverviewField(tr("TD:"), it) }
                         if (isPossibleDuplicate) {
-                            Text("⚠ Möglicherweise doppelt", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
+                            Text(tr("⚠ Möglicherweise doppelt"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
                         }
                     }
                     
@@ -485,7 +486,7 @@ fun ItemOverviewCard(
                         ) {
                             Icon(
                                 Icons.Default.Edit,
-                                contentDescription = "Bearbeiten",
+                                contentDescription = tr("Bearbeiten"),
                                 tint = MaterialTheme.colorScheme.primary
                             )
                         }
@@ -496,7 +497,7 @@ fun ItemOverviewCard(
                         ) {
                             Icon(
                                 Icons.Default.Delete,
-                                contentDescription = "Löschen",
+                                contentDescription = tr("Löschen"),
                                 tint = MaterialTheme.colorScheme.error
                             )
                         }

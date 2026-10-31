@@ -20,7 +20,9 @@ struct Printer: Identifiable, Codable, Hashable {
     /// "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf.
     func placeName(tool: Int?) -> String {
         guard toolCount > 1, let tool else { return name }
-        return "\(name) \(type == .prusaLink || type == .anycubic || type == .bambu ? "Slot" : "Kopf") \(tool + 1)"
+        return type == .prusaLink || type == .anycubic || type == .bambu
+            ? String(localized: "\(name) Slot \(tool + 1)")
+            : String(localized: "\(name) Kopf \(tool + 1)")
     }
 }
 
@@ -38,7 +40,7 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
         case .moonraker: "Klipper / Moonraker"
         case .snapmakerU1: "Snapmaker U1 (paxx12)"
         case .prusaLink: "Prusa (PrusaLink)"
-        case .anycubic: "Anycubic Kobra (LAN-Modus)"
+        case .anycubic: String(localized: "Anycubic Kobra (LAN-Modus)")
         case .bambu: "Bambu Lab P1S, X1, A1 (LAN)"
         }
     }
@@ -55,7 +57,7 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
 
     /// Bambu verlangt den Zugangscode, die anderen einen optionalen API-Schlüssel.
     var keyLabel: String {
-        self == .bambu ? "Zugangscode" : "API-Schlüssel (optional)"
+        self == .bambu ? String(localized: "Zugangscode") : String(localized: "API-Schlüssel (optional)")
     }
 
     var requiresKey: Bool { self == .bambu }
@@ -64,15 +66,15 @@ enum PrinterType: String, Codable, CaseIterable, Identifiable {
     var setupHint: String {
         switch self {
         case .moonraker:
-            "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist."
+            String(localized: "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist.")
         case .snapmakerU1:
-            "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
+            String(localized: "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen.")
         case .prusaLink:
-            "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+            String(localized: "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist.")
         case .anycubic:
-            "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+            String(localized: "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist.")
         case .bambu:
-            "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist."
+            String(localized: "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist.")
         }
     }
 }

@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { PRINTER_STANDARD_ID, useDataStore } from '@/stores/data'
 import { grams } from '@/format'
 import ColorDot from '@/components/ColorDot.vue'
 import ContainerDialog from '@/components/ContainerDialog.vue'
 
 const store = useDataStore()
+const { t } = useI18n()
 const creating = ref(false)
 
 const cards = computed(() =>
@@ -29,9 +31,9 @@ const cards = computed(() =>
 <template>
   <div class="mx-auto flex max-w-6xl flex-col gap-4">
     <div class="flex flex-wrap items-center gap-3">
-      <h1 class="text-2xl font-semibold">Container</h1>
+      <h1 class="text-2xl font-semibold">{{ t('containers.title') }}</h1>
       <span class="flex-1" />
-      <Button label="Neuer Container" icon="pi pi-plus" @click="creating = true" />
+      <Button :label="t('containers.new')" icon="pi pi-plus" @click="creating = true" />
     </div>
 
     <div class="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
@@ -44,8 +46,8 @@ const cards = computed(() =>
         <div class="flex items-center gap-2">
           <i :class="card.printer ? 'pi pi-print' : 'pi pi-box'" class="text-muted-color" />
           <span class="flex-1 truncate font-semibold">{{ card.container.name }}</span>
-          <Tag v-if="card.printer" value="Drucker" severity="secondary" />
-          <Tag v-else-if="card.container.isStandard" value="Standard" severity="secondary" />
+          <Tag v-if="card.printer" :value="t('common.printer')" severity="secondary" />
+          <Tag v-else-if="card.container.isStandard" :value="t('containers.standard')" severity="secondary" />
         </div>
         <p v-if="card.container.description" class="line-clamp-2 text-sm text-muted-color">{{ card.container.description }}</p>
         <div class="flex flex-wrap items-center gap-1">
@@ -53,9 +55,9 @@ const cards = computed(() =>
           <span v-if="card.spools.length > 16" class="text-sm text-muted-color">+{{ card.spools.length - 16 }}</span>
         </div>
         <div class="mt-auto text-sm text-muted-color">
-          {{ card.spools.length }} {{ card.spools.length === 1 ? 'Spule' : 'Spulen' }}
+          {{ t('common.spools', card.spools.length) }}
           <template v-if="card.spools.length"> · {{ grams(card.grams) }}</template>
-          <template v-if="card.container.capacity"> · Platz für {{ card.container.capacity }}</template>
+          <template v-if="card.container.capacity"> · {{ t('containers.capacity', { n: card.container.capacity }) }}</template>
         </div>
       </RouterLink>
     </div>

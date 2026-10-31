@@ -8,6 +8,7 @@ import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
 import java.util.TimeZone
+import com.filomat.app.i18n.tr
 
 /** Container im Austauschformat des Backends (`/api/snapshot`, `/api/import`). */
 @Serializable
@@ -93,11 +94,11 @@ data class Spool(
 data class SpoolPlace(val printerId: String? = null, val tool: Int? = null, val containerId: String? = null) {
     fun text(printers: List<Printer>, containers: List<Container> = emptyList()): String {
         if (printerId != null) {
-            val printer = printers.firstOrNull { it.id == printerId } ?: return "Drucker"
+            val printer = printers.firstOrNull { it.id == printerId } ?: return tr("Unbekannter Drucker")
             return printer.placeName(tool)
         }
         containerId?.let { id -> containers.firstOrNull { it.id == id }?.let { return it.name } }
-        return "Lager"
+        return tr("Lager")
     }
 
     companion object {
@@ -126,27 +127,27 @@ enum class PrinterType(
 ) {
     MOONRAKER(
         "Moonraker", "Klipper / Moonraker", "http://voron.local:7125",
-        "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist."
+        tr("Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist.")
     ),
     SNAPMAKER_U1(
         "SnapmakerU1", "Snapmaker U1 (paxx12)", "http://192.168.2.155",
-        "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen."
+        tr("Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen.")
     ),
     PRUSA_LINK(
         "PrusaLink", "Prusa (PrusaLink)", "http://prusa-core-one.local",
-        "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+        tr("Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist.")
     ),
     ANYCUBIC(
-        "Anycubic", "Anycubic Kobra (LAN-Modus)", "http://192.168.2.160",
-        "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist."
+        "Anycubic", tr("Anycubic Kobra (LAN-Modus)"), "http://192.168.2.160",
+        tr("Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist.")
     ),
     BAMBU(
         "Bambu", "Bambu Lab P1S, X1, A1 (LAN)", "http://192.168.2.170",
-        "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist.",
+        tr("Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist."),
         requiresKey = true
     );
 
-    val keyLabel: String get() = if (requiresKey) "Zugangscode" else "API-Schlüssel (optional)"
+    val keyLabel: String get() = if (requiresKey) tr("Zugangscode") else tr("API-Schlüssel (optional)")
 
     companion object {
         fun of(raw: String): PrinterType? = entries.firstOrNull { it.raw == raw }
@@ -176,8 +177,8 @@ data class Printer(
     /** "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf. */
     fun placeName(tool: Int?): String {
         if (toolCount <= 1 || tool == null) return name
-        val word = if (printerType in listOf(PrinterType.PRUSA_LINK, PrinterType.ANYCUBIC, PrinterType.BAMBU)) "Slot" else "Kopf"
-        return "$name $word ${tool + 1}"
+        return if (printerType in listOf(PrinterType.PRUSA_LINK, PrinterType.ANYCUBIC, PrinterType.BAMBU)) tr("%s Slot %s", name, tool + 1)
+        else tr("%s Kopf %s", name, tool + 1)
     }
 }
 
@@ -245,10 +246,13 @@ data class UpdateCommit(val sha: String, val subject: String, val date: Long)
 data class BackendVersion(val apiLevel: Int, val minAppLevel: Int = 0, val commit: String? = null)
 
 /** Passen App und Backend zusammen? Die Stufen erklärt `backend/README.md` unter „Versionen“. */
-enum class ApiCompatibility(val message: String?) {
+enum class ApiCompatibility(private val text: String?) {
     COMPATIBLE(null),
     BACKEND_OUTDATED("Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen."),
     APP_OUTDATED("App veraltet: bitte die neue Version installieren.");
+
+    /** In der gewählten Sprache; übersetzt erst beim Lesen, weil die Sprache wechseln kann. */
+    val message: String? get() = text?.let { tr(it) }
 
     companion object {
         /** API-Stufe, gegen die diese App gebaut ist. */

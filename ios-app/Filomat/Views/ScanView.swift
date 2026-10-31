@@ -63,8 +63,8 @@ struct ScanView: View {
 }
 
 private struct ScanActionRow: View {
-    var title: String
-    var detail: String
+    var title: LocalizedStringKey
+    var detail: LocalizedStringKey
     var systemImage: String
 
     var body: some View {

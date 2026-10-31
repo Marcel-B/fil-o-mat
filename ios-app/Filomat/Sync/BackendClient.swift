@@ -78,8 +78,8 @@ enum ApiCompatibility: Equatable {
     var message: String? {
         switch self {
         case .compatible: nil
-        case .backendOutdated: "Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen."
-        case .appOutdated: "App veraltet: bitte die neue Version aus TestFlight installieren."
+        case .backendOutdated: String(localized: "Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen.")
+        case .appOutdated: String(localized: "App veraltet: bitte die neue Version aus TestFlight installieren.")
         }
     }
 }
@@ -109,8 +109,8 @@ enum BackendError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Der Server lehnt den API-Schlüssel ab."
-        case .status(let code): "Der Server antwortet mit Fehler \(code)."
+        case .unauthorized: String(localized: "Der Server lehnt den API-Schlüssel ab.")
+        case .status(let code): String(localized: "Der Server antwortet mit Fehler \(code).")
         }
     }
 }

@@ -23,8 +23,8 @@ enum NFCError: LocalizedError, Equatable {
 
     var errorDescription: String? {
         switch self {
-        case .unavailable: return "NFC ist auf diesem Gerät nicht verfügbar."
-        case .cancelled: return "Scan abgebrochen."
+        case .unavailable: return String(localized: "NFC ist auf diesem Gerät nicht verfügbar.")
+        case .cancelled: return String(localized: "Scan abgebrochen.")
         case .failed(let message): return message
         }
     }
@@ -51,7 +51,7 @@ final class NFCService {
     func scan(prompt: String) async throws -> ScannedTag {
         #if canImport(CoreNFC) && !targetEnvironment(simulator)
         let result: TagSession.Outcome = try await run(prompt: prompt, operation: .read)
-        guard case .read(let tag) = result else { throw NFCError.failed("Unerwartetes Ergebnis") }
+        guard case .read(let tag) = result else { throw NFCError.failed(String(localized: "Unerwartetes Ergebnis")) }
         return tag
         #else
         throw NFCError.unavailable
@@ -67,7 +67,7 @@ final class NFCService {
     ) async throws -> String {
         #if canImport(CoreNFC) && !targetEnvironment(simulator)
         let result: TagSession.Outcome = try await run(prompt: prompt, operation: .writeJSON(json, validate: validate))
-        guard case .written(let tagId) = result else { throw NFCError.failed("Unerwartetes Ergebnis") }
+        guard case .written(let tagId) = result else { throw NFCError.failed(String(localized: "Unerwartetes Ergebnis")) }
         return tagId
         #else
         throw NFCError.unavailable
@@ -160,7 +160,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
 
     func tagReaderSession(_ session: NFCTagReaderSession, didDetect tags: [NFCTag]) {
         guard tags.count == 1, let tag = tags.first else {
-            session.alertMessage = "Mehrere Tags erkannt. Bitte nur ein Tag an das Gerät halten."
+            session.alertMessage = String(localized: "Mehrere Tags erkannt. Bitte nur ein Tag an das Gerät halten.")
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) { session.restartPolling() }
             return
         }
@@ -191,7 +191,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
             identifier = t.currentIDm
             technology = "FeliCa"
         @unknown default:
-            fail(session, "Dieser Tag-Typ wird nicht unterstützt.")
+            fail(session, String(localized: "Dieser Tag-Typ wird nicht unterstützt."))
             return
         }
         let tagId = identifier.map { String(format: "%02X", $0) }.joined()
@@ -206,7 +206,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
         session.connect(to: tag) { [weak self] error in
             guard let self else { return }
             if let error {
-                self.fail(session, "Verbindung zum Tag fehlgeschlagen: \(error.localizedDescription)")
+                self.fail(session, String(localized: "Verbindung zum Tag fehlgeschlagen: \(error.localizedDescription)"))
                 return
             }
             switch self.operation {
@@ -226,9 +226,9 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
             var details = TagDetails(uid: tagId, technology: technology)
             if error == nil {
                 switch status {
-                case .readWrite: details.ndefStatus = "beschreibbar"
-                case .readOnly: details.ndefStatus = "schreibgeschützt"
-                case .notSupported: details.ndefStatus = "kein NDEF"
+                case .readWrite: details.ndefStatus = String(localized: "beschreibbar")
+                case .readOnly: details.ndefStatus = String(localized: "schreibgeschützt")
+                case .notSupported: details.ndefStatus = String(localized: "kein NDEF")
                 @unknown default: break
                 }
                 if status != .notSupported { details.capacity = capacity }
@@ -260,7 +260,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
                     } catch {
                         self.complete(session, with: ScannedTag(
                             tagId: tagId,
-                            parseError: "Fehler beim Parsen der JSON-Daten: \(error.localizedDescription)",
+                            parseError: String(localized: "Fehler beim Parsen der JSON-Daten: \(error.localizedDescription)"),
                             details: details
                         ))
                     }
@@ -277,20 +277,20 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
         tag.queryNDEFStatus { [weak self] status, capacity, error in
             guard let self else { return }
             if let error {
-                self.fail(session, "Fehler beim Schreiben: \(error.localizedDescription)")
+                self.fail(session, String(localized: "Fehler beim Schreiben: \(error.localizedDescription)"))
                 return
             }
             switch status {
             case .notSupported:
-                self.fail(session, "Tag unterstützt NDEF nicht")
+                self.fail(session, String(localized: "Tag unterstützt NDEF nicht"))
                 return
             case .readOnly:
-                self.fail(session, "Tag ist nicht beschreibbar")
+                self.fail(session, String(localized: "Tag ist nicht beschreibbar"))
                 return
             case .readWrite:
                 break
             @unknown default:
-                self.fail(session, "Unbekannter Tag-Status")
+                self.fail(session, String(localized: "Unbekannter Tag-Status"))
                 return
             }
 
@@ -302,16 +302,16 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
             )
             let message = NFCNDEFMessage(records: [record])
             if message.length > capacity {
-                self.fail(session, "Tag zu klein: benötigt \(message.length) Bytes, verfügbar: \(capacity) Bytes")
+                self.fail(session, String(localized: "Tag zu klein: benötigt \(message.length) Bytes, verfügbar: \(capacity) Bytes"))
                 return
             }
 
             tag.writeNDEF(message) { error in
                 if let error {
-                    self.fail(session, "Fehler beim Schreiben: \(error.localizedDescription)")
+                    self.fail(session, String(localized: "Fehler beim Schreiben: \(error.localizedDescription)"))
                     return
                 }
-                session.alertMessage = "Tag erfolgreich beschrieben!"
+                session.alertMessage = String(localized: "Tag erfolgreich beschrieben!")
                 session.invalidate()
                 self.finish(.success(.written(tagId)))
             }
@@ -319,7 +319,7 @@ private final class TagSession: NSObject, NFCTagReaderSessionDelegate {
     }
 
     private func complete(_ session: NFCTagReaderSession, with tag: ScannedTag) {
-        session.alertMessage = "Tag gelesen"
+        session.alertMessage = String(localized: "Tag gelesen")
         session.invalidate()
         finish(.success(.read(tag)))
     }

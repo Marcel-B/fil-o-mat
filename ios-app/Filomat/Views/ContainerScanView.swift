@@ -35,16 +35,16 @@ struct ContainerScanView: View {
         Section("Drucker \(printer.name)") {
             ForEach(0..<printer.toolCount, id: \.self) { tool in
                 if let spool = store.spool(inPrinter: printer.id, tool: tool) {
-                    LabeledContent(printer.toolCount > 1 ? printer.placeName(tool: tool) : "Eingelegt") {
+                    LabeledContent(printer.toolCount > 1 ? printer.placeName(tool: tool) : String(localized: "Eingelegt")) {
                         VStack(alignment: .trailing) {
-                            Text("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)")
+                            Text("\(store.item(id: spool.itemId)?.displayTitle ?? String(localized: "Filament")) #\(spool.number)")
                             if let grams = spool.remainingWeight {
                                 Text("\(Int(grams.rounded())) g").font(.caption).foregroundStyle(.secondary)
                             }
                         }
                     }
                 } else {
-                    LabeledContent(printer.toolCount > 1 ? printer.placeName(tool: tool) : "Eingelegt", value: "frei")
+                    LabeledContent(printer.toolCount > 1 ? printer.placeName(tool: tool) : String(localized: "Eingelegt"), value: String(localized: "frei"))
                 }
             }
         }
@@ -68,8 +68,8 @@ struct ContainerScanView: View {
         if !spools.isEmpty {
             Section("Spulen (\(spools.count))") {
                 ForEach(spools) { spool in
-                    LabeledContent("\(store.item(id: spool.itemId)?.displayTitle ?? "Filament") #\(spool.number)",
-                                   value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                    LabeledContent("\(store.item(id: spool.itemId)?.displayTitle ?? String(localized: "Filament")) #\(spool.number)",
+                                   value: spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? String(localized: "Rest unbekannt"))
                 }
             }
         } else {
@@ -85,9 +85,9 @@ struct ContainerScanView: View {
             containerId = container.id
             errorMessage = nil
         } else if store.findItem(byTag: tagId) != nil {
-            errorMessage = "Das ist ein Filament-Tag. Für Filamente gibt es „Filament-Tag lesen“."
+            errorMessage = String(localized: "Das ist ein Filament-Tag. Für Filamente gibt es „Filament-Tag lesen“.")
         } else {
-            errorMessage = "Dieser Container ist in Fil-o-mat noch nicht angelegt."
+            errorMessage = String(localized: "Dieser Container ist in Fil-o-mat noch nicht angelegt.")
         }
     }
 }

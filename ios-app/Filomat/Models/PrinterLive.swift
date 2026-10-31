@@ -40,13 +40,13 @@ struct PrinterStatus: Decodable, Hashable {
 
     var title: String {
         switch state {
-        case "Printing": "Druckt"
-        case "Paused": "Pausiert"
-        case "Finished": "Fertig"
-        case "Cancelled": "Abgebrochen"
-        case "Error": "Fehler"
-        case "Offline": "Nicht erreichbar"
-        default: "Bereit"
+        case "Printing": String(localized: "Druckt")
+        case "Paused": String(localized: "Pausiert")
+        case "Finished": String(localized: "Fertig")
+        case "Cancelled": String(localized: "Abgebrochen")
+        case "Error": String(localized: "Fehler")
+        case "Offline": String(localized: "Nicht erreichbar")
+        default: String(localized: "Bereit")
         }
     }
 
@@ -65,7 +65,7 @@ struct PrinterStatus: Decodable, Hashable {
     /// "noch 1:23 h" bzw. "noch 12 min"
     var remainingText: String? {
         guard isActive, let seconds = remainingSeconds, seconds > 0 else { return nil }
-        return "noch " + PrinterStatus.duration(seconds)
+        return String(localized: "noch \(PrinterStatus.duration(seconds))")
     }
 
     static func duration(_ seconds: Int) -> String {
@@ -116,8 +116,8 @@ struct DryerReport: Decodable, Hashable {
 
     var text: String {
         var parts: [String] = []
-        if let humidityPercent { parts.append("\(Int(humidityPercent.rounded())) % Feuchte") }
-        else if let humidityLevel { parts.append("Feuchtestufe \(humidityLevel)/5") }
+        if let humidityPercent { parts.append(String(localized: "\(Int(humidityPercent.rounded())) % Feuchte")) }
+        else if let humidityLevel { parts.append(String(localized: "Feuchtestufe \(humidityLevel)/5")) }
         if let temperature { parts.append("\(Int(temperature.rounded())) °C") }
         return parts.joined(separator: " · ")
     }
@@ -143,7 +143,7 @@ struct ToolLive: Decodable, Hashable, Identifiable {
     var title: String {
         if let itemName { return spoolNumber.map { "\(itemName) #\($0)" } ?? "\(itemName) #?" }
         if let type = reported?.type, reported?.loaded != false { return type }
-        return "leer"
+        return String(localized: "leer")
     }
 }
 

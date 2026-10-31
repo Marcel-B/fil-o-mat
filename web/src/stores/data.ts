@@ -1,6 +1,6 @@
 import { defineStore } from 'pinia'
 import { computed, ref } from 'vue'
-import { api } from '@/api'
+import { api, ApiError } from '@/api'
 import { duplicateKey, placeText } from '@/format'
 import type { Container, FilamentData, Item, Printer, Spool, SpoolPlace } from '@/types'
 
@@ -28,6 +28,8 @@ export const useDataStore = defineStore('data', () => {
   const loaded = ref(false)
   const loading = ref(false)
   const error = ref<string | null>(null)
+  /** Der API-Schlüssel fehlt oder ist falsch. */
+  const unauthorized = ref(false)
 
   async function refresh() {
     loading.value = true
@@ -44,8 +46,10 @@ export const useDataStore = defineStore('data', () => {
       printers.value = p
       loaded.value = true
       error.value = null
+      unauthorized.value = false
     } catch (e) {
       error.value = (e as Error).message
+      unauthorized.value = e instanceof ApiError && e.status === 401
     } finally {
       loading.value = false
     }
@@ -183,6 +187,7 @@ export const useDataStore = defineStore('data', () => {
     loaded,
     loading,
     error,
+    unauthorized,
     refresh,
     item,
     printer,

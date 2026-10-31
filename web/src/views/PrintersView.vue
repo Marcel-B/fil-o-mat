@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { api } from '@/api'
 import { useDataStore } from '@/stores/data'
@@ -13,6 +14,7 @@ import type { Consumption, Printer, PrinterLive, Spool, ToolLive } from '@/types
 
 const store = useDataStore()
 const toast = useToast()
+const { t } = useI18n()
 
 const live = ref<PrinterLive[]>([])
 const liveById = computed(() => new Map(live.value.map((l) => [l.printerId, l])))
@@ -110,28 +112,28 @@ async function assign() {
     assignDialog.value = false
     await Promise.all([store.refresh(), loadUnassigned()])
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Zuordnen ging nicht', detail: (e as Error).message, life: 6000 })
+    toast.add({ severity: 'error', summary: t('printers.assignFailed'), detail: (e as Error).message, life: 6000 })
   } finally {
     assignSaving.value = false
   }
 }
 const toolLabel = (entry: Consumption) => {
   const printer = store.printer(entry.printerId)
-  return printer ? printerPlace(printer, entry.tool) : 'Gelöschter Drucker'
+  return printer ? printerPlace(printer, entry.tool) : t('printers.deleted')
 }
 </script>
 
 <template>
   <div class="mx-auto flex max-w-7xl flex-col gap-4">
     <div class="flex flex-wrap items-center gap-3">
-      <h1 class="text-2xl font-semibold">Drucker</h1>
+      <h1 class="text-2xl font-semibold">{{ t('printers.title') }}</h1>
       <span class="flex-1" />
-      <Button icon="pi pi-refresh" text rounded aria-label="Neu laden" :loading="loadingLive" @click="reloadAll" />
-      <Button label="Neuer Drucker" icon="pi pi-plus" @click="editPrinter(null)" />
+      <Button icon="pi pi-refresh" text rounded :aria-label="t('common.reload')" :loading="loadingLive" @click="reloadAll" />
+      <Button :label="t('printers.new')" icon="pi pi-plus" @click="editPrinter(null)" />
     </div>
 
     <div v-if="store.loaded && !store.printers.length" class="rounded-xl border border-dashed border-surface-300 p-10 text-center text-muted-color dark:border-surface-700">
-      Noch kein Drucker eingerichtet.
+      {{ t('printers.none') }}
     </div>
 
     <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
@@ -147,16 +149,16 @@ const toolLabel = (entry: Consumption) => {
     </div>
 
     <Card v-if="unassigned.length">
-      <template #title>Verbrauch ohne Spule ({{ unassigned.length }})</template>
-      <template #subtitle>Bei diesen Drucken war nicht klar, von welcher Spule abgebucht wird.</template>
+      <template #title>{{ t('printers.unassignedTitle', { n: unassigned.length }) }}</template>
+      <template #subtitle>{{ t('printers.unassignedHint') }}</template>
       <template #content>
         <DataTable :value="unassigned" size="small" data-key="id" paginator :rows="10">
-          <Column header="Ende"><template #body="{ data }">{{ formatDateTime(data.endedAt) }}</template></Column>
-          <Column header="Druck" field="jobName" />
-          <Column header="Platz"><template #body="{ data }">{{ toolLabel(data) }}</template></Column>
-          <Column header="Menge" class="text-right"><template #body="{ data }">{{ grams(data.grams) }}</template></Column>
+          <Column :header="t('printers.end')"><template #body="{ data }">{{ formatDateTime(data.endedAt) }}</template></Column>
+          <Column :header="t('printers.job')" field="jobName" />
+          <Column :header="t('common.place')"><template #body="{ data }">{{ toolLabel(data) }}</template></Column>
+          <Column :header="t('common.quantity')" class="text-right"><template #body="{ data }">{{ grams(data.grams) }}</template></Column>
           <Column class="w-32 text-right">
-            <template #body="{ data }"><Button label="Zuordnen" size="small" outlined @click="startAssign(data)" /></template>
+            <template #body="{ data }"><Button :label="t('printers.assign')" size="small" outlined @click="startAssign(data)" /></template>
           </Column>
         </DataTable>
       </template>
@@ -166,11 +168,11 @@ const toolLabel = (entry: Consumption) => {
     <SpoolDialog v-model:visible="spoolDialog" :spool="editedSpool" show-item />
     <InsertSpoolDialog v-model:visible="insertDialog" :printer="insertPrinter" :tool="insertTool" />
 
-    <Dialog v-model:visible="assignDialog" modal header="Verbrauch zuordnen" class="w-[30rem] max-w-[95vw]">
+    <Dialog v-model:visible="assignDialog" modal :header="t('printers.assignTitle')" class="w-[30rem] max-w-[95vw]">
       <div v-if="assigning" class="flex flex-col gap-4">
         <p class="text-sm">{{ assigning.jobName }} · {{ toolLabel(assigning) }} · {{ grams(assigning.grams) }}</p>
         <label class="flex flex-col gap-1 text-sm">
-          Sorte
+          {{ t('printers.kind') }}
           <Select v-model="assignItem" :options="itemOptions" option-label="label" option-value="id" filter fluid @change="assignSpool = null">
             <template #option="{ option }">
               <div class="flex items-center gap-2"><ColorDot :hex="option.color" :size="16" />{{ option.label }}</div>
@@ -178,13 +180,13 @@ const toolLabel = (entry: Consumption) => {
           </Select>
         </label>
         <label v-if="assignItem" class="flex flex-col gap-1 text-sm">
-          Spule
-          <Select v-model="assignSpool" :options="spoolOptions" option-label="label" option-value="id" show-clear placeholder="automatisch (die am Platz, sonst eine neue)" fluid />
+          {{ t('common.spool') }}
+          <Select v-model="assignSpool" :options="spoolOptions" option-label="label" option-value="id" show-clear :placeholder="t('printers.autoSpool')" fluid />
         </label>
       </div>
       <template #footer>
-        <Button label="Abbrechen" severity="secondary" text @click="assignDialog = false" />
-        <Button label="Abbuchen" icon="pi pi-check" :loading="assignSaving" :disabled="!assignItem" @click="assign" />
+        <Button :label="t('common.cancel')" severity="secondary" text @click="assignDialog = false" />
+        <Button :label="t('printers.book')" icon="pi pi-check" :loading="assignSaving" :disabled="!assignItem" @click="assign" />
       </template>
     </Dialog>
   </div>

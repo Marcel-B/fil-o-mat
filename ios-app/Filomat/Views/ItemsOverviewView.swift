@@ -22,7 +22,7 @@ struct ItemsOverviewView: View {
                 || item.itemData?.brand?.lowercased().contains(query) == true
                 || item.rfidTag.lowercased().contains(query)
         }
-        return Dictionary(grouping: filtered) { $0.itemData?.type ?? "Ohne Typ" }
+        return Dictionary(grouping: filtered) { $0.itemData?.type ?? String(localized: "Ohne Typ") }
             .map { ItemGroup(type: $0.key, items: $0.value) }
             .sorted { $0.type < $1.type }
     }
@@ -128,7 +128,7 @@ private struct ItemOverviewRow: View {
                         }.joined(separator: ", "))
                     }
                     if let stock = item.spoolsInStock, stock > 0 {
-                        field("Vorrat:", stock == 1 ? "1 Spule" : "\(stock) Spulen")
+                        field("Vorrat:", stock == 1 ? String(localized: "1 Spule") : String(localized: "\(stock) Spulen"))
                     }
                     if let td = item.transmissionText { field("TD:", td) }
                     if isPossibleDuplicate {
@@ -142,7 +142,7 @@ private struct ItemOverviewRow: View {
         .padding(.vertical, 4)
     }
 
-    private func field(_ label: String, _ value: String) -> some View {
+    private func field(_ label: LocalizedStringKey, _ value: String) -> some View {
         HStack(spacing: 4) {
             Text(label).foregroundStyle(.secondary)
             Text(value)

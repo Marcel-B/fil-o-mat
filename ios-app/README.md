@@ -31,6 +31,12 @@ Container und Filamente aus der Android-App kommen so aufs iPhone: in der Androi
 
 Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 erkennt der Drucker die Spulen selbst; bei anderen Druckern legst du die Spule in den Container des Druckers. Beim Bearbeiten eines Filaments trägst du Füll- und Restgewicht ein und siehst die gebuchten Drucke.
 
+## Sprache und Darstellung
+
+Die App gibt es auf Deutsch und Englisch; sie folgt der Sprache des Geräts, eine eigene Sprache nur für Fil-o-mat stellt man in den iOS-Einstellungen der App ein. Hell, dunkel oder wie das System wählt man unter Container > Zahnrad > Darstellung.
+
+Die Texte stehen auf Deutsch im Code und in `Filomat/Localizable.xcstrings` mit der englischen Übersetzung (Schlüssel ist der deutsche Text). Texte, die als `String` weitergereicht werden, laufen über `String(localized:)`. Neue Texte trägt Xcode beim Bauen in den Katalog ein; die englische Übersetzung dort ergänzen. Die Tests laufen auf Deutsch (`-testLanguage de` in `.github/workflows/ios.yml`). Hinweise und Fehlermeldungen vom Backend bleiben vorerst deutsch.
+
 ## Unterschiede zur Android-App
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.

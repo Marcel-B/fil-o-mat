@@ -65,6 +65,12 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 
 Herausnehmen geht in der Container-Ansicht.
 
+## Sprache und Darstellung
+
+Die App gibt es auf Deutsch und Englisch, dazu hell, dunkel oder wie das System. Beides stellt man unter Container > Zahnrad ein; ab Android 13 lässt sich die Sprache auch in den Systemeinstellungen pro App wählen (`res/xml/locales_config.xml`).
+
+Die Texte stehen auf Deutsch im Code und laufen über `tr("…")` aus `i18n/I18n.kt`; die englische Fassung steht in `i18n/English.kt` (deutscher Text als Schlüssel, wie `Localizable.xcstrings` in der iOS-App). Platzhalter wie bei `String.format`: `tr("Spule #%s", nummer)`. Ohne Eintrag bleibt der deutsche Text stehen; Unit-Tests laufen auf Deutsch. Farbschema und Sprache setzt AppCompat (`AppSettings`), deshalb ist `MainActivity` eine `AppCompatActivity` mit DayNight-Theme. Hinweise und Fehlermeldungen vom Backend bleiben vorerst deutsch.
+
 ## Projektstruktur
 
 ```

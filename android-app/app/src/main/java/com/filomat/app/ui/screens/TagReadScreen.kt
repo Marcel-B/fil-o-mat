@@ -20,6 +20,7 @@ import com.filomat.app.nfc.NFCReader
 import com.filomat.app.nfc.TagReading
 import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
+import com.filomat.app.i18n.tr
 
 /** Einen Tag einfach auslesen und alles anzeigen, was darauf steht; in der App ändert sich nichts. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,10 +39,10 @@ fun TagReadScreen(navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Filament-Tag lesen") },
+                title = { Text(tr("Filament-Tag lesen")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 }
             )
@@ -64,25 +65,25 @@ fun TagReadScreen(navController: NavController) {
                     if (isScanning) {
                         CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp)
                         Spacer(Modifier.width(8.dp))
-                        Text("Tag an das Handy halten …")
+                        Text(tr("Tag an das Handy halten …"))
                     } else {
-                        Text(if (reading == null) "Tag lesen" else "Nächsten Tag lesen")
+                        Text(if (reading == null) tr("Tag lesen") else tr("Nächsten Tag lesen"))
                     }
                 }
                 if (isScanning) {
                     TextButton(onClick = { nfcReader.stopScanning() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                        Text("Abbrechen")
+                        Text(tr("Abbrechen"))
                     }
                 }
             } else {
-                Text("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.", color = MaterialTheme.colorScheme.error)
+                Text(tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."), color = MaterialTheme.colorScheme.error)
             }
             nfcError?.let { Text(it, color = MaterialTheme.colorScheme.error) }
 
             val current = reading
             if (current == null) {
                 Text(
-                    "Zeigt alles an, was auf einem Filament- oder Container-Tag steht, auch Felder anderer Programme. In der App wird dabei nichts geändert.",
+                    tr("Zeigt alles an, was auf einem Filament- oder Container-Tag steht, auch Felder anderer Programme. In der App wird dabei nichts geändert."),
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             } else {
@@ -108,7 +109,7 @@ private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem
                 ColorDot(data.color_hex, 48.dp)
                 Column {
                     val title = listOfNotNull(data.brand, data.type, data.variant).joinToString(" ")
-                    Text(title.ifEmpty { "Filament" }, style = MaterialTheme.typography.titleMedium)
+                    Text(title.ifEmpty { tr("Filament") }, style = MaterialTheme.typography.titleMedium)
                     (data.color ?: data.color_hex?.let { "#" + it.removePrefix("#") })?.let {
                         Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant)
                     }
@@ -117,30 +118,30 @@ private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem
         }
     }
 
-    Section("In der App") {
+    Section(tr("In der App")) {
         when {
             item != null -> {
-                InfoRow("Filament", item.getDisplayTitle())
-                InfoRow("Container", state.container(item.containerId)?.name ?: "Lose")
-                item.spoolsInStock?.takeIf { it > 0 }?.let { InfoRow("Vorrat", if (it == 1) "1 Spule" else "$it Spulen") }
-                item.transmissionText()?.let { InfoRow("Lichtdurchlässigkeit (TD)", it) }
+                InfoRow(tr("Filament"), item.getDisplayTitle())
+                InfoRow(tr("Container"), state.container(item.containerId)?.name ?: "Lose")
+                item.spoolsInStock?.takeIf { it > 0 }?.let { InfoRow(tr("Vorrat"), if (it == 1) tr("1 Spule") else tr("%s Spulen", it)) }
+                item.transmissionText()?.let { InfoRow(tr("Lichtdurchlässigkeit (TD)"), it) }
                 state.spoolsOf(item.id).forEach { spool ->
-                    InfoRow("Spule #${spool.number}", listOfNotNull(spool.locationText(state.printers, state.containers), spool.remainingWeight?.let(GramText::label)).joinToString(" · "))
+                    InfoRow(tr("Spule #%s", spool.number), listOfNotNull(spool.locationText(state.printers, state.containers), spool.remainingWeight?.let(GramText::label)).joinToString(" · "))
                 }
                 OutlinedButton(onClick = { onOpenItem(item.id) }, modifier = Modifier.fillMaxWidth()) {
-                    Text("Filament bearbeiten")
+                    Text(tr("Filament bearbeiten"))
                 }
             }
             container != null -> {
-                InfoRow("Container", container.name)
-                InfoRow("Spulen darin", "${state.spoolCount(container.id)}")
+                InfoRow(tr("Container"), container.name)
+                InfoRow(tr("Spulen darin"), "${state.spoolCount(container.id)}")
             }
-            else -> Text("Dieser Tag ist in der App noch nicht bekannt.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            else -> Text(tr("Dieser Tag ist in der App noch nicht bekannt."), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
     }
 
     if (contents != null) {
-        Section("Daten auf dem Tag") {
+        Section(tr("Daten auf dem Tag")) {
             contents.error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
             contents.fields.forEach { field ->
                 InfoRow(field.label, field.value)
@@ -150,18 +151,18 @@ private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem
 
     Section("Chip") {
         InfoRow("UID", reading.uid)
-        reading.ndefType?.let { InfoRow("NDEF-Typ", it) }
+        reading.ndefType?.let { InfoRow(tr("NDEF-Typ"), it) }
         if (reading.ndefCapacity != null) {
-            InfoRow("Belegt", "${reading.ndefUsed ?: 0} von ${reading.ndefCapacity} Bytes")
+            InfoRow(tr("Belegt"), tr("%s von %s Bytes", reading.ndefUsed ?: 0, reading.ndefCapacity))
         }
-        reading.isWritable?.let { InfoRow("Beschreibbar", if (it) "Ja" else "Nein (gesperrt)") }
-        InfoRow("Technik", reading.technologies.joinToString(", "))
+        reading.isWritable?.let { InfoRow(tr("Beschreibbar"), if (it) tr("Ja") else tr("Nein (gesperrt)")) }
+        InfoRow(tr("Technik"), reading.technologies.joinToString(", "))
     }
 
     if (reading.records.isNotEmpty()) {
         Section("NDEF-Records") {
             reading.records.forEachIndexed { index, record ->
-                Text("${index + 1}. ${record.format} · ${record.type} · ${record.sizeBytes} Bytes", style = MaterialTheme.typography.labelLarge)
+                Text(tr("%s. %s · %s · %s Bytes", index + 1, record.format, record.type, record.sizeBytes), style = MaterialTheme.typography.labelLarge)
                 record.text?.let {
                     SelectionContainer {
                         Text(it, fontFamily = FontFamily.Monospace, style = MaterialTheme.typography.bodySmall)
@@ -170,7 +171,7 @@ private fun TagReadingContent(reading: TagReading, state: StoreState, onOpenItem
             }
         }
     } else if (reading.error == null) {
-        Text("Auf dem Tag stehen keine Daten.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(tr("Auf dem Tag stehen keine Daten."), color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

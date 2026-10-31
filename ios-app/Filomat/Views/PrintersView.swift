@@ -173,8 +173,8 @@ private struct PrinterRow: View {
                 Spacer()
                 if isSyncing { ProgressView() }
             }
-            Text((printer.enabled ? "" : "Pausiert · ") + (printer.toolCount > 1
-                 ? "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)"
+            Text((printer.enabled ? "" : String(localized: "Pausiert · ")) + (printer.toolCount > 1
+                 ? String(localized: "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)")
                  : "\(printer.type.title) · \(printer.baseUrl)"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -245,7 +245,7 @@ struct PrinterFormView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if printer?.hasApiKey == true {
-                        SecureField("Neuer \(type.requiresKey ? "Zugangscode" : "API-Schlüssel") (leer = unverändert)", text: $apiKey)
+                        SecureField(type.requiresKey ? "Neuer Zugangscode (leer = unverändert)" : "Neuer API-Schlüssel (leer = unverändert)", text: $apiKey)
                             .disabled(removeApiKey)
                         if !type.requiresKey {
                             Toggle("API-Schlüssel entfernen", isOn: $removeApiKey)

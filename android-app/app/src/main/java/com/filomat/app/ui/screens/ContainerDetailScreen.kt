@@ -23,6 +23,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.filomat.app.data.Container
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.ui.viewmodel.ContainerDetailViewModel
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -50,20 +51,20 @@ fun ContainerDetailScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(container?.name ?: "Container") },
+                title = { Text(container?.name ?: tr("Container")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 },
                 actions = {
                     IconButton(onClick = { showingEditContainer = true }) {
-                        Icon(Icons.Default.Edit, contentDescription = "Bearbeiten")
+                        Icon(Icons.Default.Edit, contentDescription = tr("Bearbeiten"))
                     }
                     // Standard-Container können nicht gelöscht werden
                     if (container?.isStandard != true) {
                         IconButton(onClick = { showingDeleteDialog = true }) {
-                            Icon(Icons.Default.Delete, contentDescription = "Löschen")
+                            Icon(Icons.Default.Delete, contentDescription = tr("Löschen"))
                         }
                     }
                 }
@@ -73,7 +74,7 @@ fun ContainerDetailScreen(
             ExtendedFloatingActionButton(
                 onClick = { navController.navigate("scan/place/container") },
                 icon = { Icon(Icons.Default.Add, contentDescription = null) },
-                text = { Text("Einlagern") }
+                text = { Text(tr("Einlagern")) }
             )
         }
     ) { padding ->
@@ -92,18 +93,18 @@ fun ContainerDetailScreen(
                             verticalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Informationen",
+                                text = tr("Informationen"),
                                 style = MaterialTheme.typography.titleMedium
                             )
-                            InfoRow("Name", cont.name)
-                            InfoRow("RFID-Tag", cont.rfidTag)
+                            InfoRow(tr("Name"), cont.name)
+                            InfoRow(tr("RFID-Tag"), cont.rfidTag)
                             if (cont.description.isNotEmpty()) {
                                 Row(
                                     modifier = Modifier.fillMaxWidth(),
                                     horizontalArrangement = Arrangement.SpaceBetween
                                 ) {
                                     Text(
-                                        text = "Beschreibung",
+                                        text = tr("Beschreibung"),
                                         style = MaterialTheme.typography.bodyMedium,
                                         color = MaterialTheme.colorScheme.onSurfaceVariant
                                     )
@@ -130,7 +131,7 @@ fun ContainerDetailScreen(
                 } else if (printer == null) {
                     item {
                         Text(
-                            text = "Keine Spulen in diesem Container",
+                            text = tr("Keine Spulen in diesem Container"),
                             style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -144,7 +145,7 @@ fun ContainerDetailScreen(
                     .padding(padding),
                 contentAlignment = androidx.compose.ui.Alignment.Center
             ) {
-                Text("Container nicht gefunden")
+                Text(tr("Container nicht gefunden"))
             }
         }
         
@@ -162,9 +163,9 @@ fun ContainerDetailScreen(
         if (showingDeleteDialog && container != null) {
             AlertDialog(
                 onDismissRequest = { showingDeleteDialog = false },
-                title = { Text("Container löschen") },
+                title = { Text(tr("Container löschen")) },
                 text = { 
-                    Text("Möchten Sie den Container '${container!!.name}' wirklich löschen? Die Spulen darin stehen danach unter 'Lose'.")
+                    Text(tr("Möchten Sie den Container '%s' wirklich löschen? Die Spulen darin stehen danach unter 'Lose'.", container!!.name))
                 },
                 confirmButton = {
                     TextButton(
@@ -174,12 +175,12 @@ fun ContainerDetailScreen(
                             navController.popBackStack()
                         }
                     ) {
-                        Text("Löschen", color = MaterialTheme.colorScheme.error)
+                        Text(tr("Löschen"), color = MaterialTheme.colorScheme.error)
                     }
                 },
                 dismissButton = {
                     TextButton(onClick = { showingDeleteDialog = false }) {
-                        Text("Abbrechen")
+                        Text(tr("Abbrechen"))
                     }
                 }
             )

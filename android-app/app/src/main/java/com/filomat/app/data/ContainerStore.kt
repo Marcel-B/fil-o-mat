@@ -39,6 +39,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.filomat.app.i18n.tr
 
 private val Context.dataStore by preferencesDataStore(name = "container_store")
 
@@ -183,7 +184,7 @@ class ContainerStore private constructor(context: Context) {
                 removeTag(tag, previous.id)
             } else {
                 check(state.spoolsOf(previous.id).isEmpty()) {
-                    "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+                    tr("Das Tag gehört zu „%s“, das angebrochene Spulen hat.", previous.getDisplayTitle())
                 }
                 backend?.deleteItem(previous.id)
                 edit { s -> s.copy(items = s.items.filter { it.id != previous.id }) }
@@ -203,7 +204,7 @@ class ContainerStore private constructor(context: Context) {
         val extra = item.extraTags.orEmpty()
         saveTags(
             if (item.rfidTag == tag) {
-                check(extra.isNotEmpty()) { "Das letzte Tag eines Filaments bleibt." }
+                check(extra.isNotEmpty()) { tr("Das letzte Tag eines Filaments bleibt.") }
                 item.copy(rfidTag = extra.first(), extraTags = extra.drop(1))
             } else {
                 item.copy(extraTags = extra - tag)
@@ -224,7 +225,7 @@ class ContainerStore private constructor(context: Context) {
      * Liefert die Spulen, die eine neue Nummer bekommen haben.
      */
     suspend fun mergeItem(fromId: String, itemId: String): List<RenumberedSpool> {
-        val client = checkNotNull(backend) { "Zum Zusammenführen muss das Backend verbunden sein." }
+        val client = checkNotNull(backend) { tr("Zum Zusammenführen muss das Backend verbunden sein.") }
         val renumbered = client.mergeItem(itemId, fromId)
         edit { s -> s.copy(items = s.items.filter { it.id != fromId }) }
         refresh()
@@ -266,7 +267,7 @@ class ContainerStore private constructor(context: Context) {
      */
     suspend fun connect(serverUrl: String, apiKey: String): ImportResult? {
         val client = BackendClient.create(serverUrl, apiKey) ?: run {
-            _sync.update { it.copy(error = "Ungültige Server-Adresse.") }
+            _sync.update { it.copy(error = tr("Ungültige Server-Adresse.")) }
             return null
         }
         prefs.edit().putString("server_url", serverUrl.trim()).putString("api_key", apiKey.trim()).apply()
@@ -486,7 +487,7 @@ class ContainerStore private constructor(context: Context) {
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; coerceInputValues = true }
 
         private val standardContainers = listOf(
-            Container(id = PRINTER_ID, rfidTag = "STANDARD_DRUCKER", name = "Drucker",
+            Container(id = PRINTER_ID, rfidTag = "STANDARD_DRUCKER", name = tr("Drucker"),
                 description = "Standard-Container für Drucker", isStandard = true),
             Container(id = LOOSE_ID, rfidTag = "STANDARD_LOSE", name = "Lose",
                 description = "Standard-Container für lose Items", isStandard = true)
@@ -503,9 +504,9 @@ class ContainerStore private constructor(context: Context) {
             val message = e.message ?: e.javaClass.simpleName
             return when {
                 message.contains("EPERM") ->
-                    "Kein Netzwerkzugriff. In den App-Einstellungen von Fil-o-mat die Berechtigung „Netzwerk“ erlauben."
-                e is java.net.UnknownHostException -> "Server nicht gefunden: $message"
-                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> "Server nicht erreichbar: $message"
+                    tr("Kein Netzwerkzugriff. In den App-Einstellungen von Fil-o-mat die Berechtigung „Netzwerk“ erlauben.")
+                e is java.net.UnknownHostException -> tr("Server nicht gefunden: %s", message)
+                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> tr("Server nicht erreichbar: %s", message)
                 else -> message
             }
         }

@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import com.filomat.app.data.ItemJsonData
+import com.filomat.app.i18n.tr
 
 class NFCReader(private val activity: Activity) {
     private val nfcAdapter: NfcAdapter? = NfcAdapter.getDefaultAdapter(activity)
@@ -38,7 +39,7 @@ class NFCReader(private val activity: Activity) {
     
     fun startScanning(callback: (String) -> Unit) {
         if (!isAvailable) {
-            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            _errorMessage.value = tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.")
             return
         }
         
@@ -92,7 +93,7 @@ class NFCReader(private val activity: Activity) {
                         if (contents.error == null) {
                             _lastScannedItemData.value = contents.itemData
                         } else {
-                            _errorMessage.value = "Fehler beim Parsen der JSON-Daten: ${contents.error}"
+                            _errorMessage.value = tr("Fehler beim Parsen der JSON-Daten: %s", contents.error)
                         }
                         onTagScanned?.invoke(tagId)
                     } else {
@@ -111,7 +112,7 @@ class NFCReader(private val activity: Activity) {
                 onTagScanned?.invoke(tagId)
             }
         } catch (e: Exception) {
-            _errorMessage.value = "Fehler beim Lesen des Tags: ${e.message}"
+            _errorMessage.value = tr("Fehler beim Lesen des Tags: %s", e.message)
             // Fallback: Verwende Tag-ID
             val tagId = bytesToHex(tag.id)
             _lastScannedTag.value = tagId
@@ -121,7 +122,7 @@ class NFCReader(private val activity: Activity) {
     
     fun startScanningForItem(callback: (String, ItemJsonData?) -> Unit) {
         if (!isAvailable) {
-            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            _errorMessage.value = tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.")
             return
         }
         
@@ -145,7 +146,7 @@ class NFCReader(private val activity: Activity) {
      */
     fun readTag(callback: (TagReading) -> Unit) {
         if (!isAvailable) {
-            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            _errorMessage.value = tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.")
             return
         }
         _isScanning.value = true
@@ -174,7 +175,7 @@ class NFCReader(private val activity: Activity) {
      */
     fun scanTag(callback: (ScannedTag) -> Unit) {
         if (!isAvailable) {
-            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            _errorMessage.value = tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.")
             return
         }
         _isScanning.value = true
@@ -207,12 +208,12 @@ class NFCReader(private val activity: Activity) {
             val payload = record.payload ?: ByteArray(0)
             if (record.tnf == NdefRecord.TNF_MIME_MEDIA && String(record.type, Charsets.UTF_8) == "application/json") {
                 val contents = TagContents.parse(String(payload, Charsets.UTF_8))
-                ScannedTag(uid, contents.itemData, contents.error?.let { "Filamentdaten auf dem Tag nicht lesbar: $it" })
+                ScannedTag(uid, contents.itemData, contents.error?.let { tr("Filamentdaten auf dem Tag nicht lesbar: %s", it) })
             } else {
                 ScannedTag(String(payload, Charsets.UTF_8))
             }
         } catch (e: Exception) {
-            ScannedTag(uid, parseError = "Fehler beim Lesen des Tags: ${e.message ?: e.javaClass.simpleName}")
+            ScannedTag(uid, parseError = tr("Fehler beim Lesen des Tags: %s", e.message ?: e.javaClass.simpleName))
         } finally {
             try { ndef.close() } catch (_: Exception) {}
         }
@@ -224,7 +225,7 @@ class NFCReader(private val activity: Activity) {
             technologies = tag.techList.map { it.substringAfterLast('.') }
         )
         val ndef = Ndef.get(tag) ?: return base.copy(
-            error = if (NdefFormatable.get(tag) != null) "Der Tag ist leer (noch nicht für NDEF formatiert)." else null
+            error = if (NdefFormatable.get(tag) != null) tr("Der Tag ist leer (noch nicht für NDEF formatiert).") else null
         )
         return try {
             ndef.connect()
@@ -245,7 +246,7 @@ class NFCReader(private val activity: Activity) {
                 textId = textId
             )
         } catch (e: Exception) {
-            base.copy(error = "Fehler beim Lesen des Tags: ${e.message ?: e.javaClass.simpleName}")
+            base.copy(error = tr("Fehler beim Lesen des Tags: %s", e.message ?: e.javaClass.simpleName))
         } finally {
             try { ndef.close() } catch (_: Exception) {}
         }
@@ -258,9 +259,9 @@ class NFCReader(private val activity: Activity) {
             NdefRecord.TNF_MIME_MEDIA -> "MIME"
             NdefRecord.TNF_WELL_KNOWN -> "Well-known"
             NdefRecord.TNF_ABSOLUTE_URI -> "URI"
-            NdefRecord.TNF_EXTERNAL_TYPE -> "Extern"
-            NdefRecord.TNF_EMPTY -> "Leer"
-            else -> "Unbekannt"
+            NdefRecord.TNF_EXTERNAL_TYPE -> tr("Extern")
+            NdefRecord.TNF_EMPTY -> tr("Leer")
+            else -> tr("Unbekannt")
         }
         val text = when {
             record.tnf == NdefRecord.TNF_WELL_KNOWN && type == "T" && payload.isNotEmpty() -> {
@@ -309,7 +310,7 @@ class NFCReader(private val activity: Activity) {
                 }
             }
         } catch (e: Exception) {
-            _errorMessage.value = "Fehler beim Schreiben: ${e.message}"
+            _errorMessage.value = tr("Fehler beim Schreiben: %s", e.message)
             false
         }
     }
@@ -320,7 +321,7 @@ class NFCReader(private val activity: Activity) {
             if (ndef != null) {
                 ndef.connect()
                 if (!ndef.isWritable) {
-                    _errorMessage.value = "Tag ist nicht beschreibbar"
+                    _errorMessage.value = tr("Tag ist nicht beschreibbar")
                     ndef.close()
                     return false
                 }
@@ -335,7 +336,7 @@ class NFCReader(private val activity: Activity) {
                 val maxSize = ndef.maxSize
                 
                 if (maxSize < messageSize) {
-                    _errorMessage.value = "Tag zu klein: benötigt $messageSize Bytes, verfügbar: $maxSize Bytes"
+                    _errorMessage.value = tr("Tag zu klein: benötigt %s Bytes, verfügbar: %s Bytes", messageSize, maxSize)
                     ndef.close()
                     return false
                 }
@@ -358,19 +359,19 @@ class NFCReader(private val activity: Activity) {
                     _errorMessage.value = null
                     true
                 } else {
-                    _errorMessage.value = "Tag unterstützt NDEF nicht"
+                    _errorMessage.value = tr("Tag unterstützt NDEF nicht")
                     false
                 }
             }
         } catch (e: Exception) {
-            _errorMessage.value = "Fehler beim Schreiben: ${e.message ?: e.javaClass.simpleName}"
+            _errorMessage.value = tr("Fehler beim Schreiben: %s", e.message ?: e.javaClass.simpleName)
             false
         }
     }
     
     fun startWriting(callback: (Tag) -> Unit) {
         if (!isAvailable) {
-            _errorMessage.value = "NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."
+            _errorMessage.value = tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert.")
             return
         }
         

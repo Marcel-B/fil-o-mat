@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useDataStore } from '@/stores/data'
 import { displayTitle, formatDate, grams } from '@/format'
 import ColorDot from '@/components/ColorDot.vue'
@@ -7,13 +8,14 @@ import SpoolDialog from '@/components/SpoolDialog.vue'
 import type { Spool } from '@/types'
 
 const store = useDataStore()
+const { t } = useI18n()
 const query = ref('')
 const where = ref<'all' | 'printer' | 'storage'>('all')
-const whereOptions = [
-  { label: 'Alle', value: 'all' },
-  { label: 'Im Drucker', value: 'printer' },
-  { label: 'Im Lager', value: 'storage' },
-]
+const whereOptions = computed(() => [
+  { label: t('spools.all'), value: 'all' },
+  { label: t('spools.inPrinter'), value: 'printer' },
+  { label: t('spools.inStorage'), value: 'storage' },
+])
 
 const rows = computed(() => {
   const q = query.value.trim().toLowerCase()
@@ -49,14 +51,14 @@ function edit(spool: Spool) {
 <template>
   <div class="mx-auto flex max-w-6xl flex-col gap-4">
     <div class="flex flex-wrap items-center gap-3">
-      <h1 class="text-2xl font-semibold">Spulen</h1>
-      <span class="text-muted-color">{{ store.spools.length }} angebrochen</span>
+      <h1 class="text-2xl font-semibold">{{ t('spools.title') }}</h1>
+      <span class="text-muted-color">{{ t('spools.count', { n: store.spools.length }) }}</span>
     </div>
 
     <div class="flex flex-wrap gap-3">
       <IconField class="min-w-60 flex-1">
         <InputIcon class="pi pi-search" />
-        <InputText v-model="query" placeholder="Suchen: Sorte, Platz, #Nummer …" fluid />
+        <InputText v-model="query" :placeholder="t('spools.search')" fluid />
       </IconField>
       <SelectButton v-model="where" :options="whereOptions" option-label="label" option-value="value" :allow-empty="false" />
     </div>
@@ -70,8 +72,8 @@ function edit(spool: Spool) {
       class="cursor-pointer overflow-hidden rounded-xl border border-surface-200 dark:border-surface-800"
       @row-click="edit($event.data.spool)"
     >
-      <template #empty><div class="py-8 text-center text-muted-color">Keine Spulen</div></template>
-      <Column header="Spule" field="title" sortable>
+      <template #empty><div class="py-8 text-center text-muted-color">{{ t('spools.none') }}</div></template>
+      <Column :header="t('common.spool')" field="title" sortable>
         <template #body="{ data }">
           <div class="flex items-center gap-3">
             <ColorDot :hex="data.item?.itemData?.color_hex" :size="24" />
@@ -82,8 +84,8 @@ function edit(spool: Spool) {
           </div>
         </template>
       </Column>
-      <Column header="Platz" field="place" sortable />
-      <Column header="Rest" field="remaining" sortable class="w-44">
+      <Column :header="t('common.place')" field="place" sortable />
+      <Column :header="t('spools.remaining')" field="remaining" sortable class="w-44">
         <template #body="{ data }">
           <div class="flex items-center gap-2">
             <span class="w-16 text-right" :class="{ 'text-muted-color': data.spool.remainingWeight == null }">
@@ -99,12 +101,12 @@ function edit(spool: Spool) {
           </div>
         </template>
       </Column>
-      <Column header="Gewogen" class="hidden md:table-cell">
+      <Column :header="t('spools.weighed')" class="hidden md:table-cell">
         <template #body="{ data }">
           <span class="text-sm text-muted-color">{{ data.spool.weighedAt ? formatDate(data.spool.weighedAt) : '–' }}</span>
         </template>
       </Column>
-      <Column header="Angebrochen" class="hidden lg:table-cell">
+      <Column :header="t('spools.opened')" class="hidden lg:table-cell">
         <template #body="{ data }">
           <span class="text-sm text-muted-color">{{ formatDate(data.spool.openedAt) }}</span>
         </template>

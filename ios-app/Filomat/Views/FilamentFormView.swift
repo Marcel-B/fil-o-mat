@@ -293,15 +293,15 @@ struct FilamentFormView: View {
         let tag = scanned.tagId.trimmingCharacters(in: .whitespaces)
         errorMessage = nil
         if tag.isEmpty {
-            errorMessage = "Ungültiger Tag."
+            errorMessage = String(localized: "Ungültiger Tag.")
         } else if item.hasTag(tag) {
-            errorMessage = "Dieses Tag gehört schon zu diesem Filament."
+            errorMessage = String(localized: "Dieses Tag gehört schon zu diesem Filament.")
         } else if let container = store.findContainer(byTag: tag) {
-            errorMessage = "Dieses Tag gehört zum Container '\(container.name)'."
+            errorMessage = String(localized: "Dieses Tag gehört zum Container '\(container.name)'.")
         } else if let previous = store.findItem(byTag: tag) {
             let deletesPrevious = previous.allTags.count <= 1
             if deletesPrevious, !store.spools(of: previous.id).isEmpty {
-                errorMessage = "Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat."
+                errorMessage = String(localized: "Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat.")
             } else {
                 pendingTag = PendingTag(tag: tag, previous: previous, deletesPrevious: deletesPrevious)
             }
@@ -314,7 +314,7 @@ struct FilamentFormView: View {
         var parts = [duplicate.containerId.flatMap { store.container(id: $0)?.name } ?? "Lose"]
         let spools = store.spools(of: duplicate.id)
         if !spools.isEmpty { parts.append(spools.map { "#\($0.number)" }.joined(separator: ", ")) }
-        if let stock = duplicate.spoolsInStock, stock > 0 { parts.append("Vorrat \(stock)") }
+        if let stock = duplicate.spoolsInStock, stock > 0 { parts.append(String(localized: "Vorrat \(stock)")) }
         return parts.joined(separator: " · ")
     }
 
@@ -327,9 +327,8 @@ struct FilamentFormView: View {
             let renumbered = try await store.mergeItem(duplicate.id, into: item.id)
             spoolsInStock = store.item(id: item.id)?.spoolsInStock ?? spoolsInStock
             mergeMessage = renumbered.isEmpty
-                ? "Zusammengeführt."
-                : "Zusammengeführt. Neue Nummern: " + renumbered.map { "#\($0.oldNumber) → #\($0.newNumber)" }.joined(separator: ", ")
-                    + ". Bitte auf den Spulen ändern."
+                ? String(localized: "Zusammengeführt.")
+                : String(localized: "Zusammengeführt. Neue Nummern: \(renumbered.map { "#\($0.oldNumber) → #\($0.newNumber)" }.joined(separator: ", ")). Bitte auf den Spulen ändern.")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -452,7 +451,7 @@ struct FilamentFormView: View {
         do {
             json = try TagJSON.encoder.encode(data)
         } catch {
-            errorMessage = "Fehler beim Erstellen der Daten: \(error.localizedDescription)"
+            errorMessage = String(localized: "Fehler beim Erstellen der Daten: \(error.localizedDescription)")
             return
         }
 
@@ -460,13 +459,13 @@ struct FilamentFormView: View {
         do {
             _ = try await NFCService.shared.writeJSON(
                 json,
-                prompt: "Halten Sie das iPhone an den Filament-Tag."
+                prompt: String(localized: "Halten Sie das iPhone an den Filament-Tag.")
             ) { [store] tagId in
                 if let expectedTags, !expectedTags.isEmpty, !expectedTags.contains(tagId) {
-                    return "Das ist kein Tag dieses Filaments."
+                    return String(localized: "Das ist kein Tag dieses Filaments.")
                 }
                 if let container = store.findContainer(byTag: tagId) {
-                    return "Dieses Tag gehört zum Container '\(container.name)'."
+                    return String(localized: "Dieses Tag gehört zum Container '\(container.name)'.")
                 }
                 return nil
             }
@@ -641,7 +640,7 @@ enum GramText {
 
 /// Textfeld mit Vorschlagsliste (entspricht dem Autocomplete-Dropdown der Android-App).
 private struct SuggestionField: View {
-    var title: String
+    var title: LocalizedStringKey
     @Binding var text: String
     var options: [String]
 
@@ -662,14 +661,14 @@ private struct SuggestionField: View {
                 } label: {
                     Image(systemName: "chevron.down.circle")
                 }
-                .accessibilityLabel("\(title) auswählen")
+                .accessibilityLabel(Text("\(Text(title)) auswählen"))
             }
         }
     }
 }
 
 private struct TemperatureField: View {
-    var title: String
+    var title: LocalizedStringKey
     @Binding var text: String
 
     var body: some View {
@@ -701,7 +700,7 @@ struct TransmissionField: View {
 
 /// Eingabefeld für Gramm.
 struct GramField: View {
-    var title: String
+    var title: LocalizedStringKey
     @Binding var text: String
 
     var body: some View {

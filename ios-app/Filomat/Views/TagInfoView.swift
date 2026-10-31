@@ -54,7 +54,7 @@ struct TagInfoView: View {
         let uid = tag.details?.uid ?? tag.tagId
         if let container = store.findContainer(byTag: uid) ?? store.findContainer(byTag: tag.tagId) {
             Section("In Fil-o-mat") {
-                InfoRow(label: "Container", value: container.name)
+                LabeledContent(String(localized: "label.container", defaultValue: "Container"), value: container.name)
                 if !container.description.isEmpty {
                     Text(container.description).foregroundStyle(.secondary)
                 }
@@ -70,9 +70,9 @@ struct TagInfoView: View {
                 if !item.description.isEmpty {
                     Text(item.description).foregroundStyle(.secondary)
                 }
-                InfoRow(
-                    label: "Container",
-                    value: item.containerId.flatMap { store.container(id: $0)?.name } ?? "keiner"
+                LabeledContent(
+                    String(localized: "label.container", defaultValue: "Container"),
+                    value: item.containerId.flatMap { store.container(id: $0)?.name } ?? String(localized: "keiner")
                 )
                 if let stock = item.spoolsInStock { InfoRow(label: "Volle Spulen im Vorrat", value: "\(stock)") }
                 if let net = item.netWeight { InfoRow(label: "Filament pro Spule", value: grams(net)) }
@@ -80,12 +80,12 @@ struct TagInfoView: View {
                 if let td = item.transmissionText { InfoRow(label: "Lichtdurchlässigkeit (TD)", value: td) }
                 let spools = store.spools(of: item.id)
                 if spools.isEmpty {
-                    InfoRow(label: "Angebrochene Spulen", value: "keine")
+                    InfoRow(label: "Angebrochene Spulen", value: String(localized: "keine"))
                 } else {
                     ForEach(spools) { spool in
                         LabeledContent("Spule \(spool.number)") {
                             VStack(alignment: .trailing) {
-                                Text(spool.remainingWeight.map(grams) ?? "Rest unbekannt")
+                                Text(spool.remainingWeight.map(grams) ?? String(localized: "Rest unbekannt"))
                                 Text(spool.locationText(printers: store.printers, containers: store.containers))
                                     .font(.caption)
                                     .foregroundStyle(.secondary)
@@ -161,7 +161,7 @@ struct TagInfoView: View {
             Section("NDEF-Records (\(records.count))") {
                 ForEach(Array(records.enumerated()), id: \.offset) { index, record in
                     VStack(alignment: .leading, spacing: 4) {
-                        Text("\(index + 1). \(record.formatName): \(record.type.isEmpty ? "ohne Typ" : record.type)")
+                        Text("\(index + 1). \(record.formatName): \(record.type.isEmpty ? String(localized: "ohne Typ") : record.type)")
                             .font(.subheadline.weight(.semibold))
                         Text("\(record.payload.count) Bytes").font(.caption).foregroundStyle(.secondary)
                         if !record.isJSON, !record.payload.isEmpty {
@@ -198,7 +198,7 @@ struct TagInfoView: View {
         isScanning = true
         defer { isScanning = false }
         do {
-            tag = try await NFCService.shared.scan(prompt: "Halten Sie das iPhone an einen Tag.")
+            tag = try await NFCService.shared.scan(prompt: String(localized: "Halten Sie das iPhone an einen Tag."))
             errorMessage = nil
         } catch NFCError.cancelled {
             // Nutzer hat das Scanfenster geschlossen

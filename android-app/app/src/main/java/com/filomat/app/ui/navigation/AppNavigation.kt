@@ -19,6 +19,7 @@ import com.filomat.app.ui.screens.PrinterDetailScreen
 import com.filomat.app.ui.screens.PrintersScreen
 import com.filomat.app.ui.screens.StatsScreen
 import com.filomat.app.ui.screens.ScanScreen
+import com.filomat.app.ui.screens.SettingsScreen
 import com.filomat.app.ui.screens.TagReadScreen
 
 @Composable
@@ -79,6 +80,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
         composable("backend") {
             BackendScreen(navController = navController)
+        }
+        composable("settings") {
+            SettingsScreen(navController = navController)
         }
     }
 }

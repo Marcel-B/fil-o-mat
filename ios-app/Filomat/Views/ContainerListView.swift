@@ -4,6 +4,7 @@ struct ContainerListView: View {
     @Environment(ContainerStore.self) private var store
     @State private var showingAddContainer = false
     @State private var showingBackend = false
+    @State private var showingSettings = false
 
     var body: some View {
         let regular = store.containers.filter { !$0.isStandard }
@@ -82,6 +83,13 @@ struct ContainerListView: View {
                     Label("Backend", systemImage: store.backend == nil ? "icloud.slash" : "icloud")
                 }
             }
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Label("Einstellungen", systemImage: "gearshape")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingAddContainer = true
@@ -95,6 +103,9 @@ struct ContainerListView: View {
         }
         .sheet(isPresented: $showingBackend) {
             BackendSettingsView()
+        }
+        .sheet(isPresented: $showingSettings) {
+            AppSettingsView()
         }
     }
 }

@@ -8,6 +8,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import com.filomat.app.i18n.tr
 
 class BackendException(message: String, val status: Int? = null) : IOException(message)
 
@@ -135,10 +136,10 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
             }
             val status = connection.responseCode
             if (status == 404 && allowNotFound) return null
-            if (status == 401) throw BackendException("Der Server lehnt den API-Schlüssel ab.", status)
+            if (status == 401) throw BackendException(tr("Der Server lehnt den API-Schlüssel ab."), status)
             if (status !in 200..299) {
                 connection.errorStream?.close()
-                throw BackendException("Der Server antwortet mit Fehler $status.", status)
+                throw BackendException(tr("Der Server antwortet mit Fehler %s.", status), status)
             }
             return connection.inputStream.use { it.readBytes() }
         } finally {

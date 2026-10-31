@@ -28,6 +28,7 @@ import android.nfc.Tag
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -167,9 +168,9 @@ fun EditFilamentDialog(
         title = { 
             Text(
                 when (workflowState) {
-                    1 -> "Temperaturen"
-                    2 -> if (writeToTag) "Tag beschreiben" else "Speichern"
-                    else -> "Filament bearbeiten"
+                    1 -> tr("Temperaturen")
+                    2 -> if (writeToTag) tr("Tag beschreiben") else tr("Speichern")
+                    else -> tr("Filament bearbeiten")
                 }
             )
         },
@@ -191,7 +192,7 @@ fun EditFilamentDialog(
                                 value = selectedType,
                                 onValueChange = { },
                                 readOnly = true,
-                                label = { Text("Typ *") },
+                                label = { Text(tr("Typ *")) },
                                 trailingIcon = {
                                     IconButton(onClick = { isTypeExpanded = !isTypeExpanded }) {
                                         Icon(Icons.Default.ArrowDropDown, contentDescription = null)
@@ -234,7 +235,7 @@ fun EditFilamentDialog(
                                     brand = it
                                     isBrandExpanded = it.isNotEmpty() && filteredBrands.isNotEmpty()
                                 },
-                                label = { Text("Marke") },
+                                label = { Text(tr("Marke")) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .menuAnchor(),
@@ -282,7 +283,7 @@ fun EditFilamentDialog(
                                     variant = it
                                     isVariantExpanded = it.isNotEmpty() && filteredVariants.isNotEmpty()
                                 },
-                                label = { Text("Variante") },
+                                label = { Text(tr("Variante")) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .menuAnchor(),
@@ -323,7 +324,7 @@ fun EditFilamentDialog(
                             OutlinedTextField(
                                 value = colorHex,
                                 onValueChange = { colorHex = it },
-                                label = { Text("Farbe (Hex)") },
+                                label = { Text(tr("Farbe (Hex)")) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 enabled = !isProcessing,
@@ -392,11 +393,11 @@ fun EditFilamentDialog(
                         OutlinedTextField(
                             value = color,
                             onValueChange = { color = it },
-                            label = { Text("Farbe (Text)") },
+                            label = { Text(tr("Farbe (Text)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
-                            placeholder = { Text("Rot") }
+                            placeholder = { Text(tr("Rot")) }
                         )
                         
                         if (statusError != null) {
@@ -421,7 +422,7 @@ fun EditFilamentDialog(
                         OutlinedTextField(
                             value = minTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) minTemp = it },
-                            label = { Text("Min. Temperatur (°C)") },
+                            label = { Text(tr("Min. Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -432,7 +433,7 @@ fun EditFilamentDialog(
                         OutlinedTextField(
                             value = maxTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) maxTemp = it },
-                            label = { Text("Max. Temperatur (°C)") },
+                            label = { Text(tr("Max. Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -443,7 +444,7 @@ fun EditFilamentDialog(
                         OutlinedTextField(
                             value = bedMinTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) bedMinTemp = it },
-                            label = { Text("Min. Bett-Temperatur (°C)") },
+                            label = { Text(tr("Min. Bett-Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -454,7 +455,7 @@ fun EditFilamentDialog(
                         OutlinedTextField(
                             value = bedMaxTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) bedMaxTemp = it },
-                            label = { Text("Max. Bett-Temperatur (°C)") },
+                            label = { Text(tr("Max. Bett-Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -485,7 +486,7 @@ fun EditFilamentDialog(
                                 Spacer(modifier = Modifier.height(16.dp))
                             }
                             Text(
-                                text = "Halten Sie den NFC-Tag an das Gerät",
+                                text = tr("Halten Sie den NFC-Tag an das Gerät"),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                             
@@ -514,7 +515,7 @@ fun EditFilamentDialog(
                             }
                         } else {
                             Text(
-                                text = "Filament wird gespeichert...",
+                                text = tr("Filament wird gespeichert..."),
                                 style = MaterialTheme.typography.bodyMedium
                             )
                         }
@@ -532,12 +533,12 @@ fun EditFilamentDialog(
                                 statusError = null
                                 statusMessage = null
                             } else {
-                                statusError = "Bitte wählen Sie einen Typ aus"
+                                statusError = tr("Bitte wählen Sie einen Typ aus")
                             }
                         },
                         enabled = !isProcessing && selectedType.isNotEmpty()
                     ) {
-                        Text("Weiter")
+                        Text(tr("Weiter"))
                     }
                 }
                 1 -> {
@@ -550,7 +551,7 @@ fun EditFilamentDialog(
                             },
                             enabled = true
                         ) {
-                            Text("Zurück")
+                            Text(tr("Zurück"))
                         }
                         Button(
                             onClick = {
@@ -589,13 +590,13 @@ fun EditFilamentDialog(
                                         containerStore.updateItem(updatedItem)
                                         
                                         withContext(Dispatchers.Main) {
-                                            statusMessage = "Filament erfolgreich gespeichert!"
+                                            statusMessage = tr("Filament erfolgreich gespeichert!")
                                             delay(1000)
                                             onDismiss()
                                         }
                                     } catch (e: Exception) {
                                         withContext(Dispatchers.Main) {
-                                            statusError = "Fehler beim Speichern: ${e.message}"
+                                            statusError = tr("Fehler beim Speichern: %s", e.message)
                                             isProcessing = false
                                             workflowState = 2
                                         }
@@ -604,7 +605,7 @@ fun EditFilamentDialog(
                             },
                             enabled = !isProcessing
                         ) {
-                            Text("Speichern")
+                            Text(tr("Speichern"))
                         }
                         Button(
                             onClick = {
@@ -643,7 +644,7 @@ fun EditFilamentDialog(
                                     android.util.Log.d("EditFilament", "JSON: $encoded")
                                     encoded
                                 } catch (e: Exception) {
-                                    statusError = "Fehler beim Erstellen der Daten: ${e.message}"
+                                    statusError = tr("Fehler beim Erstellen der Daten: %s", e.message)
                                     isProcessing = false
                                     workflowState = 1
                                     return@Button
@@ -673,16 +674,16 @@ fun EditFilamentDialog(
                                                 val updatedItem = item.copy(itemData = updatedItemData)
                                                 containerStore.updateItem(updatedItem)
                                                 
-                                                statusMessage = "Tag erfolgreich beschrieben und gespeichert!"
+                                                statusMessage = tr("Tag erfolgreich beschrieben und gespeichert!")
                                                 delay(1000)
                                                 onDismiss()
                                             } else {
-                                                statusError = "Fehler beim Beschreiben des Tags"
+                                                statusError = tr("Fehler beim Beschreiben des Tags")
                                                 isProcessing = false
                                                 workflowState = 2
                                             }
                                         } catch (e: Exception) {
-                                            statusError = "Fehler: ${e.message ?: e.javaClass.simpleName}"
+                                            statusError = tr("Fehler: %s", e.message ?: e.javaClass.simpleName)
                                             isProcessing = false
                                             workflowState = 2
                                         }
@@ -691,7 +692,7 @@ fun EditFilamentDialog(
                             },
                             enabled = !isProcessing && isNfcAvailable
                         ) {
-                            Text("Speichern & Tag")
+                            Text(tr("Speichern & Tag"))
                         }
                     }
                 }
@@ -710,7 +711,7 @@ fun EditFilamentDialog(
                                 },
                                 enabled = true
                             ) {
-                                Text("Zurück")
+                                Text(tr("Zurück"))
                             }
                         }
                         TextButton(
@@ -721,7 +722,7 @@ fun EditFilamentDialog(
                             },
                             enabled = true
                         ) {
-                            Text("Abbrechen")
+                            Text(tr("Abbrechen"))
                         }
                     }
                 }
@@ -737,7 +738,7 @@ fun EditFilamentDialog(
                         },
                         enabled = true
                     ) {
-                        Text("Abbrechen")
+                        Text(tr("Abbrechen"))
                     }
                 }
                 1 -> {
@@ -747,7 +748,7 @@ fun EditFilamentDialog(
                         },
                         enabled = true
                     ) {
-                        Text("Zurück")
+                        Text(tr("Zurück"))
                     }
                 }
                 2 -> null // Abbrechen-Button ist bereits im confirmButton

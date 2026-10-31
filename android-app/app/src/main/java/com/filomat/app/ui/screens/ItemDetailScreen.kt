@@ -32,6 +32,7 @@ import com.filomat.app.ui.components.SpoolPlacePicker
 import com.filomat.app.ui.components.TransmissionField
 import kotlinx.coroutines.launch
 import java.text.DateFormat
+import com.filomat.app.i18n.tr
 
 /** Eine Filamentsorte: Tag-Daten, Gewichte, Vorrat, angebrochene Spulen und Verbrauch (wie das Formular der iOS-App). */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -46,10 +47,10 @@ fun ItemDetailScreen(itemId: String, navController: NavController) {
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text(item?.getDisplayTitle() ?: "Filament") },
+                title = { Text(item?.getDisplayTitle() ?: tr("Filament")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 }
             )
@@ -60,7 +61,7 @@ fun ItemDetailScreen(itemId: String, navController: NavController) {
             Box(Modifier.fillMaxSize().padding(padding))
         } else if (item == null) {
             Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
-                Text("Filament nicht gefunden")
+                Text(tr("Filament nicht gefunden"))
             }
         } else {
             ItemDetailContent(
@@ -111,7 +112,7 @@ private fun ItemDetailContent(
     fun duplicateDetail(duplicate: Item): String = listOfNotNull(
         state.container(duplicate.containerId)?.name ?: "Lose",
         state.spoolsOf(duplicate.id).takeIf { it.isNotEmpty() }?.joinToString(", ") { "#${it.number}" },
-        duplicate.spoolsInStock?.takeIf { it > 0 }?.let { "Vorrat $it" }
+        duplicate.spoolsInStock?.takeIf { it > 0 }?.let { tr("Vorrat %s", it) }
     ).joinToString(" · ")
 
     fun merge(duplicate: Item) {
@@ -120,9 +121,9 @@ private fun ItemDetailContent(
         scope.launch {
             try {
                 val renumbered = store.mergeItem(duplicate.id, item.id)
-                mergeMessage = if (renumbered.isEmpty()) "Zusammengeführt."
-                else "Zusammengeführt. Neue Nummern: " + renumbered.joinToString(", ") { "#${it.oldNumber} → #${it.newNumber}" } +
-                    ". Bitte auf den Spulen ändern."
+                mergeMessage = if (renumbered.isEmpty()) tr("Zusammengeführt.")
+                else tr("Zusammengeführt. Neue Nummern: %s. Bitte auf den Spulen ändern.",
+                    renumbered.joinToString(", ") { "#${it.oldNumber} → #${it.newNumber}" })
             } catch (e: Exception) {
                 errorMessage = ContainerStore.describe(e)
             }
@@ -149,13 +150,13 @@ private fun ItemDetailContent(
         tagError = null
         val previous = state.findItemByTag(tag)
         when {
-            tag.isEmpty() -> tagError = "Ungültiger Tag."
-            item.hasTag(tag) -> tagError = "Dieses Tag gehört schon zu diesem Filament."
+            tag.isEmpty() -> tagError = tr("Ungültiger Tag.")
+            item.hasTag(tag) -> tagError = tr("Dieses Tag gehört schon zu diesem Filament.")
             state.findContainerByTag(tag) != null ->
-                tagError = "Dieses Tag gehört zum Container '${state.findContainerByTag(tag)?.name}'."
+                tagError = tr("Dieses Tag gehört zum Container '%s'.", state.findContainerByTag(tag)?.name)
             previous == null -> addTag(tag)
             previous.allTags.size <= 1 && state.spoolsOf(previous.id).isNotEmpty() ->
-                tagError = "Das Tag gehört zu „${previous.getDisplayTitle()}“, das angebrochene Spulen hat."
+                tagError = tr("Das Tag gehört zu „%s“, das angebrochene Spulen hat.", previous.getDisplayTitle())
             else -> pendingTag = tag to previous
         }
     }
@@ -193,16 +194,16 @@ private fun ItemDetailContent(
                             item.colorLabel()?.let { Text(it, color = MaterialTheme.colorScheme.onSurfaceVariant) }
                         }
                         IconButton(onClick = { showingEdit = true }) {
-                            Icon(Icons.Default.Edit, contentDescription = "Filament-Daten bearbeiten")
+                            Icon(Icons.Default.Edit, contentDescription = tr("Filament-Daten bearbeiten"))
                         }
                     }
-                    item.itemData?.type?.let { InfoRow("Typ", it) }
-                    item.itemData?.brand?.let { InfoRow("Marke", it) }
-                    item.itemData?.variant?.let { InfoRow("Variante", it) }
+                    item.itemData?.type?.let { InfoRow(tr("Typ"), it) }
+                    item.itemData?.brand?.let { InfoRow(tr("Marke"), it) }
+                    item.itemData?.variant?.let { InfoRow(tr("Variante"), it) }
                     val data = item.itemData
-                    if (data?.min_temp != null && data.max_temp != null) InfoRow("Temperatur", "${data.min_temp}°C - ${data.max_temp}°C")
-                    if (data?.bed_min_temp != null && data.bed_max_temp != null) InfoRow("Bett-Temp", "${data.bed_min_temp}°C - ${data.bed_max_temp}°C")
-                    InfoRow("Container", containerName)
+                    if (data?.min_temp != null && data.max_temp != null) InfoRow(tr("Temperatur"), "${data.min_temp}°C - ${data.max_temp}°C")
+                    if (data?.bed_min_temp != null && data.bed_max_temp != null) InfoRow(tr("Bett-Temp"), "${data.bed_min_temp}°C - ${data.bed_max_temp}°C")
+                    InfoRow(tr("Container"), containerName)
                 }
             }
         }
@@ -211,23 +212,23 @@ private fun ItemDetailContent(
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Tags", style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
+                        Text(tr("Tags"), style = MaterialTheme.typography.titleMedium, modifier = Modifier.weight(1f))
                         if (isAssigningTag) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     }
-                    if (item.allTags.isEmpty()) Text("Noch kein Tag", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                    if (item.allTags.isEmpty()) Text(tr("Noch kein Tag"), color = MaterialTheme.colorScheme.onSurfaceVariant)
                     item.allTags.forEach { tag ->
                         Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(tag, modifier = Modifier.weight(1f))
                             if (item.allTags.size > 1) {
                                 TextButton(enabled = !isAssigningTag, onClick = { changeTags { store.removeTag(tag, item.id) } }) {
-                                    Text("Entfernen")
+                                    Text(tr("Entfernen"))
                                 }
                             }
                         }
                     }
-                    ScanButton(reader, "Plättchen hinzufügen") { tag -> prepareTagAssignment(tag.tagId) }
+                    ScanButton(reader, tr("Plättchen hinzufügen")) { tag -> prepareTagAssignment(tag.tagId) }
                     Text(
-                        "Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht.",
+                        tr("Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -239,21 +240,21 @@ private fun ItemDetailContent(
         item {
             Card(Modifier.fillMaxWidth()) {
                 Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Sorte", style = MaterialTheme.typography.titleMedium)
-                    GramField("Füllgewicht neue Spule (g)", netWeight) { netWeight = it }
-                    GramField("Leere Spule (g)", spoolWeight) { spoolWeight = it }
+                    Text(tr("Sorte"), style = MaterialTheme.typography.titleMedium)
+                    GramField(tr("Füllgewicht neue Spule (g)"), netWeight) { netWeight = it }
+                    GramField(tr("Leere Spule (g)"), spoolWeight) { spoolWeight = it }
                     Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text("Volle Spulen im Vorrat: $spoolsInStock", modifier = Modifier.weight(1f))
+                        Text(tr("Volle Spulen im Vorrat: %s", spoolsInStock), modifier = Modifier.weight(1f))
                         IconButton(onClick = { if (spoolsInStock > 0) spoolsInStock-- }) {
-                            Icon(Icons.Default.Remove, contentDescription = "Eine weniger")
+                            Icon(Icons.Default.Remove, contentDescription = tr("Eine weniger"))
                         }
                         IconButton(onClick = { if (spoolsInStock < 99) spoolsInStock++ }) {
-                            Icon(Icons.Default.Add, contentDescription = "Eine mehr")
+                            Icon(Icons.Default.Add, contentDescription = tr("Eine mehr"))
                         }
                     }
                     TransmissionField(transmission) { transmission = it }
                     Text(
-                        "Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst.",
+                        tr("Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -262,11 +263,11 @@ private fun ItemDetailContent(
                         onClick = {
                             scope.launch {
                                 store.updateItem(withWeights(), sendWeights = true)
-                                message = "Gespeichert."
+                                message = tr("Gespeichert.")
                             }
                         },
                         modifier = Modifier.fillMaxWidth()
-                    ) { Text("Speichern") }
+                    ) { Text(tr("Speichern")) }
                     message?.let { Text(it, color = MaterialTheme.colorScheme.primary, style = MaterialTheme.typography.bodySmall) }
                 }
             }
@@ -276,7 +277,7 @@ private fun ItemDetailContent(
             item {
                 Card(Modifier.fillMaxWidth()) {
                     Column(Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text("Möglicherweise doppelt", style = MaterialTheme.typography.titleMedium)
+                        Text(tr("Möglicherweise doppelt"), style = MaterialTheme.typography.titleMedium)
                         duplicates.forEach { duplicate ->
                             OutlinedButton(
                                 enabled = connected && !isMerging,
@@ -284,7 +285,7 @@ private fun ItemDetailContent(
                                 modifier = Modifier.fillMaxWidth()
                             ) {
                                 Column(Modifier.fillMaxWidth()) {
-                                    Text("„${duplicate.getDisplayTitle()}“ hierher übernehmen")
+                                    Text(tr("„%s“ hierher übernehmen", duplicate.getDisplayTitle()))
                                     Text(duplicateDetail(duplicate), style = MaterialTheme.typography.bodySmall)
                                 }
                             }
@@ -292,7 +293,7 @@ private fun ItemDetailContent(
                         if (isMerging) CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                         mergeMessage?.let { Text(it, color = MaterialTheme.colorScheme.primary) }
                         Text(
-                            "Gleiche Marke, Typ, Variante und Farbe. Beim Zusammenführen wandern Spulen, Vorrat, Verbrauch und Tags hierher, der andere Eintrag wird gelöscht.",
+                            tr("Gleiche Marke, Typ, Variante und Farbe. Beim Zusammenführen wandern Spulen, Vorrat, Verbrauch und Tags hierher, der andere Eintrag wird gelöscht."),
                             style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
@@ -303,7 +304,7 @@ private fun ItemDetailContent(
 
         if (connected) {
             item {
-                Text("Angebrochene Spulen", style = MaterialTheme.typography.titleMedium)
+                Text(tr("Angebrochene Spulen"), style = MaterialTheme.typography.titleMedium)
             }
             items(spools, key = { it.id }) { spool ->
                 Card(
@@ -341,10 +342,10 @@ private fun ItemDetailContent(
                             CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                             Spacer(Modifier.width(8.dp))
                         }
-                        Text("Neue Spule anbrechen")
+                        Text(tr("Neue Spule anbrechen"))
                     }
                     Text(
-                        "Schreib die Nummer mit Stift auf die Spule. Gedruckter Verbrauch wird von der Spule abgezogen, die im Drucker an diesem Kopf steckt.",
+                        tr("Schreib die Nummer mit Stift auf die Spule. Gedruckter Verbrauch wird von der Spule abgezogen, die im Drucker an diesem Kopf steckt."),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -354,7 +355,7 @@ private fun ItemDetailContent(
         }
 
         if (consumption.isNotEmpty()) {
-            item { Text("Verbrauch", style = MaterialTheme.typography.titleMedium) }
+            item { Text(tr("Verbrauch"), style = MaterialTheme.typography.titleMedium) }
             items(consumption, key = { it.id }) { entry ->
                 Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
                     Column(Modifier.weight(1f)) {
@@ -376,18 +377,18 @@ private fun ItemDetailContent(
     itemToMerge?.let { duplicate ->
         AlertDialog(
             onDismissRequest = { itemToMerge = null },
-            title = { Text("Zusammenführen?") },
+            title = { Text(tr("Zusammenführen?")) },
             text = {
-                Text("${duplicateDetail(duplicate)}. Alles davon kommt zu diesem Eintrag, „${duplicate.getDisplayTitle()}“ wird gelöscht. Spulennummern, die es hier schon gibt, bekommen eine neue Nummer.")
+                Text(tr("%s. Alles davon kommt zu diesem Eintrag, „%s“ wird gelöscht. Spulennummern, die es hier schon gibt, bekommen eine neue Nummer.", duplicateDetail(duplicate), duplicate.getDisplayTitle()))
             },
             confirmButton = {
                 TextButton(onClick = {
                     itemToMerge = null
                     merge(duplicate)
-                }) { Text("Zusammenführen") }
+                }) { Text(tr("Zusammenführen")) }
             },
             dismissButton = {
-                TextButton(onClick = { itemToMerge = null }) { Text("Abbrechen") }
+                TextButton(onClick = { itemToMerge = null }) { Text(tr("Abbrechen")) }
             }
         )
     }
@@ -395,21 +396,21 @@ private fun ItemDetailContent(
     pendingTag?.let { (tag, previous) ->
         AlertDialog(
             onDismissRequest = { pendingTag = null },
-            title = { Text("Plättchen übernehmen?") },
+            title = { Text(tr("Plättchen übernehmen?")) },
             text = {
                 Text(
-                    if (previous.allTags.size > 1) "Das Tag $tag gehört zu „${previous.getDisplayTitle()}“ und wird dort entfernt."
-                    else "Das Tag $tag gehört zu „${previous.getDisplayTitle()}“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht."
+                    if (previous.allTags.size > 1) tr("Das Tag %s gehört zu „%s“ und wird dort entfernt.", tag, previous.getDisplayTitle())
+                    else tr("Das Tag %s gehört zu „%s“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht.", tag, previous.getDisplayTitle())
                 )
             },
             confirmButton = {
                 TextButton(onClick = {
                     pendingTag = null
                     addTag(tag)
-                }) { Text(if (previous.allTags.size > 1) "Übernehmen" else "Löschen und übernehmen") }
+                }) { Text(if (previous.allTags.size > 1) tr("Übernehmen") else tr("Löschen und übernehmen")) }
             },
             dismissButton = {
-                TextButton(onClick = { pendingTag = null }) { Text("Abbrechen") }
+                TextButton(onClick = { pendingTag = null }) { Text(tr("Abbrechen")) }
             }
         )
     }
@@ -435,7 +436,7 @@ private fun GramField(label: String, value: String, onChange: (String) -> Unit) 
         value = value,
         onValueChange = { text -> if (text.all { it.isDigit() || it == ',' || it == '.' }) onChange(text) },
         label = { Text(label) },
-        placeholder = { Text("z. B. 1000") },
+        placeholder = { Text(tr("z. B. 1000")) },
         singleLine = true,
         keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Decimal),
         modifier = Modifier.fillMaxWidth()
@@ -483,19 +484,19 @@ private fun SpoolEditDialog(
 
     AlertDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
-        title = { Text("Spule #${spool.number}") },
+        title = { Text(tr("Spule #%s", spool.number)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                GramField("Gewogen mit Spule (g)", weighed) { weighed = it; updateFromScale() }
-                GramField("Leere Spule (g)", emptySpool) { emptySpool = it; updateFromScale() }
-                GramField("Restgewicht (g)", remaining) { remaining = it }
-                SpoolPlacePicker("Steckt in", state, location) { location = it }
+                GramField(tr("Gewogen mit Spule (g)"), weighed) { weighed = it; updateFromScale() }
+                GramField(tr("Leere Spule (g)"), emptySpool) { emptySpool = it; updateFromScale() }
+                GramField(tr("Restgewicht (g)"), remaining) { remaining = it }
+                SpoolPlacePicker(tr("Steckt in"), state, location) { location = it }
                 if (isSaving) LinearProgressIndicator(Modifier.fillMaxWidth())
                 errorMessage?.let { Text(it, color = MaterialTheme.colorScheme.error) }
                 TextButton(
                     enabled = !isSaving,
                     onClick = { perform { store.markSpoolEmpty(spool.id) } }
-                ) { Text("Spule ist leer", color = MaterialTheme.colorScheme.error) }
+                ) { Text(tr("Spule ist leer"), color = MaterialTheme.colorScheme.error) }
             }
         },
         confirmButton = {
@@ -505,8 +506,8 @@ private fun SpoolEditDialog(
                         spool.movedTo(location).copy(remainingWeight = GramText.parse(remaining))
                     )
                 }
-            }) { Text("Speichern") }
+            }) { Text(tr("Speichern")) }
         },
-        dismissButton = { TextButton(enabled = !isSaving, onClick = onDismiss) { Text("Abbrechen") } }
+        dismissButton = { TextButton(enabled = !isSaving, onClick = onDismiss) { Text(tr("Abbrechen")) } }
     )
 }

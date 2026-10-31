@@ -19,7 +19,7 @@ enum SpoolChoice: Hashable {
     case newSpool
 }
 
-/// Ablauf "Einlagern" bzw. "In Drucker einlegen": erst das Filament (Musterplättchen) scannen,
+/// Ablauf String(localized: "Einlagern") bzw. String(localized: "In Drucker einlegen"): erst das Filament (Musterplättchen) scannen,
 /// dann wählen, welche Spule, dann den Container scannen bzw. Drucker und Kopf wählen.
 @MainActor
 @Observable
@@ -53,13 +53,13 @@ final class PlaceFlowModel {
     }
 
     var title: String {
-        target == .container ? "Einlagern" : "In Drucker einlegen"
+        target == .container ? String(localized: "Einlagern") : String(localized: "In Drucker einlegen")
     }
 
     var actionTitle: String {
         switch target {
-        case .container: choice == .newSpool ? "Anbrechen und einlagern" : "Einlagern"
-        case .printer: choice == .newSpool ? "Anbrechen und einlegen" : "Einlegen"
+        case .container: choice == .newSpool ? String(localized: "Anbrechen und einlagern") : String(localized: "Einlagern")
+        case .printer: choice == .newSpool ? String(localized: "Anbrechen und einlegen") : String(localized: "Einlegen")
         }
     }
 
@@ -83,11 +83,11 @@ final class PlaceFlowModel {
     func handleFilamentTag(_ tag: ScannedTag, store: ContainerStore) {
         let tagId = tag.tagId.trimmingCharacters(in: .whitespaces)
         guard !tagId.isEmpty else {
-            errorMessage = "Ungültiger Tag."
+            errorMessage = String(localized: "Ungültiger Tag.")
             return
         }
         if let container = store.findContainer(byTag: tagId) {
-            errorMessage = "Das ist der Container „\(container.name)“. Scanne zuerst das Filament."
+            errorMessage = String(localized: "Das ist der Container „\(container.name)“. Scanne zuerst das Filament.")
             return
         }
         reset()
@@ -106,7 +106,7 @@ final class PlaceFlowModel {
         guard let tag = unknownTag else { return }
         let item = Item(
             rfidTag: tag.tagId.trimmingCharacters(in: .whitespaces),
-            name: Item.defaultName(for: tag.itemData, fallback: "Filament"),
+            name: Item.defaultName(for: tag.itemData, fallback: String(localized: "Filament")),
             itemData: tag.itemData
         )
         store.addItem(item)
@@ -158,8 +158,8 @@ final class PlaceFlowModel {
         let tagId = tag.tagId.trimmingCharacters(in: .whitespaces)
         guard let found = store.findContainer(byTag: tagId) else {
             errorMessage = store.findItem(byTag: tagId) != nil
-                ? "Das ist ein Filament-Tag. Scanne jetzt den Container."
-                : "Container nicht gefunden. Lege ihn zuerst unter „Container“ an."
+                ? String(localized: "Das ist ein Filament-Tag. Scanne jetzt den Container.")
+                : String(localized: "Container nicht gefunden. Lege ihn zuerst unter „Container“ an.")
             return
         }
         switch target {
@@ -169,14 +169,14 @@ final class PlaceFlowModel {
             if let printer = store.printer(owningContainer: found.id) {
                 selectPlace(.printer(printer.id, tool: 0))
             } else {
-                errorMessage = "„\(found.name)“ ist kein Drucker. Wähle Drucker und Kopf aus der Liste."
+                errorMessage = String(localized: "„\(found.name)“ ist kein Drucker. Wähle Drucker und Kopf aus der Liste.")
             }
         }
     }
 
     func selectContainer(_ container: Container, store: ContainerStore) {
         if let printer = store.printer(owningContainer: container.id) {
-            errorMessage = "Das ist der Container von „\(printer.name)“. Nimm dafür „In Drucker einlegen“."
+            errorMessage = String(localized: "Das ist der Container von „\(printer.name)“. Nimm dafür „In Drucker einlegen“.")
             return
         }
         self.container = container
@@ -213,7 +213,7 @@ final class PlaceFlowModel {
         guard let choice else { return nil }
         switch choice {
         case .stock:
-            return item?.containerId.flatMap { store.container(id: $0)?.name } ?? "kein Container"
+            return item?.containerId.flatMap { store.container(id: $0)?.name } ?? String(localized: "kein Container")
         case .spool(let id):
             return store.spools.first { $0.id == id }?.locationText(printers: store.printers, containers: store.containers)
         case .newSpool:
@@ -268,25 +268,25 @@ final class PlaceFlowModel {
             case (.container, .stock):
                 guard let container else { return }
                 store.moveItem(id: item.id, toContainer: container.id)
-                message = "\(item.displayTitle) liegt jetzt in „\(container.name)“."
+                message = String(localized: "\(item.displayTitle) liegt jetzt in „\(container.name)“.")
             case (.container, .spool(let id)):
                 guard let container, let spool = store.spools.first(where: { $0.id == id }) else { return }
                 try await store.placeSpool(weighted(spool), at: .container(container.id))
-                message = "Spule #\(spool.number) von \(item.displayTitle) liegt jetzt in „\(container.name)“."
+                message = String(localized: "Spule #\(spool.number) von \(item.displayTitle) liegt jetzt in „\(container.name)“.")
             case (.printer, .spool(let id)):
                 guard let place = printerPlace, let spool = store.spools.first(where: { $0.id == id }) else { return }
                 try await store.placeSpool(weighted(spool), at: place)
-                message = "Spule #\(spool.number) von \(item.displayTitle) steckt jetzt in \(place.text(printers: store.printers))."
+                message = String(localized: "Spule #\(spool.number) von \(item.displayTitle) steckt jetzt in \(place.text(printers: store.printers)).")
             case (.container, .newSpool):
                 guard let container else { return }
                 let spool = try await store.openSpool(itemId: item.id, remainingWeight: GramText.parse(remaining), place: .container(container.id))
                 let number = spool.map { " #\($0.number)" } ?? ""
-                message = "Spule\(number) von \(item.displayTitle) angebrochen und in „\(container.name)“ eingelagert. Schreib die Nummer auf die Spule."
+                message = String(localized: "Spule\(number) von \(item.displayTitle) angebrochen und in „\(container.name)“ eingelagert. Schreib die Nummer auf die Spule.")
             case (.printer, .newSpool):
                 guard let place = printerPlace else { return }
                 let spool = try await store.openSpool(itemId: item.id, remainingWeight: GramText.parse(remaining), place: place)
                 let number = spool.map { " #\($0.number)" } ?? ""
-                message = "Spule\(number) von \(item.displayTitle) angebrochen und in \(place.text(printers: store.printers)) eingelegt. Schreib die Nummer auf die Spule."
+                message = String(localized: "Spule\(number) von \(item.displayTitle) angebrochen und in \(place.text(printers: store.printers)) eingelegt. Schreib die Nummer auf die Spule.")
             default:
                 return
             }

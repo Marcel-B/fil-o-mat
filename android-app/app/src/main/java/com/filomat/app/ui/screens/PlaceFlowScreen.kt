@@ -32,6 +32,7 @@ import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.SectionCard
 import com.filomat.app.ui.components.rememberNfcReader
 import kotlinx.coroutines.launch
+import com.filomat.app.i18n.tr
 
 /** "Einlagern" bzw. "In Drucker einlegen" in drei Schritten: Filament, Spule, Ziel. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -54,20 +55,20 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                 val message = when (action) {
                     is PlaceAction.MoveItem -> {
                         store.addItemToContainer(action.item.id, action.container.id)
-                        "${action.item.getDisplayTitle()} liegt jetzt in „${action.container.name}“."
+                        tr("%s liegt jetzt in „%s“.", action.item.getDisplayTitle(), action.container.name)
                     }
                     is PlaceAction.MoveSpool -> {
                         store.placeSpool(action.spool, action.place)
                         val where = action.place.text(state.printers, state.containers)
-                        if (action.place.printerId != null) "Spule #${action.spool.number} von ${action.item.getDisplayTitle()} steckt jetzt in $where."
-                        else "Spule #${action.spool.number} von ${action.item.getDisplayTitle()} liegt jetzt in „$where“."
+                        if (action.place.printerId != null) tr("Spule #%s von %s steckt jetzt in %s.", action.spool.number, action.item.getDisplayTitle(), where)
+                        else tr("Spule #%s von %s liegt jetzt in „%s“.", action.spool.number, action.item.getDisplayTitle(), where)
                     }
                     is PlaceAction.OpenSpool -> {
                         val spool = store.openSpool(action.item.id, action.place)
                         val number = spool?.let { " #${it.number}" } ?: ""
                         val where = action.place.text(state.printers, state.containers)
-                        if (action.place.printerId != null) "Spule$number von ${action.item.getDisplayTitle()} angebrochen und in $where eingelegt. Schreib die Nummer auf die Spule."
-                        else "Spule$number von ${action.item.getDisplayTitle()} angebrochen und in „$where“ eingelagert. Schreib die Nummer auf die Spule."
+                        if (action.place.printerId != null) tr("Spule%s von %s angebrochen und in %s eingelegt. Schreib die Nummer auf die Spule.", number, action.item.getDisplayTitle(), where)
+                        else tr("Spule%s von %s angebrochen und in „%s“ eingelagert. Schreib die Nummer auf die Spule.", number, action.item.getDisplayTitle(), where)
                     }
                 }
                 flow = flow.reset(done = message)
@@ -105,12 +106,12 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                 title = { Text(flow.title) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 },
                 actions = {
                     if (flow.step != PlaceStep.SCAN_FILAMENT || flow.unknownTag != null) {
-                        TextButton(onClick = { flow = flow.reset() }) { Text("Neu beginnen") }
+                        TextButton(onClick = { flow = flow.reset() }) { Text(tr("Neu beginnen")) }
                     }
                 }
             )
@@ -153,15 +154,15 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
 
             // Schritt 1: Filament
             item {
-                SectionCard("1. Filament") {
+                SectionCard(tr("1. Filament")) {
                     val item = flow.currentItem(state)
                     val unknown = flow.unknownTag
                     if (item != null) {
                         ItemHeader(item, stockText(item, state))
                     } else if (unknown != null) {
-                        Text("Dieses Plättchen ($unknown) kennt die App noch nicht.")
+                        Text(tr("Dieses Plättchen (%s) kennt die App noch nicht.", unknown))
                         Button(onClick = { choosingItem = true }, modifier = Modifier.fillMaxWidth()) {
-                            Text("Zu vorhandenem Filament hinzufügen")
+                            Text(tr("Zu vorhandenem Filament hinzufügen"))
                         }
                         OutlinedButton(
                             onClick = {
@@ -170,14 +171,14 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                                 flow = next
                             },
                             modifier = Modifier.fillMaxWidth()
-                        ) { Text("Als neues Filament anlegen") }
+                        ) { Text(tr("Als neues Filament anlegen")) }
                     } else {
                         Text(
-                            if (target == PlaceTarget.CONTAINER) "Scanne das Musterplättchen des Filaments, das eingelagert wird."
-                            else "Scanne das Musterplättchen des Filaments, das in den Drucker kommt.",
+                            if (target == PlaceTarget.CONTAINER) tr("Scanne das Musterplättchen des Filaments, das eingelagert wird.")
+                            else tr("Scanne das Musterplättchen des Filaments, das in den Drucker kommt."),
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        ScanButton(reader, "Filament scannen") { tag ->
+                        ScanButton(reader, tr("Filament scannen")) { tag ->
                             val next = flow.withFilament(tag.tagId, tag.itemData, state, sync.connected)
                             flow = if (tag.parseError != null && next.error == null) next.failed(tag.parseError) else next
                         }
@@ -188,10 +189,10 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
             // Schritt 2: welche Spule
             if (flow.step != PlaceStep.SCAN_FILAMENT) {
                 item {
-                    SectionCard(if (target == PlaceTarget.CONTAINER) "2. Was kommt in den Container?" else "2. Was kommt in den Drucker?") {
+                    SectionCard(if (target == PlaceTarget.CONTAINER) tr("2. Was kommt in den Container?") else tr("2. Was kommt in den Drucker?")) {
                         val options = flow.choices(state, sync.connected)
                         if (options.isEmpty()) {
-                            Text("Für Spulen in Druckern muss das Backend verbunden sein.", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text(tr("Für Spulen in Druckern muss das Backend verbunden sein."), color = MaterialTheme.colorScheme.onSurfaceVariant)
                         }
                         options.forEach { choice ->
                             SelectableRow(
@@ -224,18 +225,18 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
 @Composable
 private fun ContainerTarget(flow: PlaceFlow, state: StoreState, reader: com.filomat.app.nfc.NFCReader, onChange: (PlaceFlow) -> Unit) {
     var menuOpen by remember { mutableStateOf(false) }
-    SectionCard("3. Container") {
+    SectionCard(tr("3. Container")) {
         flow.containerId?.let { state.container(it) }?.let { container ->
-            InfoRow("Container", container.name)
+            InfoRow(tr("Container"), container.name)
             if (flow.isAlreadyThere(state)) {
-                Text("Liegt schon in diesem Container.", color = MaterialTheme.colorScheme.tertiary)
+                Text(tr("Liegt schon in diesem Container."), color = MaterialTheme.colorScheme.tertiary)
             }
         }
-        ScanButton(reader, if (flow.containerId == null) "Container scannen" else "Anderen Container scannen") { tag ->
+        ScanButton(reader, if (flow.containerId == null) tr("Container scannen") else tr("Anderen Container scannen")) { tag ->
             onChange(flow.withTargetTag(tag.tagId, state))
         }
         Box {
-            OutlinedButton(onClick = { menuOpen = true }, modifier = Modifier.fillMaxWidth()) { Text("Aus der Liste wählen") }
+            OutlinedButton(onClick = { menuOpen = true }, modifier = Modifier.fillMaxWidth()) { Text(tr("Aus der Liste wählen")) }
             DropdownMenu(expanded = menuOpen, onDismissRequest = { menuOpen = false }) {
                 state.storageContainers().forEach { container ->
                     DropdownMenuItem(text = { Text(container.name) }, onClick = {
@@ -252,20 +253,20 @@ private fun ContainerTarget(flow: PlaceFlow, state: StoreState, reader: com.filo
 private fun PrinterTarget(flow: PlaceFlow, state: StoreState, onChange: (PlaceFlow) -> Unit) {
     val displaced = flow.displacedSpool(state)
     val footer = when {
-        displaced != null -> "Dort steckt gerade ${spoolName(displaced, state)}; sie kommt ins Lager."
-        flow.isAlreadyThere(state) -> "Die Spule steckt schon dort."
+        displaced != null -> tr("Dort steckt gerade %s; sie kommt ins Lager.", spoolName(displaced, state))
+        flow.isAlreadyThere(state) -> tr("Die Spule steckt schon dort.")
         else -> null
     }
-    SectionCard("3. Drucker und Kopf", footer = footer) {
+    SectionCard(tr("3. Drucker und Kopf"), footer = footer) {
         if (state.printers.isEmpty()) {
-            Text("Noch keine Drucker angelegt (Tab „Drucker“).", color = MaterialTheme.colorScheme.onSurfaceVariant)
+            Text(tr("Noch keine Drucker angelegt (Tab „Drucker“)."), color = MaterialTheme.colorScheme.onSurfaceVariant)
         }
         state.printers.forEach { printer ->
             for (tool in 0 until printer.toolCount) {
                 val place = SpoolPlace.printer(printer.id, tool)
                 SelectableRow(
                     title = printer.placeName(tool),
-                    detail = state.spoolIn(printer.id, tool)?.let { spoolName(it, state) } ?: "frei",
+                    detail = state.spoolIn(printer.id, tool)?.let { spoolName(it, state) } ?: tr("frei"),
                     selected = flow.printerPlace == place
                 ) { onChange(flow.selectPlace(place)) }
             }
@@ -288,36 +289,36 @@ private fun SelectableRow(title: String, detail: String, selected: Boolean, onCl
                 Text(detail, style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
-        if (selected) Icon(Icons.Default.Check, contentDescription = "Gewählt", tint = MaterialTheme.colorScheme.primary)
+        if (selected) Icon(Icons.Default.Check, contentDescription = tr("Gewählt"), tint = MaterialTheme.colorScheme.primary)
     }
 }
 
 private fun choiceTitle(choice: SpoolChoice, state: StoreState): String = when (choice) {
-    SpoolChoice.Stock -> "Sorte mit vollen Spulen"
-    is SpoolChoice.Opened -> "Angebrochene Spule #${state.spool(choice.spoolId)?.number ?: 0}"
-    SpoolChoice.NewSpool -> "Neue Spule anbrechen"
+    SpoolChoice.Stock -> tr("Sorte mit vollen Spulen")
+    is SpoolChoice.Opened -> tr("Angebrochene Spule #%s", state.spool(choice.spoolId)?.number ?: 0)
+    SpoolChoice.NewSpool -> tr("Neue Spule anbrechen")
 }
 
 private fun choiceDetail(choice: SpoolChoice, item: Item?, state: StoreState): String = when (choice) {
     SpoolChoice.Stock -> {
-        val place = item?.containerId?.let { state.container(it)?.name } ?: "kein Container"
-        "Musterplättchen und Vorrat · bisher: $place"
+        val place = item?.containerId?.let { state.container(it)?.name } ?: tr("kein Container")
+        tr("Musterplättchen und Vorrat · bisher: %s", place)
     }
     is SpoolChoice.Opened -> state.spool(choice.spoolId)?.let { spool ->
-        val rest = spool.remainingWeight?.let(GramText::label) ?: "Rest unbekannt"
+        val rest = spool.remainingWeight?.let(GramText::label) ?: tr("Rest unbekannt")
         "$rest · ${spool.locationText(state.printers, state.containers)}"
     } ?: ""
     SpoolChoice.NewSpool -> {
         val stock = item?.spoolsInStock ?: 0
-        if (stock > 0) "Aus dem Vorrat ($stock ${if (stock == 1) "Spule" else "Spulen"})" else "Im Vorrat ist keine Spule mehr eingetragen"
+        if (stock > 0) (if (stock == 1) tr("Aus dem Vorrat (1 Spule)") else tr("Aus dem Vorrat (%s Spulen)", stock)) else tr("Im Vorrat ist keine Spule mehr eingetragen")
     }
 }
 
 private fun stockText(item: Item, state: StoreState): String {
     val parts = mutableListOf<String>()
-    item.spoolsInStock?.let { parts += "Vorrat: $it" }
+    item.spoolsInStock?.let { parts += tr("Vorrat: %s", it) }
     val opened = state.spoolsOf(item.id).size
-    if (opened > 0) parts += "$opened angebrochen"
+    if (opened > 0) parts += tr("%s angebrochen", opened)
     return if (parts.isEmpty()) item.rfidTag else parts.joinToString(" · ")
 }
 
@@ -336,10 +337,10 @@ fun ItemPickerDialog(items: List<Item>, suggested: ItemJsonData?, onDismiss: () 
         .sortedWith(compareBy<Item>({ !isSuggested(it) }, { it.getDisplayTitle().lowercase() }))
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text("Filament wählen") },
+        title = { Text(tr("Filament wählen")) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text("Suchen") }, singleLine = true,
+                OutlinedTextField(value = query, onValueChange = { query = it }, label = { Text(tr("Suchen")) }, singleLine = true,
                     modifier = Modifier.fillMaxWidth())
                 LazyColumn(Modifier.heightIn(max = 360.dp)) {
                     items(shown, key = { it.id }) { item ->
@@ -359,6 +360,6 @@ fun ItemPickerDialog(items: List<Item>, suggested: ItemJsonData?, onDismiss: () 
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } }
     )
 }

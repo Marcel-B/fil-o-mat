@@ -43,13 +43,13 @@ struct ContainerDetailView: View {
                             } label: {
                                 LabeledContent {
                                     // Ohne Restgewicht rechnet das Backend mit einer vollen Spule der Sorte
-                                    Text((spool.remainingWeight ?? item?.netWeight).map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                                    Text((spool.remainingWeight ?? item?.netWeight).map { "\(Int($0.rounded())) g" } ?? String(localized: "Rest unbekannt"))
                                 } label: {
                                     Text(printer.placeName(tool: tool))
                                     // Farbe dazu: zwei Sorten gleicher Marke und Art unterscheiden sich sonst nicht
                                     HStack(spacing: 6) {
                                         ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
-                                        Text([item?.displayTitle ?? "Filament", item?.itemData?.color]
+                                        Text([item?.displayTitle ?? String(localized: "Filament"), item?.itemData?.color]
                                             .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ") + " #\(spool.number)")
                                     }
                                     .font(.subheadline)
@@ -57,7 +57,7 @@ struct ContainerDetailView: View {
                                 }
                             }
                         } else {
-                            LabeledContent(printer.placeName(tool: tool), value: "frei")
+                            LabeledContent(printer.placeName(tool: tool), value: String(localized: "frei"))
                         }
                     }
                 }
@@ -72,11 +72,11 @@ struct ContainerDetailView: View {
                             SpoolEditView(spool: spool, emptySpoolWeight: item?.spoolWeight, showsItem: true)
                         } label: {
                             LabeledContent {
-                                Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt")
+                                Text(spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? String(localized: "Rest unbekannt"))
                             } label: {
                                 HStack(spacing: 6) {
                                     ColorDot(hex: item?.itemData?.colorHex, size: 12, showsPlaceholder: false)
-                                    Text("\(item?.displayTitle ?? "Filament") #\(spool.number)")
+                                    Text("\(item?.displayTitle ?? String(localized: "Filament")) #\(spool.number)")
                                 }
                             }
                         }

@@ -26,6 +26,7 @@ import android.nfc.Tag
 import androidx.compose.ui.Alignment
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -157,9 +158,9 @@ fun CreateFilamentDialog(
         title = { 
             Text(
                 when (workflowState) {
-                    1 -> "Temperaturen"
-                    2 -> "Tag beschreiben"
-                    else -> "Neues Filament erstellen"
+                    1 -> tr("Temperaturen")
+                    2 -> tr("Tag beschreiben")
+                    else -> tr("Neues Filament erstellen")
                 }
             )
         },
@@ -181,7 +182,7 @@ fun CreateFilamentDialog(
                                 value = selectedType ?: "",
                                 onValueChange = { },
                                 readOnly = true,
-                                label = { Text("Typ *") },
+                                label = { Text(tr("Typ *")) },
                                 trailingIcon = {
                                     IconButton(onClick = { isTypeExpanded = !isTypeExpanded }) {
                                         Icon(Icons.Default.ArrowDropDown, contentDescription = null)
@@ -224,7 +225,7 @@ fun CreateFilamentDialog(
                                     brand = it
                                     isBrandExpanded = it.isNotEmpty() && filteredBrands.isNotEmpty()
                                 },
-                                label = { Text("Marke") },
+                                label = { Text(tr("Marke")) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .menuAnchor(),
@@ -272,7 +273,7 @@ fun CreateFilamentDialog(
                                     variant = it
                                     isVariantExpanded = it.isNotEmpty() && filteredVariants.isNotEmpty()
                                 },
-                                label = { Text("Variante") },
+                                label = { Text(tr("Variante")) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .menuAnchor(),
@@ -313,7 +314,7 @@ fun CreateFilamentDialog(
                             OutlinedTextField(
                                 value = colorHex,
                                 onValueChange = { colorHex = it },
-                                label = { Text("Farbe (Hex)") },
+                                label = { Text(tr("Farbe (Hex)")) },
                                 modifier = Modifier.weight(1f),
                                 singleLine = true,
                                 enabled = !isProcessing,
@@ -382,11 +383,11 @@ fun CreateFilamentDialog(
                         OutlinedTextField(
                             value = color,
                             onValueChange = { color = it },
-                            label = { Text("Farbe (Text)") },
+                            label = { Text(tr("Farbe (Text)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
-                            placeholder = { Text("Rot") }
+                            placeholder = { Text(tr("Rot")) }
                         )
                         
                         if (statusError != null) {
@@ -411,7 +412,7 @@ fun CreateFilamentDialog(
                         OutlinedTextField(
                             value = minTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) minTemp = it },
-                            label = { Text("Min. Temperatur (°C)") },
+                            label = { Text(tr("Min. Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -422,7 +423,7 @@ fun CreateFilamentDialog(
                         OutlinedTextField(
                             value = maxTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) maxTemp = it },
-                            label = { Text("Max. Temperatur (°C)") },
+                            label = { Text(tr("Max. Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -433,7 +434,7 @@ fun CreateFilamentDialog(
                         OutlinedTextField(
                             value = bedMinTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) bedMinTemp = it },
-                            label = { Text("Min. Bett-Temperatur (°C)") },
+                            label = { Text(tr("Min. Bett-Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -444,7 +445,7 @@ fun CreateFilamentDialog(
                         OutlinedTextField(
                             value = bedMaxTemp,
                             onValueChange = { if (it.isEmpty() || it.all { char -> char.isDigit() }) bedMaxTemp = it },
-                            label = { Text("Max. Bett-Temperatur (°C)") },
+                            label = { Text(tr("Max. Bett-Temperatur (°C)")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing,
@@ -474,7 +475,7 @@ fun CreateFilamentDialog(
                             Spacer(modifier = Modifier.height(16.dp))
                         }
                         Text(
-                            text = "Halten Sie den NFC-Tag an das Gerät",
+                            text = tr("Halten Sie den NFC-Tag an das Gerät"),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         
@@ -515,12 +516,12 @@ fun CreateFilamentDialog(
                                 statusError = null
                                 statusMessage = null
                             } else {
-                                statusError = "Bitte wählen Sie einen Typ aus"
+                                statusError = tr("Bitte wählen Sie einen Typ aus")
                             }
                         },
                         enabled = !isProcessing && selectedType != null
                     ) {
-                        Text("Weiter")
+                        Text(tr("Weiter"))
                     }
                 }
                 1 -> {
@@ -560,7 +561,7 @@ fun CreateFilamentDialog(
                                     android.util.Log.d("CreateFilament", "JSON: $encoded")
                                     encoded
                                 } catch (e: Exception) {
-                                    statusError = "Fehler beim Erstellen der Daten: ${e.message}"
+                                    statusError = tr("Fehler beim Erstellen der Daten: %s", e.message)
                                     isProcessing = false
                                     workflowState = 1
                                     return@Button
@@ -572,16 +573,16 @@ fun CreateFilamentDialog(
                                         try {
                                             val success = nfcReader.writeJsonTag(jsonData, tag)
                                             if (success) {
-                                                statusMessage = "Tag erfolgreich beschrieben!"
+                                                statusMessage = tr("Tag erfolgreich beschrieben!")
                                                 delay(1000)
                                                 onDismiss()
                                             } else {
-                                                statusError = "Fehler beim Beschreiben des Tags"
+                                                statusError = tr("Fehler beim Beschreiben des Tags")
                                                 isProcessing = false
                                                 workflowState = 2
                                             }
                                         } catch (e: Exception) {
-                                            statusError = "Fehler: ${e.message ?: e.javaClass.simpleName}"
+                                            statusError = tr("Fehler: %s", e.message ?: e.javaClass.simpleName)
                                             isProcessing = false
                                             workflowState = 2
                                         }
@@ -590,7 +591,7 @@ fun CreateFilamentDialog(
                         },
                         enabled = !isProcessing
                     ) {
-                        Text("Weiter")
+                        Text(tr("Weiter"))
                     }
                 }
                 2 -> {
@@ -607,7 +608,7 @@ fun CreateFilamentDialog(
                             },
                             enabled = true
                         ) {
-                            Text("Zurück")
+                            Text(tr("Zurück"))
                         }
                         TextButton(
                             onClick = {
@@ -617,7 +618,7 @@ fun CreateFilamentDialog(
                             },
                             enabled = true
                         ) {
-                            Text("Abbrechen")
+                            Text(tr("Abbrechen"))
                         }
                     }
                 }
@@ -633,7 +634,7 @@ fun CreateFilamentDialog(
                         },
                         enabled = true
                     ) {
-                        Text("Abbrechen")
+                        Text(tr("Abbrechen"))
                     }
                 }
                 1 -> {
@@ -643,7 +644,7 @@ fun CreateFilamentDialog(
                         },
                         enabled = true
                     ) {
-                        Text("Zurück")
+                        Text(tr("Zurück"))
                     }
                 }
                 2 -> null // Abbrechen-Button ist bereits im confirmButton

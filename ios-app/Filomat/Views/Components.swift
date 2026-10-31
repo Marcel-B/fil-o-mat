@@ -22,7 +22,7 @@ struct ColorDot: View {
 }
 
 struct InfoRow: View {
-    var label: String
+    var label: LocalizedStringKey
     var value: String
 
     var body: some View {
@@ -49,8 +49,8 @@ struct ColorInfo: View {
 
 /// Knopf, der einen Tag scannt und das Ergebnis weiterreicht. Abbrechen im Scanfenster ist kein Fehler.
 struct ScanButton: View {
-    var title: String
-    var prompt: String
+    var title: LocalizedStringKey
+    var prompt: String.LocalizationValue
     var onTag: (ScannedTag) -> Void
     var onError: (String) -> Void = { _ in }
 
@@ -79,7 +79,7 @@ struct ScanButton: View {
         isScanning = true
         defer { isScanning = false }
         do {
-            onTag(try await NFCService.shared.scan(prompt: prompt))
+            onTag(try await NFCService.shared.scan(prompt: String(localized: prompt)))
         } catch NFCError.cancelled {
             // Nutzer hat das Scanfenster geschlossen
         } catch {
@@ -109,7 +109,7 @@ struct ItemHeader: View {
 /// Auswahl eines Spulenplatzes: Lager, ein Container im Lager oder ein Kopf eines Druckers.
 struct SpoolPlacePicker: View {
     @Environment(ContainerStore.self) private var store
-    var title: String
+    var title: LocalizedStringKey
     @Binding var selection: SpoolPlace
 
     var body: some View {

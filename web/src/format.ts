@@ -1,20 +1,22 @@
+import { intlLocale, t } from './i18n'
 import type { Item, Printer, PrinterType, SpoolPlace, Container } from './types'
 
-const number = new Intl.NumberFormat('de-DE', { maximumFractionDigits: 1 })
+// Zahlen und Datum im Format der gewählten Sprache
+const number = () => new Intl.NumberFormat(intlLocale(), { maximumFractionDigits: 1 })
 
 export function grams(value: number | null | undefined): string {
   if (value == null) return '–'
-  return value >= 1000 ? `${number.format(value / 1000)} kg` : `${Math.round(value)} g`
+  return value >= 1000 ? `${number().format(value / 1000)} kg` : `${Math.round(value)} g`
 }
 
 export function decimal(value: number | null | undefined, digits = 1): string {
   if (value == null) return '–'
-  return value.toLocaleString('de-DE', { maximumFractionDigits: digits })
+  return value.toLocaleString(intlLocale(), { maximumFractionDigits: digits })
 }
 
 /** "Prusament PLA Matte", ohne Angaben der Name. Wie displayTitle in den Apps. */
 export function displayTitle(item: Item | null | undefined): string {
-  if (!item) return 'Filament'
+  if (!item) return t('common.filament')
   const d = item.itemData
   const parts = [d?.brand, d?.type, d?.variant].map((p) => p?.trim()).filter((p): p is string => !!p)
   return parts.length ? parts.join(' ') : item.name
@@ -42,8 +44,8 @@ export function cssColor(hex: string | null | undefined): string | null {
 /** "Slot" bei Druckern mit Spulenwechsler, sonst "Kopf"; leer bei einem Kopf (wie PlaceName im Backend). */
 export function placeName(type: PrinterType, tools: number, tool: number): string {
   if (tools <= 1) return ''
-  const word = type === 'PrusaLink' || type === 'Anycubic' || type === 'Bambu' ? 'Slot' : 'Kopf'
-  return `${word} ${tool + 1}`
+  const slots = type === 'PrusaLink' || type === 'Anycubic' || type === 'Bambu'
+  return t(slots ? 'format.slot' : 'format.head', { n: tool + 1 })
 }
 
 export function printerPlace(printer: Printer, tool: number | null): string {
@@ -55,13 +57,13 @@ export function printerPlace(printer: Printer, tool: number | null): string {
 export function placeText(place: SpoolPlace, printers: Printer[], containers: Container[]): string {
   if (place.printerId) {
     const printer = printers.find((p) => p.id === place.printerId)
-    return printer ? printerPlace(printer, place.tool) : 'Drucker'
+    return printer ? printerPlace(printer, place.tool) : t('common.printer')
   }
   if (place.containerId) {
     const container = containers.find((c) => c.id === place.containerId)
     if (container) return container.name
   }
-  return 'Lager'
+  return t('common.storage')
 }
 
 export function duration(seconds: number | null | undefined): string {
@@ -71,26 +73,24 @@ export function duration(seconds: number | null | undefined): string {
   return h > 0 ? `${h} h ${m} min` : `${m} min`
 }
 
-const dateTime = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium', timeStyle: 'short' })
-const dateOnly = new Intl.DateTimeFormat('de-DE', { dateStyle: 'medium' })
 
 export function formatDateTime(value: string | number | null | undefined): string {
   if (value == null) return '–'
-  return dateTime.format(new Date(value))
+  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'medium', timeStyle: 'short' }).format(new Date(value))
 }
 
 export function formatDate(value: string | number | null | undefined): string {
   if (value == null) return '–'
-  return dateOnly.format(new Date(value))
+  return new Intl.DateTimeFormat(intlLocale(), { dateStyle: 'medium' }).format(new Date(value))
 }
 
 /** "vor 3 min", "vor 2 h", sonst Datum. */
 export function ago(value: string | number | null | undefined): string {
-  if (value == null) return 'nie'
+  if (value == null) return t('format.never')
   const seconds = (Date.now() - new Date(value).getTime()) / 1000
-  if (seconds < 60) return 'gerade eben'
-  if (seconds < 3600) return `vor ${Math.round(seconds / 60)} min`
-  if (seconds < 86400) return `vor ${Math.round(seconds / 3600)} h`
+  if (seconds < 60) return t('format.justNow')
+  if (seconds < 3600) return t('format.minutesAgo', { n: Math.round(seconds / 60) })
+  if (seconds < 86400) return t('format.hoursAgo', { n: Math.round(seconds / 3600) })
   return formatDateTime(value)
 }
 

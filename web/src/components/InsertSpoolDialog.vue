@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { useDataStore } from '@/stores/data'
 import { displayTitle, grams, printerPlace } from '@/format'
@@ -10,6 +11,7 @@ const props = defineProps<{ printer: Printer | null; tool: number }>()
 const visible = defineModel<boolean>('visible', { required: true })
 const store = useDataStore()
 const toast = useToast()
+const { t } = useI18n()
 
 const choice = ref<string | null>(null)
 const openNew = ref<string | null>(null)
@@ -52,11 +54,11 @@ async function save() {
       await store.updateSpool(spool.id, spool.remainingWeight, place)
     } else if (openNew.value) {
       const spool = await store.openSpool(openNew.value, place)
-      toast.add({ severity: 'success', summary: `Spule #${spool.number} angebrochen`, detail: 'Nummer mit Stift auf die Spule schreiben.', life: 6000 })
+      toast.add({ severity: 'success', summary: t('common.spoolOpened', { number: spool.number }), detail: t('common.writeNumber'), life: 6000 })
     }
     visible.value = false
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Ging nicht', detail: (e as Error).message, life: 6000 })
+    toast.add({ severity: 'error', summary: t('common.failed'), detail: (e as Error).message, life: 6000 })
   } finally {
     saving.value = false
   }
@@ -64,11 +66,11 @@ async function save() {
 </script>
 
 <template>
-  <Dialog v-model:visible="visible" modal :header="printer ? `${printerPlace(printer, tool)}: Spule einlegen` : ''" class="w-[32rem] max-w-[95vw]">
+  <Dialog v-model:visible="visible" modal :header="printer ? t('insert.title', { place: printerPlace(printer, tool) }) : ''" class="w-[32rem] max-w-[95vw]">
     <div class="flex flex-col gap-4">
       <label class="flex flex-col gap-1 text-sm">
-        Angebrochene Spule
-        <Select v-model="choice" :options="options" option-label="label" option-value="id" filter show-clear placeholder="Spule wählen" fluid @change="openNew = null">
+        {{ t('insert.openSpool') }}
+        <Select v-model="choice" :options="options" option-label="label" option-value="id" filter show-clear :placeholder="t('insert.chooseSpool')" fluid @change="openNew = null">
           <template #option="{ option }">
             <div class="flex items-center gap-2">
               <ColorDot :hex="option.color" :size="16" />
@@ -80,23 +82,23 @@ async function save() {
           </template>
         </Select>
       </label>
-      <div class="text-center text-sm text-muted-color">oder</div>
+      <div class="text-center text-sm text-muted-color">{{ t('insert.or') }}</div>
       <label class="flex flex-col gap-1 text-sm">
-        Neue Spule einer Sorte anbrechen
-        <Select v-model="openNew" :options="itemOptions" option-label="label" option-value="id" filter show-clear placeholder="Sorte wählen" fluid @change="choice = null">
+        {{ t('insert.openNew') }}
+        <Select v-model="openNew" :options="itemOptions" option-label="label" option-value="id" filter show-clear :placeholder="t('insert.chooseKind')" fluid @change="choice = null">
           <template #option="{ option }">
             <div class="flex items-center gap-2">
               <ColorDot :hex="option.color" :size="16" />
               <span class="flex-1">{{ option.label }}</span>
-              <span v-if="option.stock" class="text-xs text-muted-color">Vorrat {{ option.stock }}</span>
+              <span v-if="option.stock" class="text-xs text-muted-color">{{ t('insert.stock', { n: option.stock }) }}</span>
             </div>
           </template>
         </Select>
       </label>
     </div>
     <template #footer>
-      <Button label="Abbrechen" severity="secondary" text @click="visible = false" />
-      <Button label="Einlegen" icon="pi pi-check" :loading="saving" :disabled="!choice && !openNew" @click="save" />
+      <Button :label="t('common.cancel')" severity="secondary" text @click="visible = false" />
+      <Button :label="t('insert.insert')" icon="pi pi-check" :loading="saving" :disabled="!choice && !openNew" @click="save" />
     </template>
   </Dialog>
 </template>

@@ -1,9 +1,10 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { useDataStore } from '@/stores/data'
-import { displayTitle, grams } from '@/format'
+import { decimal, displayTitle, grams } from '@/format'
 import { defaultName, emptyForm, inputFromForm } from '@/itemForm'
 import ColorDot from '@/components/ColorDot.vue'
 import ItemForm from '@/components/ItemForm.vue'
@@ -12,12 +13,13 @@ import type { Item } from '@/types'
 const store = useDataStore()
 const router = useRouter()
 const toast = useToast()
+const { t } = useI18n()
 
 const query = ref('')
 const typeFilter = ref<string | null>(null)
 
 const types = computed(() =>
-  [...new Set(store.items.map((i) => i.itemData?.type?.trim() || 'Ohne Typ'))].sort((a, b) => a.localeCompare(b, 'de')),
+  [...new Set(store.items.map((i) => i.itemData?.type?.trim() || t('items.noType')))].sort((a, b) => a.localeCompare(b, 'de')),
 )
 
 interface Row {
@@ -35,7 +37,7 @@ const rows = computed<Row[]>(() => {
   return store.items
     .filter((item) => {
       const d = item.itemData
-      if (typeFilter.value && (d?.type?.trim() || 'Ohne Typ') !== typeFilter.value) return false
+      if (typeFilter.value && (d?.type?.trim() || t('items.noType')) !== typeFilter.value) return false
       if (!q) return true
       return [item.name, d?.type, d?.brand, d?.variant, d?.color, d?.color_hex, ...item.extraTags, item.rfidTag].some((v) =>
         v?.toLowerCase().includes(q),
@@ -46,7 +48,7 @@ const rows = computed<Row[]>(() => {
       return {
         item,
         title: displayTitle(item),
-        type: item.itemData?.type?.trim() || 'Ohne Typ',
+        type: item.itemData?.type?.trim() || t('items.noType'),
         spoolText: spools
           .map((s) => `#${s.number}` + (s.remainingWeight != null ? ` ${grams(s.remainingWeight)}` : ''))
           .join(', '),
@@ -69,7 +71,7 @@ function openCreate() {
 
 async function create() {
   if (!form.value.type.trim()) {
-    toast.add({ severity: 'warn', summary: 'Typ fehlt', life: 3000 })
+    toast.add({ severity: 'warn', summary: t('items.typeMissing'), life: 3000 })
     return
   }
   saving.value = true
@@ -78,7 +80,7 @@ async function create() {
     creating.value = false
     router.push({ name: 'item', params: { id: item.id } })
   } catch (e) {
-    toast.add({ severity: 'error', summary: 'Anlegen ging nicht', detail: (e as Error).message, life: 6000 })
+    toast.add({ severity: 'error', summary: t('items.createFailed'), detail: (e as Error).message, life: 6000 })
   } finally {
     saving.value = false
   }
@@ -88,18 +90,18 @@ async function create() {
 <template>
   <div class="mx-auto flex max-w-6xl flex-col gap-4">
     <div class="flex flex-wrap items-center gap-3">
-      <h1 class="text-2xl font-semibold">Filamente</h1>
-      <span class="text-muted-color">{{ store.items.length }} Sorten</span>
+      <h1 class="text-2xl font-semibold">{{ t('items.title') }}</h1>
+      <span class="text-muted-color">{{ t('items.count', store.items.length) }}</span>
       <span class="flex-1" />
-      <Button label="Neue Sorte" icon="pi pi-plus" @click="openCreate" />
+      <Button :label="t('items.new')" icon="pi pi-plus" @click="openCreate" />
     </div>
 
     <div class="flex flex-wrap gap-3">
       <IconField class="min-w-60 flex-1">
         <InputIcon class="pi pi-search" />
-        <InputText v-model="query" placeholder="Suchen: Marke, Typ, Farbe, Tag …" fluid />
+        <InputText v-model="query" :placeholder="t('items.search')" fluid />
       </IconField>
-      <Select v-model="typeFilter" :options="types" placeholder="Alle Typen" show-clear class="w-44" />
+      <Select v-model="typeFilter" :options="types" :placeholder="t('items.allTypes')" show-clear class="w-44" />
     </div>
 
     <DataTable
@@ -119,10 +121,10 @@ async function create() {
       </template>
       <template #empty>
         <div class="py-8 text-center text-muted-color">
-          {{ query || typeFilter ? 'Nichts gefunden' : 'Noch keine Filamente' }}
+          {{ query || typeFilter ? t('items.nothingFound') : t('items.none') }}
         </div>
       </template>
-      <Column header="Sorte">
+      <Column :header="t('items.kind')">
         <template #body="{ data }">
           <div class="flex items-center gap-3">
             <ColorDot :hex="data.item.itemData?.color_hex" :size="28" />
@@ -130,43 +132,43 @@ async function create() {
               <div class="font-medium">{{ data.title }}</div>
               <div class="text-sm text-muted-color">
                 {{ data.item.itemData?.color || (data.item.itemData?.color_hex ? `#${data.item.itemData.color_hex}` : '') }}
-                <span v-if="data.duplicate" class="ml-1 text-orange-500"><i class="pi pi-exclamation-triangle text-xs" /> möglicherweise doppelt</span>
+                <span v-if="data.duplicate" class="ml-1 text-orange-500"><i class="pi pi-exclamation-triangle text-xs" /> {{ t('items.possibleDuplicate') }}</span>
               </div>
             </div>
           </div>
         </template>
       </Column>
-      <Column header="Angebrochen" class="hidden md:table-cell">
+      <Column :header="t('items.opened')" class="hidden md:table-cell">
         <template #body="{ data }">
           <span v-if="data.spoolText" class="text-sm">{{ data.spoolText }}</span>
           <span v-else class="text-muted-color">–</span>
         </template>
       </Column>
-      <Column header="Vorrat" class="w-24 text-right">
+      <Column :header="t('items.stock')" class="w-24 text-right">
         <template #body="{ data }">
-          <Tag v-if="data.stock > 0" :value="`${data.stock} voll`" severity="secondary" />
+          <Tag v-if="data.stock > 0" :value="t('items.full', { n: data.stock })" severity="secondary" />
         </template>
       </Column>
-      <Column header="Gesamt" class="hidden w-28 text-right sm:table-cell">
+      <Column :header="t('items.total')" class="hidden w-28 text-right sm:table-cell">
         <template #body="{ data }">
           {{ grams(data.spoolGrams + data.stock * (data.item.netWeight ?? 0)) }}
         </template>
       </Column>
       <Column header="TD" class="hidden w-20 text-right lg:table-cell">
         <template #body="{ data }">
-          {{ data.item.transmissionDistance != null ? `${data.item.transmissionDistance.toLocaleString('de-DE')} mm` : '' }}
+          {{ data.item.transmissionDistance != null ? `${decimal(data.item.transmissionDistance, 2)} mm` : '' }}
         </template>
       </Column>
     </DataTable>
 
-    <Dialog v-model:visible="creating" modal header="Neue Sorte" class="w-[48rem] max-w-[95vw]">
+    <Dialog v-model:visible="creating" modal :header="t('items.new')" class="w-[48rem] max-w-[95vw]">
       <ItemForm v-model="form" creating />
       <p class="mt-4 text-xs text-muted-color">
-        Ein NFC-Tag (Musterplättchen) bekommt die Sorte in der App: dort „Plättchen hinzufügen“.
+        {{ t('items.tagHint') }}
       </p>
       <template #footer>
-        <Button label="Abbrechen" severity="secondary" text @click="creating = false" />
-        <Button label="Anlegen" icon="pi pi-check" :loading="saving" @click="create" />
+        <Button :label="t('common.cancel')" severity="secondary" text @click="creating = false" />
+        <Button :label="t('items.create')" icon="pi pi-check" :loading="saving" @click="create" />
       </template>
     </Dialog>
   </div>
