@@ -132,7 +132,8 @@ public class ReaderTests : IDisposable
 
         var live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{printer.Id}/status"))!;
         Assert.Equal("DD04", live.Tools[0].Reported!.TagUid);
-        Assert.Contains(live.Hints, h => h.Kind == HintKind.TagMismatch && h.Tool == 0);
+        var hint = Assert.Single(live.Hints, h => h.Kind == HintKind.TagMismatch && h.Tool == 0);
+        Assert.Contains("Rot", hint.Text);
     }
 
     [Theory]

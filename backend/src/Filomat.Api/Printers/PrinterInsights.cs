@@ -56,7 +56,7 @@ public record Hint(HintKind Kind, bool Warning, int? Tool, string Text);
 /// <summary>Spule im Drucker mit ihrer Sorte, wie die App sie führt.</summary>
 public record PlacedSpool(Spool Spool, Item Item);
 
-/// <summary>Sorte, deren Plättchen der Drucker an einem Kopf ohne Spule erkennt, mit den Nummern ihrer losen Spulen.</summary>
+/// <summary>Sorte, deren Plättchen der Drucker an einem Kopf erkennt (ohne oder mit einer anderen Spule), mit den Nummern ihrer losen Spulen.</summary>
 public record DetectedItem(Item Item, IReadOnlyList<int> LooseNumbers);
 
 /// <summary>Verknüpft den gemeldeten Zustand eines Druckers mit den Spulen der App.</summary>
@@ -80,7 +80,7 @@ public static class PrinterInsights
     public const double HygroscopicLimit = 40;
     public const double DefaultLimit = 55;
 
-    /// <param name="detected">Pro Kopf ohne Spule die Sorte, deren Plättchen der Drucker dort erkennt.</param>
+    /// <param name="detected">Pro Kopf die Sorte, deren Plättchen der Drucker dort erkennt, wenn sie laut App nicht dort steckt.</param>
     public static (List<ToolLive> Tools, List<Hint> Hints) Build(PrinterType type, int toolCount, PrinterStatus status,
         IReadOnlyList<PlacedSpool> placed, IReadOnlyDictionary<int, DetectedItem>? detected = null)
     {
@@ -93,7 +93,8 @@ public static class PrinterInsights
             var place = PlaceName(type, count, tool);
             var spool = placed.FirstOrDefault(p => (p.Spool.Tool ?? 0) == tool);
             var reported = status.Slots?.FirstOrDefault(s => s.Tool == tool);
-            var found = spool is null ? detected?.GetValueOrDefault(tool) : null;
+            var seen = detected?.GetValueOrDefault(tool);
+            var found = spool is null ? seen : null;
             var item = spool?.Item ?? found?.Item;
             var itemType = item?.ItemData?.Type;
             var itemColor = Normalize(item?.ItemData?.ColorHex);
@@ -122,7 +123,9 @@ public static class PrinterInsights
             if (reported is not null)
             {
                 if (reported.TagUid is { } tag && spool is not null && !spool.Item.AllTags.Contains(tag, StringComparer.OrdinalIgnoreCase))
-                    hints.Add(new Hint(HintKind.TagMismatch, true, tool, Prefix(place) + L.F("Der Drucker erkennt ein anderes Tag als {0}.", label)));
+                    hints.Add(new Hint(HintKind.TagMismatch, true, tool, Prefix(place) + (seen is not null
+                        ? L.F("Der Drucker erkennt {0}, in der App steckt dort {1}.", seen.Item.Name, label)
+                        : L.F("Der Drucker erkennt ein anderes Tag als {0}.", label))));
                 else if (reported.Loaded == false && spool is not null)
                     hints.Add(new Hint(HintKind.SlotEmpty, true, tool, Prefix(place) + L.F("Laut Drucker leer, in der App steckt dort {0}.", label)));
                 else if (found is not null)

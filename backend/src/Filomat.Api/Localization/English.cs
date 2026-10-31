@@ -10,6 +10,7 @@ public static class English
         ["{0} hat noch {1}, der Druck braucht noch {2}."] = "{0} has {1} left, the print still needs {2}.",
         ["{0} hat noch {1}, der Druck braucht geschätzt noch {2}."] = "{0} has {1} left, the print still needs about {2}.",
         ["Der Drucker erkennt ein anderes Tag als {0}."] = "The printer detects a different tag than {0}.",
+        ["Der Drucker erkennt {0}, in der App steckt dort {1}."] = "The printer detects {0}, the app has {1} there.",
         ["Laut Drucker leer, in der App steckt dort {0}."] = "Empty according to the printer, the app has {0} there.",
         ["{0} erkannt. Welche Spule steckt dort? Lose liegen {1}."] = "{0} detected. Which spool is in there? Loose: {1}.",
         ["{0} erkannt, in der App steckt dort keine Spule."] = "{0} detected, the app has no spool there.",
