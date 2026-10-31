@@ -1,0 +1,3908 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "%@ Kopf %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ head %2$lld"
+          }
+        }
+      }
+    },
+    "%@ Slot %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ slot %2$lld"
+          }
+        }
+      }
+    },
+    "%@ auswählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose %@"
+          }
+        }
+      }
+    },
+    "%@ liegt jetzt in „%@“." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ is now in “%2$@”."
+          }
+        }
+      }
+    },
+    "%@ vom %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ from %2$@"
+          }
+        }
+      }
+    },
+    "%@ · %lld Köpfe · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%1$@ · %2$lld heads · %3$@"
+          }
+        }
+      }
+    },
+    "%@. Alles davon kommt zu diesem Eintrag. Spulennummern, die es hier schon gibt, bekommen eine neue Nummer." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@. All of it comes to this entry. Spool numbers that already exist here get a new number."
+          }
+        }
+      }
+    },
+    "%lld %% Feuchte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld %% humidity"
+          }
+        }
+      }
+    },
+    "%lld (%lld abgebrochen)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld (%lld cancelled)"
+          }
+        }
+      }
+    },
+    "%lld Drucke" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld prints"
+          }
+        }
+      }
+    },
+    "%lld Sorten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld filaments"
+          }
+        }
+      }
+    },
+    "%lld Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld spools"
+          }
+        }
+      }
+    },
+    "%lld Warnungen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld warnings"
+          }
+        }
+      }
+    },
+    "%lld abgebrochen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld cancelled"
+          }
+        }
+      }
+    },
+    "%lld angebrochen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld opened"
+          }
+        }
+      }
+    },
+    "%lld volle Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld full spools"
+          }
+        }
+      }
+    },
+    "%lld volle, %lld angebrochene Spulen · etwa %@ kg" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld full, %lld opened spools · about %@ kg"
+          }
+        }
+      }
+    },
+    "%lld von %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%lld of %lld"
+          }
+        }
+      }
+    },
+    "'%@' und sein Container werden entfernt. Eingelegte Spulen wandern nach „Lose“, ihr Verbrauch bleibt erhalten." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "‘%@’ and its container will be removed. Loaded spools move to “Lose”; their consumption is kept."
+          }
+        }
+      }
+    },
+    "1 Druck" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 print"
+          }
+        }
+      }
+    },
+    "1 Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 spool"
+          }
+        }
+      }
+    },
+    "1 volle Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1 full spool"
+          }
+        }
+      }
+    },
+    "1. Filament" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "1. Filament"
+          }
+        }
+      }
+    },
+    "12 Monate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "12 months"
+          }
+        }
+      }
+    },
+    "2 Jahre" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2 years"
+          }
+        }
+      }
+    },
+    "2. Was kommt in den Container?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. What goes into the container?"
+          }
+        }
+      }
+    },
+    "2. Was kommt in den Drucker?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "2. What goes into the printer?"
+          }
+        }
+      }
+    },
+    "3 Monate" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3 months"
+          }
+        }
+      }
+    },
+    "3. Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Container"
+          }
+        }
+      }
+    },
+    "3. Drucker und Kopf" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "3. Printer and head"
+          }
+        }
+      }
+    },
+    "API-Schlüssel (optional)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "API key (optional)"
+          }
+        }
+      }
+    },
+    "API-Schlüssel entfernen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove API key"
+          }
+        }
+      }
+    },
+    "Abbrechen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancel"
+          }
+        }
+      }
+    },
+    "Abgebrochen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Cancelled"
+          }
+        }
+      }
+    },
+    "Abgefragt %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Queried %@"
+          }
+        }
+      }
+    },
+    "Abgleichen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync"
+          }
+        }
+      }
+    },
+    "Adresse entfernt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Address removed."
+          }
+        }
+      }
+    },
+    "Aktualisieren …" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update …"
+          }
+        }
+      }
+    },
+    "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Everything on the tag and what Fil-o-mat knows about the filament"
+          }
+        }
+      }
+    },
+    "Als neues Filament anlegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create as new filament"
+          }
+        }
+      }
+    },
+    "Am Drucker Einstellungen > Netzwerk > LAN-Modus einschalten (die Anycubic-Cloud ist dann aus). Mit ACE wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "On the printer, turn on Settings > Network > LAN mode (the Anycubic cloud is then off). With an ACE, consumption is deducted per slot, from the spool loaded at that slot in the app."
+          }
+        }
+      }
+    },
+    "Anbrechen und einlagern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open and store"
+          }
+        }
+      }
+    },
+    "Anbrechen und einlegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open and load"
+          }
+        }
+      }
+    },
+    "Anderen Container scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan another container"
+          }
+        }
+      }
+    },
+    "Angebrochen:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened:"
+          }
+        }
+      }
+    },
+    "Angebrochene Spule #%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened spool #%lld"
+          }
+        }
+      }
+    },
+    "Angebrochene Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened spools"
+          }
+        }
+      }
+    },
+    "Anycubic Kobra (LAN-Modus)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Anycubic Kobra (LAN mode)"
+          }
+        }
+      }
+    },
+    "App veraltet: bitte die neue Version aus TestFlight installieren." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "App outdated: please install the new version from TestFlight."
+          }
+        }
+      }
+    },
+    "Auf Tag schreiben" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write to tag"
+          }
+        }
+      }
+    },
+    "Auf dem Server ist keine Nextcloud eingetragen (NEXTCLOUD_WEBDAV_URL, NEXTCLOUD_USERNAME, NEXTCLOUD_APP_PASSWORD in backend/.env)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No Nextcloud is configured on the server (NEXTCLOUD_WEBDAV_URL, NEXTCLOUD_USERNAME, NEXTCLOUD_APP_PASSWORD in backend/.env)."
+          }
+        }
+      }
+    },
+    "Aus dem Vorrat (%lld Spulen)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From stock (%lld spools)"
+          }
+        }
+      }
+    },
+    "Aus dem Vorrat (1 Spule)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "From stock (1 spool)"
+          }
+        }
+      }
+    },
+    "Aus der Liste wählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose from the list"
+          }
+        }
+      }
+    },
+    "Ausgeschaltet fragt das Backend den Drucker nicht mehr ab, z. B. solange er nicht im Netz ist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When off, the backend stops querying the printer, e.g. while it is not on the network."
+          }
+        }
+      }
+    },
+    "Automatisch abgleichen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync automatically"
+          }
+        }
+      }
+    },
+    "Backend" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend"
+          }
+        }
+      }
+    },
+    "Backend aktualisieren?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update backend?"
+          }
+        }
+      }
+    },
+    "Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend outdated: please update it, otherwise features are missing."
+          }
+        }
+      }
+    },
+    "Backend wird aktualisiert …" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend is updating …"
+          }
+        }
+      }
+    },
+    "Backend-Update fehlgeschlagen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backend update failed"
+          }
+        }
+      }
+    },
+    "Bearbeiten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit"
+          }
+        }
+      }
+    },
+    "Beim Verbinden werden die Daten dieses iPhones hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen, z. B. Container aus der Android-App." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "When connecting, the data on this iPhone is uploaded (nothing is deleted) and then the shared state is taken over, e.g. containers from the Android app."
+          }
+        }
+      }
+    },
+    "Bereit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Ready"
+          }
+        }
+      }
+    },
+    "Beschreibung" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Description"
+          }
+        }
+      }
+    },
+    "Bett max." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bed max."
+          }
+        }
+      }
+    },
+    "Bett min." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bed min."
+          }
+        }
+      }
+    },
+    "Bett-Temp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Bed temp."
+          }
+        }
+      }
+    },
+    "Bisher: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "So far: %@"
+          }
+        }
+      }
+    },
+    "Bitte eine gültige Zahl eingeben" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please enter a valid number"
+          }
+        }
+      }
+    },
+    "Bitte wählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Please choose"
+          }
+        }
+      }
+    },
+    "Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Containers"
+          }
+        }
+      }
+    },
+    "Container ansehen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "View container"
+          }
+        }
+      }
+    },
+    "Container bearbeiten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit container"
+          }
+        }
+      }
+    },
+    "Container löschen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete container"
+          }
+        }
+      }
+    },
+    "Container nicht gefunden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container not found"
+          }
+        }
+      }
+    },
+    "Container nicht gefunden. Lege ihn zuerst unter „Container“ an." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container not found. Create it under “Containers” first."
+          }
+        }
+      }
+    },
+    "Container scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan container"
+          }
+        }
+      }
+    },
+    "Container scannen und sehen, was darin liegt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan a container and see what’s inside"
+          }
+        }
+      }
+    },
+    "Container öffnen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open container"
+          }
+        }
+      }
+    },
+    "Container:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container:"
+          }
+        }
+      }
+    },
+    "Darstellung" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Appearance"
+          }
+        }
+      }
+    },
+    "Das Backend hat den Drucker noch nicht abgefragt oder kennt keinen Zustand (ältere Version?)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend hasn’t queried the printer yet or doesn’t know its status (older version?)."
+          }
+        }
+      }
+    },
+    "Das Backend ist auf dem neuesten Stand." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend is up to date."
+          }
+        }
+      }
+    },
+    "Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren. Ein Token ist nur für einen geschützten eigenen Server nötig." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend reports finished and cancelled prints with the remaining weight, errors and spools that won’t last for the current print. A hard-to-guess topic on ntfy.sh is enough; subscribe to it in the ntfy app. A token is only needed for a protected server of your own."
+          }
+        }
+      }
+    },
+    "Das Leergewicht kommt, falls bekannt, aus der SpoolmanDB für die Marke. Reicht eine Spule für einen Druck nicht, wird automatisch eine aus dem Vorrat angebrochen. Die Lichtdurchlässigkeit ist der TD-Wert in mm, wie ihn z. B. ein TD-1 misst." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "If known, the empty weight comes from SpoolmanDB for the brand. If a spool is not enough for a print, one from stock is opened automatically. The transmission distance is the TD value in mm, as measured by a TD-1, for example."
+          }
+        }
+      }
+    },
+    "Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The remaining weight is the weighed weight minus the empty spool."
+          }
+        }
+      }
+    },
+    "Das Tag %@ gehört zu „%@“ und wird dort entfernt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tag %1$@ belongs to “%2$@” and will be removed there."
+          }
+        }
+      }
+    },
+    "Das Tag %@ gehört zu „%@“. Dieser Eintrag hat keine angebrochenen Spulen und wird gelöscht." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tag %1$@ belongs to “%2$@”. That entry has no opened spools and will be deleted."
+          }
+        }
+      }
+    },
+    "Das Tag gehört zu „%@“, das angebrochene Spulen hat." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The tag belongs to “%@”, which has opened spools."
+          }
+        }
+      }
+    },
+    "Das ist der Container von „%@“. Nimm dafür „In Drucker einlegen“." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the container of “%@”. Use “Load into printer” for it."
+          }
+        }
+      }
+    },
+    "Das ist der Container „%@“. Scanne das Musterplättchen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the container “%@”. Scan the swatch."
+          }
+        }
+      }
+    },
+    "Das ist der Container „%@“. Scanne zuerst das Filament." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is the container “%@”. Scan the filament first."
+          }
+        }
+      }
+    },
+    "Das ist ein Filament-Tag. Für Filamente gibt es „Filament-Tag lesen“." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a filament tag. For filaments, use “Read filament tag”."
+          }
+        }
+      }
+    },
+    "Das ist ein Filament-Tag. Scanne jetzt den Container." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is a filament tag. Now scan the container."
+          }
+        }
+      }
+    },
+    "Das ist kein Tag dieses Filaments." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This is not a tag of this filament."
+          }
+        }
+      }
+    },
+    "Das letzte Tag eines Filaments bleibt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The last tag of a filament stays."
+          }
+        }
+      }
+    },
+    "Davon abgebrochen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Of which cancelled"
+          }
+        }
+      }
+    },
+    "Den API-Schlüssel zeigt der Drucker unter Einstellungen > Netzwerk > PrusaLink. Mit MMU3 wird pro Slot abgezogen, von der Spule, die in der App an diesem Slot eingelegt ist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The printer shows the API key under Settings > Network > PrusaLink. With an MMU3, consumption is deducted per slot, from the spool loaded at that slot in the app."
+          }
+        }
+      }
+    },
+    "Den Zugangscode zeigt der Drucker unter Einstellungen > WLAN, die Seriennummer liest das Backend selbst. Abgezogen wird das Slicer-Gewicht aus der Druckdatei, mit AMS pro Slot (Slot 1–4 AMS, Slot 5 externe Spule), von der Spule, die in der App an diesem Slot eingelegt ist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The printer shows the access code under Settings > WLAN; the backend reads the serial number itself. The slicer weight from the print file is deducted, with an AMS per slot (slots 1–4 AMS, slot 5 external spool), from the spool loaded at that slot in the app."
+          }
+        }
+      }
+    },
+    "Der Server antwortet mit Fehler %lld." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server responds with error %lld."
+          }
+        }
+      }
+    },
+    "Der Server holt die neue Version, baut sie und startet das Backend neu. Das dauert ein paar Minuten; so lange ist kein Abgleich möglich." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server fetches the new version, builds it and restarts the backend. This takes a few minutes; syncing is not possible during that time."
+          }
+        }
+      }
+    },
+    "Der Server lehnt den API-Schlüssel ab." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The server rejects the API key."
+          }
+        }
+      }
+    },
+    "Der U1 erkennt die Spulen in jedem Kopf über ihre Tags. Der Verbrauch wird pro Kopf abgezogen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The U1 recognises the spools in each head by their tags. Consumption is deducted per head."
+          }
+        }
+      }
+    },
+    "Der Verbrauch wird von der Spule abgezogen, die in der App an diesem Drucker eingelegt ist." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consumption is deducted from the spool loaded at this printer in the app."
+          }
+        }
+      }
+    },
+    "Die App gibt es auf Deutsch und Englisch. Sie folgt der Sprache des Geräts; eine eigene Sprache nur für Fil-o-mat stellst du in den Systemeinstellungen ein." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app is available in German and English. It follows the language of the device; you can set a separate language just for Fil-o-mat in the system settings."
+          }
+        }
+      }
+    },
+    "Die Container-Daten werden auf das RFID-Tag geschrieben, danach wird der Container gespeichert." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The container data is written to the RFID tag, then the container is saved."
+          }
+        }
+      }
+    },
+    "Die Lichtdurchlässigkeit darf nicht negativ sein." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The transmission distance must not be negative."
+          }
+        }
+      }
+    },
+    "Die Spule steckt schon dort." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The spool is already loaded there."
+          }
+        }
+      }
+    },
+    "Dieser Container ist in Fil-o-mat noch nicht angelegt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This container has not been created in Fil-o-mat yet."
+          }
+        }
+      }
+    },
+    "Dieser Tag ist in Fil-o-mat noch nicht bekannt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil-o-mat doesn’t know this tag yet."
+          }
+        }
+      }
+    },
+    "Dieser Tag-Typ wird nicht unterstützt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This tag type is not supported."
+          }
+        }
+      }
+    },
+    "Dieses Plättchen (%@) kennt die App noch nicht." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The app doesn’t know this swatch (%@) yet."
+          }
+        }
+      }
+    },
+    "Dieses Tag gehört bereits zu einem Filament." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This tag already belongs to a filament."
+          }
+        }
+      }
+    },
+    "Dieses Tag gehört bereits zum Container '%@'." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This tag already belongs to the container ‘%@’."
+          }
+        }
+      }
+    },
+    "Dieses Tag gehört schon zu diesem Filament." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This tag already belongs to this filament."
+          }
+        }
+      }
+    },
+    "Dieses Tag gehört zum Container '%@'." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "This tag belongs to the container ‘%@’."
+          }
+        }
+      }
+    },
+    "Dort steckt gerade %@; sie kommt ins Lager." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ is loaded there right now; it goes to storage."
+          }
+        }
+      }
+    },
+    "Druck" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print"
+          }
+        }
+      }
+    },
+    "Drucke" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Prints"
+          }
+        }
+      }
+    },
+    "Drucker" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printers"
+          }
+        }
+      }
+    },
+    "Drucker %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printer %@"
+          }
+        }
+      }
+    },
+    "Drucker bearbeiten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit printer"
+          }
+        }
+      }
+    },
+    "Drucker entfernen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove printer"
+          }
+        }
+      }
+    },
+    "Drucker hinzufügen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add printer"
+          }
+        }
+      }
+    },
+    "Drucker meldet %lld %% Rest" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printer reports %lld %% left"
+          }
+        }
+      }
+    },
+    "Drucker werden im Backend verwaltet. Verbinde es über das Wolken-Symbol in der Container-Liste." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printers are managed in the backend. Connect it using the cloud icon in the container list."
+          }
+        }
+      }
+    },
+    "Druckt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printing"
+          }
+        }
+      }
+    },
+    "Druckzeit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Print time"
+          }
+        }
+      }
+    },
+    "Dunkel" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dark"
+          }
+        }
+      }
+    },
+    "Durchmesser" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Diameter"
+          }
+        }
+      }
+    },
+    "Düse max." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nozzle max."
+          }
+        }
+      }
+    },
+    "Düse min." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Nozzle min."
+          }
+        }
+      }
+    },
+    "Eingelegt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loaded"
+          }
+        }
+      }
+    },
+    "Einlagern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Store"
+          }
+        }
+      }
+    },
+    "Einlegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load"
+          }
+        }
+      }
+    },
+    "Einstellungen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Settings"
+          }
+        }
+      }
+    },
+    "Entfernen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remove"
+          }
+        }
+      }
+    },
+    "Erfolgreich: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Succeeded: %@"
+          }
+        }
+      }
+    },
+    "Ergebnis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Result"
+          }
+        }
+      }
+    },
+    "Erneut abgleichen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Sync again"
+          }
+        }
+      }
+    },
+    "Extern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "External"
+          }
+        }
+      }
+    },
+    "Farbe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour"
+          }
+        }
+      }
+    },
+    "Farbe (Hex), z. B. #FF0000" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour (hex), e.g. #FF0000"
+          }
+        }
+      }
+    },
+    "Farbe (Text), z. B. Rot" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour (text), e.g. Red"
+          }
+        }
+      }
+    },
+    "Farbname" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour name"
+          }
+        }
+      }
+    },
+    "Farbschema" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Colour scheme"
+          }
+        }
+      }
+    },
+    "Fehler" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error"
+          }
+        }
+      }
+    },
+    "Fehler beim Erstellen der Daten: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error creating the data: %@"
+          }
+        }
+      }
+    },
+    "Fehler beim Erstellen der JSON-Daten: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error creating the JSON data: %@"
+          }
+        }
+      }
+    },
+    "Fehler beim Parsen der JSON-Daten: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error parsing the JSON data: %@"
+          }
+        }
+      }
+    },
+    "Fehler beim Schreiben: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Error writing: %@"
+          }
+        }
+      }
+    },
+    "Fehlgeschlagen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Failed"
+          }
+        }
+      }
+    },
+    "Fertig" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Done"
+          }
+        }
+      }
+    },
+    "Feuchtestufe %lld/5" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Humidity level %lld/5"
+          }
+        }
+      }
+    },
+    "Filament" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filament"
+          }
+        }
+      }
+    },
+    "Filament bearbeiten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Edit filament"
+          }
+        }
+      }
+    },
+    "Filament bewegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Move filament"
+          }
+        }
+      }
+    },
+    "Filament erstellen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Create filament"
+          }
+        }
+      }
+    },
+    "Filament löschen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete filament"
+          }
+        }
+      }
+    },
+    "Filament pro Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filament per spool"
+          }
+        }
+      }
+    },
+    "Filament scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan filament"
+          }
+        }
+      }
+    },
+    "Filament scannen, dann Drucker und Kopf wählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the filament, then choose printer and head"
+          }
+        }
+      }
+    },
+    "Filament scannen, dann den Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the filament, then the container"
+          }
+        }
+      }
+    },
+    "Filament wählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose filament"
+          }
+        }
+      }
+    },
+    "Filament-Daten auf dem Tag" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filament data on the tag"
+          }
+        }
+      }
+    },
+    "Filament-Tag lesen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read filament tag"
+          }
+        }
+      }
+    },
+    "Filamente" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filaments"
+          }
+        }
+      }
+    },
+    "Füge einen Drucker hinzu, damit sein Verbrauch automatisch abgezogen wird." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add a printer so its consumption is deducted automatically."
+          }
+        }
+      }
+    },
+    "Füllgewicht neue Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Net weight of a new spool"
+          }
+        }
+      }
+    },
+    "Füllgewicht neue Spule (g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Net weight of a new spool (g)"
+          }
+        }
+      }
+    },
+    "Für Spulen in Druckern muss das Backend verbunden sein." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend must be connected for spools in printers."
+          }
+        }
+      }
+    },
+    "Gesamt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total"
+          }
+        }
+      }
+    },
+    "Gesichert." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Saved."
+          }
+        }
+      }
+    },
+    "Gewicht" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weight"
+          }
+        }
+      }
+    },
+    "Gewogen mit Spule (g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weighed with spool (g)"
+          }
+        }
+      }
+    },
+    "Gleiche Marke, Typ, Variante und Farbe. Beim Zusammenführen wandern Spulen, Vorrat, Verbrauch und Tags hierher, der andere Eintrag wird gelöscht." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Same brand, type, variant and colour. When merging, spools, stock, consumption and tags move here, and the other entry is deleted."
+          }
+        }
+      }
+    },
+    "Gramm" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Grams"
+          }
+        }
+      }
+    },
+    "Grunddaten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Basics"
+          }
+        }
+      }
+    },
+    "Halten Sie das iPhone an das Musterplättchen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold the iPhone to the swatch."
+          }
+        }
+      }
+    },
+    "Halten Sie das iPhone an das Tag des Containers." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold the iPhone to the container’s tag."
+          }
+        }
+      }
+    },
+    "Halten Sie das iPhone an den Container-Tag." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold the iPhone to the container tag."
+          }
+        }
+      }
+    },
+    "Halten Sie das iPhone an den Filament-Tag." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold the iPhone to the filament tag."
+          }
+        }
+      }
+    },
+    "Halten Sie das iPhone an einen Tag." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Hold the iPhone to a tag."
+          }
+        }
+      }
+    },
+    "Hell" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Light"
+          }
+        }
+      }
+    },
+    "Hinweise" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notes"
+          }
+        }
+      }
+    },
+    "Hinzufügen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add"
+          }
+        }
+      }
+    },
+    "Hochgeladen: %lld Container, %lld Filamente. Jetzt %lld Container und %lld Filamente." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Uploaded: %lld containers, %lld filaments. Now %lld containers and %lld filaments."
+          }
+        }
+      }
+    },
+    "Im Drucker" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In the printer"
+          }
+        }
+      }
+    },
+    "Im Vorrat ist keine Spule mehr eingetragen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No spool left in stock"
+          }
+        }
+      }
+    },
+    "In Drucker einlegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Load into printer"
+          }
+        }
+      }
+    },
+    "In Fil-o-mat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In Fil-o-mat"
+          }
+        }
+      }
+    },
+    "In den Systemeinstellungen ändern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Change in system settings"
+          }
+        }
+      }
+    },
+    "Informationen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Details"
+          }
+        }
+      }
+    },
+    "Jedes dieser Tags führt beim Scannen zu diesem Filament, z. B. Musterplättchen an Boxen und Druckern. Zum Entfernen nach links wischen. Gehört ein gescanntes Tag noch einem anderen Eintrag, wird es dort entfernt; war es dessen einziges, wird der Eintrag gelöscht." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Each of these tags leads to this filament when scanned, e.g. swatches on boxes and printers. Swipe left to remove one. If a scanned tag still belongs to another entry, it is removed there; if it was that entry’s only tag, the entry is deleted."
+          }
+        }
+      }
+    },
+    "Jetzt aktualisieren" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Update now"
+          }
+        }
+      }
+    },
+    "Jetzt sichern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Back up now"
+          }
+        }
+      }
+    },
+    "Kein Backend verbunden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No backend connected"
+          }
+        }
+      }
+    },
+    "Kein Backend verbunden." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No backend connected."
+          }
+        }
+      }
+    },
+    "Kein Vorrat erfasst" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No stock recorded"
+          }
+        }
+      }
+    },
+    "Kein Zustand" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No status"
+          }
+        }
+      }
+    },
+    "Keine Container vorhanden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No containers yet"
+          }
+        }
+      }
+    },
+    "Keine Drucker" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No printers"
+          }
+        }
+      }
+    },
+    "Keine Filamente vorhanden" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No filaments yet"
+          }
+        }
+      }
+    },
+    "Keine Spulen in diesem Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No spools in this container"
+          }
+        }
+      }
+    },
+    "Keine volle Spule mehr im Vorrat und angebrochen zusammen unter %lld g." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No full spool left in stock and opened spools together below %lld g."
+          }
+        }
+      }
+    },
+    "Köpfe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Heads"
+          }
+        }
+      }
+    },
+    "Lager" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Storage"
+          }
+        }
+      }
+    },
+    "Leer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty"
+          }
+        }
+      }
+    },
+    "Leere Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty spool"
+          }
+        }
+      }
+    },
+    "Leere Spule (g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Empty spool (g)"
+          }
+        }
+      }
+    },
+    "Letzte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last"
+          }
+        }
+      }
+    },
+    "Letzter Abgleich" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last sync"
+          }
+        }
+      }
+    },
+    "Lichtdurchlässigkeit" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transmission distance"
+          }
+        }
+      }
+    },
+    "Lichtdurchlässigkeit (TD)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transmission distance (TD)"
+          }
+        }
+      }
+    },
+    "Lichtdurchlässigkeit (TD, mm)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transmission distance (TD, mm)"
+          }
+        }
+      }
+    },
+    "Lichtdurchlässigkeit erfassen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Record transmission distance"
+          }
+        }
+      }
+    },
+    "Liegt schon in diesem Container." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Already in this container."
+          }
+        }
+      }
+    },
+    "Läuft" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Running"
+          }
+        }
+      }
+    },
+    "Löschen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete"
+          }
+        }
+      }
+    },
+    "Marke" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brand"
+          }
+        }
+      }
+    },
+    "Marke:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Brand:"
+          }
+        }
+      }
+    },
+    "Material" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Material"
+          }
+        }
+      }
+    },
+    "Max. Bett-Temperatur (°C)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max. bed temperature (°C)"
+          }
+        }
+      }
+    },
+    "Max. Temperatur (°C)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Max. temperature (°C)"
+          }
+        }
+      }
+    },
+    "Mehr" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More"
+          }
+        }
+      }
+    },
+    "Mehrere Tags erkannt. Bitte nur ein Tag an das Gerät halten." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Several tags detected. Please hold only one tag to the device."
+          }
+        }
+      }
+    },
+    "Meldungen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Notifications"
+          }
+        }
+      }
+    },
+    "Menge" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantity"
+          }
+        }
+      }
+    },
+    "Menge (optional)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Quantity (optional)"
+          }
+        }
+      }
+    },
+    "Min. Bett-Temperatur (°C)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Min. bed temperature (°C)"
+          }
+        }
+      }
+    },
+    "Min. Temperatur (°C)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Min. temperature (°C)"
+          }
+        }
+      }
+    },
+    "Monat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Month"
+          }
+        }
+      }
+    },
+    "Musterplättchen scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan swatch"
+          }
+        }
+      }
+    },
+    "Musterplättchen scannen und den TD-Wert eintragen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan a swatch and enter the TD value"
+          }
+        }
+      }
+    },
+    "Musterplättchen und Vorrat · bisher: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Swatch and stock · so far: %@"
+          }
+        }
+      }
+    },
+    "Möchten Sie das Filament '%@' wirklich löschen?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do you really want to delete the filament ‘%@’?"
+          }
+        }
+      }
+    },
+    "Möchten Sie den Container '%@' wirklich löschen? Die Spulen darin stehen danach unter 'Lose'." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Do you really want to delete the container ‘%@’? Its spools will then be listed under ‘Lose’."
+          }
+        }
+      }
+    },
+    "Möglicherweise doppelt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Possible duplicate"
+          }
+        }
+      }
+    },
+    "NFC ist auf diesem Gerät nicht verfügbar." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "NFC is not available on this device."
+          }
+        }
+      }
+    },
+    "Nach neuer Version suchen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Check for a new version"
+          }
+        }
+      }
+    },
+    "Nachkaufen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "To buy"
+          }
+        }
+      }
+    },
+    "Nachsehen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Look up"
+          }
+        }
+      }
+    },
+    "Name" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name"
+          }
+        }
+      }
+    },
+    "Name *" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name *"
+          }
+        }
+      }
+    },
+    "Name, z. B. Snapmaker U1" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Name, e.g. Snapmaker U1"
+          }
+        }
+      }
+    },
+    "Neu beginnen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Start over"
+          }
+        }
+      }
+    },
+    "Neue Backend-Version verfügbar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New backend version available"
+          }
+        }
+      }
+    },
+    "Neue Spule anbrechen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open new spool"
+          }
+        }
+      }
+    },
+    "Neue Version (%lld Commits)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New version (%lld commits)"
+          }
+        }
+      }
+    },
+    "Neuer API-Schlüssel (leer = unverändert)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New API key (empty = unchanged)"
+          }
+        }
+      }
+    },
+    "Neuer Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New container"
+          }
+        }
+      }
+    },
+    "Neuer Zugangscode (leer = unverändert)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New access code (empty = unchanged)"
+          }
+        }
+      }
+    },
+    "Neues Filament" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "New filament"
+          }
+        }
+      }
+    },
+    "Nicht erreichbar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not reachable"
+          }
+        }
+      }
+    },
+    "Noch kein Tag" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No tag yet"
+          }
+        }
+      }
+    },
+    "Noch keine Drucker angelegt (Tab „Drucker“)." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No printers created yet (“Printers” tab)."
+          }
+        }
+      }
+    },
+    "Noch keine Sicherung." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No backup yet."
+          }
+        }
+      }
+    },
+    "Noch nicht gemessen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Not measured yet"
+          }
+        }
+      }
+    },
+    "Nächste" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Next"
+          }
+        }
+      }
+    },
+    "Nächsten Container scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan next container"
+          }
+        }
+      }
+    },
+    "Nächsten Tag lesen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read next tag"
+          }
+        }
+      }
+    },
+    "Nächstes scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan next"
+          }
+        }
+      }
+    },
+    "Ohne Typ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No type"
+          }
+        }
+      }
+    },
+    "Pausiert" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused"
+          }
+        }
+      }
+    },
+    "Pausiert · " : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Paused · "
+          }
+        }
+      }
+    },
+    "Platz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Location"
+          }
+        }
+      }
+    },
+    "Plättchen hinzufügen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add swatch"
+          }
+        }
+      }
+    },
+    "Plättchen übernehmen?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take over swatch?"
+          }
+        }
+      }
+    },
+    "Protokoll" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Protocol"
+          }
+        }
+      }
+    },
+    "RFID-Tag" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFID tag"
+          }
+        }
+      }
+    },
+    "RFID: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "RFID: %@"
+          }
+        }
+      }
+    },
+    "Rest unbekannt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining unknown"
+          }
+        }
+      }
+    },
+    "Restgewicht (g)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Remaining weight (g)"
+          }
+        }
+      }
+    },
+    "Scan abgebrochen." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan cancelled."
+          }
+        }
+      }
+    },
+    "Scanne das Musterplättchen des Filaments, das eingelagert wird." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the swatch of the filament being stored."
+          }
+        }
+      }
+    },
+    "Scanne das Musterplättchen des Filaments, das in den Drucker kommt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan the swatch of the filament going into the printer."
+          }
+        }
+      }
+    },
+    "Scanne..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scanning..."
+          }
+        }
+      }
+    },
+    "Scannen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Scan"
+          }
+        }
+      }
+    },
+    "Schicht" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Layer"
+          }
+        }
+      }
+    },
+    "Schließen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Close"
+          }
+        }
+      }
+    },
+    "Schreib die Nummer mit Stift auf die Spule. Gedruckter Verbrauch wird von der Spule abgezogen, die im Drucker an diesem Kopf steckt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write the number on the spool with a marker. Printed consumption is deducted from the spool loaded at that head of the printer."
+          }
+        }
+      }
+    },
+    "Server" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Server"
+          }
+        }
+      }
+    },
+    "Sichern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "Sicherung in die Nextcloud" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Backup to Nextcloud"
+          }
+        }
+      }
+    },
+    "Slots" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Slots"
+          }
+        }
+      }
+    },
+    "Sorte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filament"
+          }
+        }
+      }
+    },
+    "Sorte mit vollen Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filament with full spools"
+          }
+        }
+      }
+    },
+    "Sorte öffnen: Vorrat, alle Spulen, Verbrauch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open filament: stock, all spools, consumption"
+          }
+        }
+      }
+    },
+    "Sorten" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Filaments"
+          }
+        }
+      }
+    },
+    "Speicher" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Memory"
+          }
+        }
+      }
+    },
+    "Speichern" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save"
+          }
+        }
+      }
+    },
+    "Speichern & auf Tag schreiben" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Save & write to tag"
+          }
+        }
+      }
+    },
+    "Sprache" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Language"
+          }
+        }
+      }
+    },
+    "Spule" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool"
+          }
+        }
+      }
+    },
+    "Spule #%lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool #%lld"
+          }
+        }
+      }
+    },
+    "Spule #%lld von %@ liegt jetzt in „%@“." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool #%1$lld of %2$@ is now in “%3$@”."
+          }
+        }
+      }
+    },
+    "Spule #%lld von %@ steckt jetzt in %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool #%1$lld of %2$@ is now loaded in %3$@."
+          }
+        }
+      }
+    },
+    "Spule %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool %lld"
+          }
+        }
+      }
+    },
+    "Spule ist leer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool is empty"
+          }
+        }
+      }
+    },
+    "Spule%@ von %@ angebrochen und in %@ eingelegt. Schreib die Nummer auf die Spule." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool%1$@ of %2$@ opened and loaded in %3$@. Write the number on the spool."
+          }
+        }
+      }
+    },
+    "Spule%@ von %@ angebrochen und in „%@“ eingelagert. Schreib die Nummer auf die Spule." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spool%1$@ of %2$@ opened and stored in “%3$@”. Write the number on the spool."
+          }
+        }
+      }
+    },
+    "Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spools"
+          }
+        }
+      }
+    },
+    "Spulen (%lld)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spools (%lld)"
+          }
+        }
+      }
+    },
+    "Spulen darin" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Spools inside"
+          }
+        }
+      }
+    },
+    "Spulen in Druckern verwaltet das Backend. Verbinde es über das Wolken-Symbol in der Container-Liste." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend manages spools in printers. Connect it using the cloud icon in the container list."
+          }
+        }
+      }
+    },
+    "Statistik" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Statistics"
+          }
+        }
+      }
+    },
+    "Steckt in" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Loaded in"
+          }
+        }
+      }
+    },
+    "Suchen..." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Search..."
+          }
+        }
+      }
+    },
+    "TD (Transmission Distance, HueForge) in mm, wie ihn z. B. ein TD-1 anzeigt. Je höher, desto mehr Licht lässt das Filament durch." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TD (transmission distance, HueForge) in mm, as shown by a TD-1, for example. The higher it is, the more light the filament lets through."
+          }
+        }
+      }
+    },
+    "TD:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "TD:"
+          }
+        }
+      }
+    },
+    "Tag beschreiben" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Write tag"
+          }
+        }
+      }
+    },
+    "Tag erfolgreich beschrieben!" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag written successfully!"
+          }
+        }
+      }
+    },
+    "Tag gelesen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag read"
+          }
+        }
+      }
+    },
+    "Tag ist nicht beschreibbar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag is not writable"
+          }
+        }
+      }
+    },
+    "Tag lesen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Read tag"
+          }
+        }
+      }
+    },
+    "Tag unterstützt NDEF nicht" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag does not support NDEF"
+          }
+        }
+      }
+    },
+    "Tag zu klein: benötigt %lld Bytes, verfügbar: %lld Bytes" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tag too small: needs %lld bytes, available: %lld bytes"
+          }
+        }
+      }
+    },
+    "Tags" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Tags"
+          }
+        }
+      }
+    },
+    "Temperatur" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temperature"
+          }
+        }
+      }
+    },
+    "Temperaturen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Temperatures"
+          }
+        }
+      }
+    },
+    "Testmeldung schicken" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Send test notification"
+          }
+        }
+      }
+    },
+    "Testmeldung verschickt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Test notification sent."
+          }
+        }
+      }
+    },
+    "Token (leer = unverändert)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token (empty = unchanged)"
+          }
+        }
+      }
+    },
+    "Token (optional)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Token (optional)"
+          }
+        }
+      }
+    },
+    "Transparenz" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Transparency"
+          }
+        }
+      }
+    },
+    "Trockenbox" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Dry box"
+          }
+        }
+      }
+    },
+    "Typ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type"
+          }
+        }
+      }
+    },
+    "Typ *" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type *"
+          }
+        }
+      }
+    },
+    "Typ:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Type:"
+          }
+        }
+      }
+    },
+    "Unbekannt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown"
+          }
+        }
+      }
+    },
+    "Unbekannter Tag-Status" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unknown tag status"
+          }
+        }
+      }
+    },
+    "Unerwartetes Ergebnis" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unexpected result"
+          }
+        }
+      }
+    },
+    "Ungültiger Tag." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Invalid tag."
+          }
+        }
+      }
+    },
+    "Untertyp" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Subtype"
+          }
+        }
+      }
+    },
+    "Unverändert" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Unchanged"
+          }
+        }
+      }
+    },
+    "Variante" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Variant"
+          }
+        }
+      }
+    },
+    "Verbinden und abgleichen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connect and sync"
+          }
+        }
+      }
+    },
+    "Verbindung trennen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Disconnect"
+          }
+        }
+      }
+    },
+    "Verbindung zum Tag fehlgeschlagen: %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Connecting to the tag failed: %@"
+          }
+        }
+      }
+    },
+    "Verbrauch" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consumption"
+          }
+        }
+      }
+    },
+    "Verbrauch pro Monat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Consumption per month"
+          }
+        }
+      }
+    },
+    "Version" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Version"
+          }
+        }
+      }
+    },
+    "Volle Spulen im Vorrat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full spools in stock"
+          }
+        }
+      }
+    },
+    "Volle Spulen im Vorrat: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full spools in stock: %lld"
+          }
+        }
+      }
+    },
+    "Volle und angebrochene Spulen je Sorte, was nachgekauft werden sollte" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Full and opened spools per filament, and what to buy"
+          }
+        }
+      }
+    },
+    "Vorrat" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stock"
+          }
+        }
+      }
+    },
+    "Vorrat %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stock %lld"
+          }
+        }
+      }
+    },
+    "Vorrat:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stock:"
+          }
+        }
+      }
+    },
+    "Vorrat: %lld" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Stock: %lld"
+          }
+        }
+      }
+    },
+    "Weitere Farben" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "More colours"
+          }
+        }
+      }
+    },
+    "Welche Spule steckt hier?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Which spool is loaded here?"
+          }
+        }
+      }
+    },
+    "Wie das System" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Like the system"
+          }
+        }
+      }
+    },
+    "Wiegen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weigh"
+          }
+        }
+      }
+    },
+    "Wiegen ist optional. Das Restgewicht wird aus dem gewogenen Gewicht minus leerer Spule berechnet." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Weighing is optional. The remaining weight is the weighed weight minus the empty spool."
+          }
+        }
+      }
+    },
+    "Wird aktualisiert …" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Updating …"
+          }
+        }
+      }
+    },
+    "Zeitraum" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Period"
+          }
+        }
+      }
+    },
+    "Zu vorhandenem Filament hinzufügen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Add to existing filament"
+          }
+        }
+      }
+    },
+    "Zugangscode" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Access code"
+          }
+        }
+      }
+    },
+    "Zuletzt abgeglichen %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last synced %@"
+          }
+        }
+      }
+    },
+    "Zuletzt geprüft %@, Branch %@." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Last checked %1$@, branch %2$@."
+          }
+        }
+      }
+    },
+    "Zum Zusammenführen muss das Backend verbunden sein." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The backend must be connected to merge."
+          }
+        }
+      }
+    },
+    "Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "The address from the server configuration applies at the moment. An address entered here takes precedence."
+          }
+        }
+      }
+    },
+    "Zusammenführen?" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merge?"
+          }
+        }
+      }
+    },
+    "Zusammengeführt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merged."
+          }
+        }
+      }
+    },
+    "Zusammengeführt. Neue Nummern: %@. Bitte auf den Spulen ändern." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Merged. New numbers: %@. Please change them on the spools."
+          }
+        }
+      }
+    },
+    "beschreibbar" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "writable"
+          }
+        }
+      }
+    },
+    "braucht %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "needs %@"
+          }
+        }
+      }
+    },
+    "frei" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "empty"
+          }
+        }
+      }
+    },
+    "ja" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "yes"
+          }
+        }
+      }
+    },
+    "kein Container" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no container"
+          }
+        }
+      }
+    },
+    "kein NDEF" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no NDEF"
+          }
+        }
+      }
+    },
+    "keine" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "none"
+          }
+        }
+      }
+    },
+    "keiner" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "none"
+          }
+        }
+      }
+    },
+    "label.container" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Container"
+          }
+        }
+      }
+    },
+    "label.printer" : {
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Drucker"
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Printer"
+          }
+        }
+      }
+    },
+    "leer" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "empty"
+          }
+        }
+      }
+    },
+    "nein" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no"
+          }
+        }
+      }
+    },
+    "noch %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "%@ left"
+          }
+        }
+      }
+    },
+    "ntfy-Thema" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "ntfy topic"
+          }
+        }
+      }
+    },
+    "ohne Typ" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "no type"
+          }
+        }
+      }
+    },
+    "schreibgeschützt" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "write-protected"
+          }
+        }
+      }
+    },
+    "z. B. 1000" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. 1000"
+          }
+        }
+      }
+    },
+    "z. B. 3,5" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "e.g. 3.5"
+          }
+        }
+      }
+    },
+    "Übernehmen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take over"
+          }
+        }
+      }
+    },
+    "Übernehmen und „%@“ löschen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take over and delete “%@”"
+          }
+        }
+      }
+    },
+    "„%@“ hierher übernehmen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Take “%@” over into this one"
+          }
+        }
+      }
+    },
+    "„%@“ ist kein Drucker. Wähle Drucker und Kopf aus der Liste." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "“%@” is not a printer. Choose printer and head from the list."
+          }
+        }
+      }
+    },
+    "„%@“ löschen und übernehmen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Delete “%@” and take over"
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

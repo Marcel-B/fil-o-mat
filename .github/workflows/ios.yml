@@ -40,4 +40,5 @@ jobs:
             -project Filomat.xcodeproj \
             -scheme Filomat \
             -destination "platform=iOS Simulator,name=$DEVICE" \
+            -testLanguage de -testRegion DE \
             CODE_SIGNING_ALLOWED=NO

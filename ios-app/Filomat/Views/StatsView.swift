@@ -25,7 +25,7 @@ struct StatsView: View {
                 Section("Gesamt") {
                     LabeledContent("Verbrauch", value: stats.totals.grams.gramsText)
                     LabeledContent("Drucke", value: stats.totals.cancelled > 0
-                                   ? "\(stats.totals.jobs) (\(stats.totals.cancelled) abgebrochen)"
+                                   ? String(localized: "\(stats.totals.jobs) (\(stats.totals.cancelled) abgebrochen)")
                                    : "\(stats.totals.jobs)")
                     if stats.totals.printSeconds > 0 {
                         LabeledContent("Druckzeit", value: PrinterStatus.duration(stats.totals.printSeconds))
@@ -93,15 +93,15 @@ struct StatsView: View {
     }
 
     private func detail(_ totals: StatsTotals) -> String {
-        var parts = [totals.jobs == 1 ? "1 Druck" : "\(totals.jobs) Drucke"]
-        if totals.cancelled > 0 { parts.append("\(totals.cancelled) abgebrochen") }
+        var parts = [totals.jobs == 1 ? String(localized: "1 Druck") : String(localized: "\(totals.jobs) Drucke")]
+        if totals.cancelled > 0 { parts.append(String(localized: "\(totals.cancelled) abgebrochen")) }
         if totals.printSeconds > 0 { parts.append(PrinterStatus.duration(totals.printSeconds)) }
         return parts.joined(separator: " · ")
     }
 
     private func load() async {
         guard let backend = store.backend else {
-            errorMessage = "Kein Backend verbunden."
+            errorMessage = String(localized: "Kein Backend verbunden.")
             return
         }
         do {
@@ -192,7 +192,7 @@ struct NotificationSettingsView: View {
                 url: trimmedUrl, token: trimmedToken.isEmpty ? nil : trimmedToken))
             token = ""
             errorMessage = nil
-            message = trimmedUrl.isEmpty ? "Adresse entfernt." : "Gesichert."
+            message = trimmedUrl.isEmpty ? String(localized: "Adresse entfernt.") : String(localized: "Gesichert.")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -205,7 +205,7 @@ struct NotificationSettingsView: View {
         do {
             try await backend.sendTestNotification()
             errorMessage = nil
-            message = "Testmeldung verschickt."
+            message = String(localized: "Testmeldung verschickt.")
         } catch {
             errorMessage = error.localizedDescription
         }

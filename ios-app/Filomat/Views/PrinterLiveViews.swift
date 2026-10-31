@@ -13,7 +13,7 @@ struct PrinterStatusLine: View {
                     .tint(live.status.state == "Paused" ? .orange : .accentColor)
             }
             if !live.warnings.isEmpty {
-                Label(live.warnings.count == 1 ? live.warnings[0].text : "\(live.warnings.count) Warnungen",
+                Label(live.warnings.count == 1 ? live.warnings[0].text : String(localized: "\(live.warnings.count) Warnungen"),
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .lineLimit(2)
@@ -120,7 +120,7 @@ struct PrinterDetailView: View {
                 }
             }
             if let layer = status.layer, let total = status.totalLayers, total > 0, status.hasJob {
-                LabeledContent("Schicht", value: "\(layer) von \(total)")
+                LabeledContent("Schicht", value: String(localized: "\(layer) von \(total)"))
             }
             if let elapsed = status.elapsedSeconds, elapsed > 0, status.hasJob {
                 LabeledContent("Druckzeit", value: PrinterStatus.duration(elapsed))

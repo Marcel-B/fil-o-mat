@@ -1,0 +1,40 @@
+{
+  "sourceLanguage" : "de",
+  "strings" : {
+    "NSLocalNetworkUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil-o-mat verbindet sich mit deinem Fil-o-mat-Server im Heimnetz."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil-o-mat connects to your Fil-o-mat server on your home network."
+          }
+        }
+      }
+    },
+    "NFCReaderUsageDescription" : {
+      "extractionState" : "manual",
+      "localizations" : {
+        "de" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil-o-mat liest und beschreibt die NFC-Tags deiner Container und Filamentspulen."
+          }
+        },
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Fil-o-mat reads and writes the NFC tags of your containers and filament spools."
+          }
+        }
+      }
+    }
+  },
+  "version" : "1.0"
+}

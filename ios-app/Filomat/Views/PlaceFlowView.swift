@@ -120,32 +120,32 @@ struct PlaceFlowView: View {
                 }
             }
         } header: {
-            Text("2. Was kommt \(model.target == .container ? "in den Container" : "in den Drucker")?")
+            Text(model.target == .container ? "2. Was kommt in den Container?" : "2. Was kommt in den Drucker?")
         }
     }
 
     private func title(of choice: SpoolChoice) -> String {
         switch choice {
-        case .stock: return "Sorte mit vollen Spulen"
-        case .spool(let id): return "Angebrochene Spule #\(spool(id)?.number ?? 0)"
-        case .newSpool: return "Neue Spule anbrechen"
+        case .stock: return String(localized: "Sorte mit vollen Spulen")
+        case .spool(let id): return String(localized: "Angebrochene Spule #\(spool(id)?.number ?? 0)")
+        case .newSpool: return String(localized: "Neue Spule anbrechen")
         }
     }
 
     private func detail(of choice: SpoolChoice) -> String {
         switch choice {
         case .stock:
-            let place = model.item?.containerId.flatMap { store.container(id: $0)?.name } ?? "kein Container"
-            return "Musterplättchen und Vorrat · bisher: \(place)"
+            let place = model.item?.containerId.flatMap { store.container(id: $0)?.name } ?? String(localized: "kein Container")
+            return String(localized: "Musterplättchen und Vorrat · bisher: \(place)")
         case .spool(let id):
             guard let spool = spool(id) else { return "" }
-            let rest = spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt"
+            let rest = spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? String(localized: "Rest unbekannt")
             return "\(rest) · \(spool.locationText(printers: store.printers, containers: store.containers))"
         case .newSpool:
             let stock = model.item?.spoolsInStock ?? 0
             return stock > 0
-                ? "Aus dem Vorrat (\(stock) \(stock == 1 ? "Spule" : "Spulen"))"
-                : "Im Vorrat ist keine Spule mehr eingetragen"
+                ? (stock == 1 ? String(localized: "Aus dem Vorrat (1 Spule)") : String(localized: "Aus dem Vorrat (\(stock) Spulen)"))
+                : String(localized: "Im Vorrat ist keine Spule mehr eingetragen")
         }
     }
 
@@ -171,7 +171,7 @@ struct PlaceFlowView: View {
     private var containerSection: some View {
         Section("3. Container") {
             if let container = model.container {
-                LabeledContent("Container", value: container.name)
+                LabeledContent(String(localized: "label.container", defaultValue: "Container"), value: container.name)
                 if model.isAlreadyThere(store: store) {
                     Text("Liegt schon in diesem Container.").foregroundStyle(.orange)
                 }
@@ -234,20 +234,20 @@ struct PlaceFlowView: View {
     }
 
     private func occupant(printerId: String, tool: Int) -> String {
-        guard let spool = store.spool(inPrinter: printerId, tool: tool) else { return "frei" }
+        guard let spool = store.spool(inPrinter: printerId, tool: tool) else { return String(localized: "frei") }
         return name(of: spool)
     }
 
     private func name(of spool: Spool) -> String {
-        let title = store.item(id: spool.itemId)?.displayTitle ?? "Filament"
+        let title = store.item(id: spool.itemId)?.displayTitle ?? String(localized: "Filament")
         return "\(title) #\(spool.number)"
     }
 
     private func stockText(for item: Item) -> String {
         var parts: [String] = []
-        if let stock = item.spoolsInStock { parts.append("Vorrat: \(stock)") }
+        if let stock = item.spoolsInStock { parts.append(String(localized: "Vorrat: \(stock)")) }
         let opened = store.spools(of: item.id).count
-        if opened > 0 { parts.append("\(opened) angebrochen") }
+        if opened > 0 { parts.append(String(localized: "\(opened) angebrochen")) }
         return parts.isEmpty ? item.rfidTag : parts.joined(separator: " · ")
     }
 }

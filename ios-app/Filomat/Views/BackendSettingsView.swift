@@ -221,7 +221,7 @@ struct BackendSettingsView: View {
     private static func describe(_ sha: String, date: Date?) -> String {
         let short = String(sha.prefix(7))
         guard let date else { return short }
-        return "\(short) vom \(date.formatted(date: .abbreviated, time: .shortened))"
+        return String(localized: "\(short) vom \(date.formatted(date: .abbreviated, time: .shortened))")
     }
 
     private func checkForUpdate() async {
@@ -257,7 +257,7 @@ struct BackendSettingsView: View {
         BackendSettings.apiKey = apiKey
         resultMessage = nil
         guard let result = await store.connect(client) else { return }
-        var message = "Hochgeladen: \(result.containers) Container, \(result.items) Filamente. Jetzt \(store.containers.count) Container und \(store.items.count) Filamente."
+        var message = String(localized: "Hochgeladen: \(result.containers) Container, \(result.items) Filamente. Jetzt \(store.containers.count) Container und \(store.items.count) Filamente.")
         for skipped in result.skipped { message += "\n• \(skipped)" }
         resultMessage = message
     }

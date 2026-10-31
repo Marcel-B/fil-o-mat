@@ -79,20 +79,20 @@ struct AddContainerView: View {
         do {
             json = try TagJSON.encoder.encode(tagData)
         } catch {
-            errorMessage = "Fehler beim Erstellen der JSON-Daten: \(error.localizedDescription)"
+            errorMessage = String(localized: "Fehler beim Erstellen der JSON-Daten: \(error.localizedDescription)")
             return
         }
 
         do {
             let tagId = try await NFCService.shared.writeJSON(
                 json,
-                prompt: "Halten Sie das iPhone an das Tag des Containers."
+                prompt: String(localized: "Halten Sie das iPhone an das Tag des Containers.")
             ) { [store] tagId in
                 if let existing = store.findContainer(byTag: tagId) {
-                    return "Dieses Tag gehört bereits zum Container '\(existing.name)'."
+                    return String(localized: "Dieses Tag gehört bereits zum Container '\(existing.name)'.")
                 }
                 if store.findItem(byTag: tagId) != nil {
-                    return "Dieses Tag gehört bereits zu einem Filament."
+                    return String(localized: "Dieses Tag gehört bereits zu einem Filament.")
                 }
                 return nil
             }

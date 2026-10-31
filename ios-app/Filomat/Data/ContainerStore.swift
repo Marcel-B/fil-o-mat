@@ -179,7 +179,7 @@ final class ContainerStore {
                 try await removeTag(tag, fromItem: previous.id)
             } else {
                 guard spools(of: previous.id).isEmpty else {
-                    throw StoreError.tagInUse("Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat.")
+                    throw StoreError.tagInUse(String(localized: "Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat."))
                 }
                 try await backend?.deleteItem(id: previous.id)
                 items.removeAll { $0.id == previous.id }
@@ -201,7 +201,7 @@ final class ContainerStore {
         var item = items[index]
         var extra = item.extraTags ?? []
         if item.rfidTag == tag {
-            guard !extra.isEmpty else { throw StoreError.tagInUse("Das letzte Tag eines Filaments bleibt.") }
+            guard !extra.isEmpty else { throw StoreError.tagInUse(String(localized: "Das letzte Tag eines Filaments bleibt.")) }
             item.rfidTag = extra.removeFirst()
         } else {
             extra.removeAll { $0 == tag }
@@ -222,7 +222,7 @@ final class ContainerStore {
     /// Führt ein doppeltes Filament in dieses zusammen (Spulen, Verbrauch, Vorrat, Tags); das andere wird gelöscht.
     /// - Returns: Spulen, die eine neue Nummer bekommen haben.
     func mergeItem(_ fromId: String, into itemId: String) async throws -> [RenumberedSpool] {
-        guard let backend else { throw StoreError.tagInUse("Zum Zusammenführen muss das Backend verbunden sein.") }
+        guard let backend else { throw StoreError.tagInUse(String(localized: "Zum Zusammenführen muss das Backend verbunden sein.")) }
         let renumbered = try await backend.mergeItem(into: itemId, from: fromId)
         items.removeAll { $0.id == fromId }
         save()
