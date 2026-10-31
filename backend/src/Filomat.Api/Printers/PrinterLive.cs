@@ -166,14 +166,19 @@ public class PrinterLive(
         return spools.Where(s => items.ContainsKey(s.ItemId)).Select(s => new PlacedSpool(s, items[s.ItemId])).ToList();
     }
 
-    /// <summary>Köpfe ohne Spule in der App, an denen der Drucker das Plättchen einer bekannten Sorte erkennt.</summary>
+    /// <summary>
+    /// Köpfe, an denen der Drucker das Plättchen einer bekannten Sorte erkennt, die dort laut App nicht steckt: ohne Spule
+    /// in der App oder mit einer Spule einer anderen Sorte.
+    /// </summary>
     private async Task<Dictionary<int, DetectedItem>> DetectedAsync(PrinterStatus status, List<PlacedSpool> placed,
         CancellationToken cancellationToken)
     {
         var result = new Dictionary<int, DetectedItem>();
         foreach (var slot in status.Slots ?? [])
         {
-            if (slot.TagUid is not { } tag || slot.Loaded == false || placed.Any(p => (p.Spool.Tool ?? 0) == slot.Tool)) continue;
+            if (slot.TagUid is not { } tag || slot.Loaded == false) continue;
+            if (placed.FirstOrDefault(p => (p.Spool.Tool ?? 0) == slot.Tool) is { } inApp
+                && inApp.Item.AllTags.Contains(tag, StringComparer.OrdinalIgnoreCase)) continue;
             if (await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken) is not { } item) continue;
             var loose = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null && s.PrinterId == null)
                 .OrderBy(s => s.Number).Select(s => s.Number).ToListAsync(cancellationToken);

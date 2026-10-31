@@ -1,6 +1,16 @@
 {
   "sourceLanguage" : "de",
   "strings" : {
+    "%@ #%lld übernehmen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use %@ #%lld"
+          }
+        }
+      }
+    },
     "%@ Kopf %lld" : {
       "localizations" : {
         "en" : {
@@ -57,6 +67,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%1$@ · %2$lld heads · %3$@"
+          }
+        }
+      }
+    },
+    "%@ übernehmen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Use %@"
           }
         }
       }
@@ -2477,6 +2497,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "New backend version available"
+          }
+        }
+      }
+    },
+    "Neue Spule %@ anbrechen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open a new spool of %@"
           }
         }
       }

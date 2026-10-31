@@ -98,7 +98,9 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
     val printer = printers.firstOrNull { it.id == printerId }
     val live = liveMap[printerId]
     val spools by store.spools.collectAsState(initial = emptyList())
+    val items by store.allItems.collectAsState(initial = emptyList())
     val scope = rememberCoroutineScope()
+    var fixing by remember { mutableStateOf(false) }
     var editing by remember { mutableStateOf(false) }
     var thumbnail by remember { mutableStateOf<ImageBitmap?>(null) }
 
@@ -198,6 +200,40 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                             )
                             Text(hint.text, style = MaterialTheme.typography.bodyMedium)
                         }
+                        // Der Drucker erkennt das Plättchen einer anderen Sorte: ein Tipp legt eine ihrer Spulen in den Kopf
+                        val tool = live.tools.firstOrNull { it.tool == hint.tool }
+                        val tag = tool?.reported?.tagUid
+                        val detected = if (hint.kind == "TagMismatch" && tag != null)
+                            items.firstOrNull { item -> item.allTags.any { it.equals(tag, ignoreCase = true) } }?.takeIf { it.id != tool?.itemId }
+                        else null
+                        if (tool != null && detected != null) {
+                            val candidates = spools
+                                .filter { it.itemId == detected.id && (it.printerId != printerId || (it.tool ?: 0) != tool.tool) }
+                                .sortedWith(compareBy({ if (it.printerId == null) 0 else 1 }, { it.number }))
+                            DetectedFix(
+                                itemName = detected.name,
+                                candidates = candidates,
+                                canOpen = (detected.spoolsInStock ?: 0) > 0,
+                                enabled = !fixing,
+                                printerName = { id -> printers.firstOrNull { it.id == id }?.name },
+                                onChoose = { spool ->
+                                    scope.launch {
+                                        fixing = true
+                                        runCatching { store.placeSpool(spool, SpoolPlace.printer(printerId, tool.tool)) }
+                                        store.refreshPrinterLive()
+                                        fixing = false
+                                    }
+                                },
+                                onOpen = {
+                                    scope.launch {
+                                        fixing = true
+                                        runCatching { store.openSpool(detected.id, SpoolPlace.printer(printerId, tool.tool)) }
+                                        store.refreshPrinterLive()
+                                        fixing = false
+                                    }
+                                }
+                            )
+                        }
                     }
                 }
             }
@@ -268,6 +304,48 @@ private fun SpoolChoice(loose: List<Spool>, onChoose: (Spool) -> Unit) {
                 )
             }
         }
+    }
+}
+
+/**
+ * Knopf am Hinweis „Der Drucker erkennt …“: legt eine Spule der erkannten Sorte in den Kopf, die bisherige wandert ins
+ * Lager. Eine Spule: ein Tipp. Mehrere: Auswahl. Keine angebrochene, aber Vorrat: neue Spule anbrechen.
+ */
+@Composable
+private fun DetectedFix(
+    itemName: String,
+    candidates: List<Spool>,
+    canOpen: Boolean,
+    enabled: Boolean,
+    printerName: (String) -> String?,
+    onChoose: (Spool) -> Unit,
+    onOpen: () -> Unit
+) {
+    var expanded by remember { mutableStateOf(false) }
+    when {
+        candidates.size == 1 -> TextButton(onClick = { onChoose(candidates[0]) }, enabled = enabled) {
+            Text(tr("%s #%s übernehmen", itemName, candidates[0].number))
+        }
+        candidates.size > 1 -> Box {
+            TextButton(onClick = { expanded = true }, enabled = enabled) { Text(tr("%s übernehmen", itemName)) }
+            DropdownMenu(expanded = expanded, onDismissRequest = { expanded = false }) {
+                candidates.forEach { spool ->
+                    val parts = listOfNotNull(
+                        "#${spool.number}",
+                        spool.remainingWeight?.let { gramsText(it) },
+                        spool.printerId?.let(printerName)
+                    )
+                    DropdownMenuItem(
+                        text = { Text(parts.joinToString(" · ")) },
+                        onClick = {
+                            expanded = false
+                            onChoose(spool)
+                        }
+                    )
+                }
+            }
+        }
+        canOpen -> TextButton(onClick = onOpen, enabled = enabled) { Text(tr("Neue Spule %s anbrechen", itemName)) }
     }
 }
 
