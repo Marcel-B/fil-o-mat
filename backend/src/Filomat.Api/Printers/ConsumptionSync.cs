@@ -81,6 +81,7 @@ public class ConsumptionSync(
         var entries = await db.Consumptions.Where(c => c.PrinterId == printer.Id && c.JobId == job.JobId)
             .OrderBy(c => c.Tool).ToListAsync(cancellationToken);
         var tools = PrinterLive.ToolCount(printer);
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
         var lines = new List<string>();
         var low = false;
         foreach (var entry in entries.Where(e => e.Grams > 0))
@@ -91,39 +92,39 @@ public class ConsumptionSync(
             var spool = entry.SpoolId is null ? null : await db.Spools.FindAsync([entry.SpoolId], cancellationToken);
             if (item is null)
             {
-                lines.Add($"{prefix}{entry.Grams:0} g ohne Zuordnung");
+                lines.Add(prefix + L.F("{0:0} g ohne Zuordnung", entry.Grams));
                 continue;
             }
             if (spool is null)
             {
-                lines.Add($"{prefix}{item.Name} −{entry.Grams:0} g, Spule unklar");
+                lines.Add(prefix + L.F("{0} −{1:0} g, Spule unklar", item.Name, entry.Grams));
                 continue;
             }
             var line = $"{prefix}{item.Name} #{spool.Number} −{entry.Grams:0} g";
-            if (spool.EmptiedAt is not null) line += ", leer";
+            if (spool.EmptiedAt is not null) line += L.T(", leer");
             else if (spool.RemainingWeight is { } remaining)
             {
-                line += $", noch {remaining:0} g";
+                line += L.F(", noch {0:0} g", remaining);
                 // Fast leer: unter 10 % der vollen Spule oder unter 50 g
                 if (remaining < Math.Max(50, (item.NetWeight ?? 0) * 0.1))
                 {
-                    line += " (fast leer)";
+                    line += L.T(" (fast leer)");
                     low = true;
                 }
             }
             lines.Add(line);
         }
         if (job.DurationSeconds is int seconds and > 0)
-            lines.Add(seconds >= 3600 ? $"Druckzeit {seconds / 3600}:{seconds % 3600 / 60:00} h" : $"Druckzeit {seconds / 60} min");
+            lines.Add(seconds >= 3600 ? L.F("Druckzeit {0}:{1:00} h", seconds / 3600, seconds % 3600 / 60) : L.F("Druckzeit {0} min", seconds / 60));
 
         var (verb, tags) = job.Status switch
         {
-            "completed" => ("fertig", "white_check_mark"),
-            "cancelled" => ("abgebrochen", "x"),
-            _ => ("mit Fehler beendet", "warning"),
+            "completed" => (L.T("fertig"), "white_check_mark"),
+            "cancelled" => (L.T("abgebrochen"), "x"),
+            _ => (L.T("mit Fehler beendet"), "warning"),
         };
-        var name = job.Name.Length > 0 ? job.Name : "Druck";
-        await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : $"{name} ist {verb}.",
+        var name = job.Name.Length > 0 ? job.Name : L.T("Druck");
+        await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : L.F("{0} ist {1}.", name, verb),
             low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken, image: token => live.GetPhotoAsync(printer, token));
     }
 

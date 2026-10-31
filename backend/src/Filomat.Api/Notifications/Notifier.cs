@@ -10,7 +10,8 @@ namespace Filomat.Api.Notifications;
 /// <summary>Ziel für Meldungen; in den Apps einstellbar, sonst aus <c>Ntfy:Url</c> und <c>Ntfy:Token</c>.</summary>
 /// <param name="Url">Adresse des Themas, z. B. <c>https://ntfy.sh/filomat-abc123</c>.</param>
 /// <param name="FromApp">In der App eingestellt (sonst aus der Server-Konfiguration).</param>
-public record NtfySettings(string? Url, string? Token, bool FromApp)
+/// <param name="Language">Sprache der Meldungen, <c>de</c> oder <c>en</c>.</param>
+public record NtfySettings(string? Url, string? Token, bool FromApp, string Language = L.German)
 {
     public bool Configured => Uri.TryCreate(Url, UriKind.Absolute, out var uri) && uri.Scheme is "http" or "https";
 }
@@ -24,19 +25,30 @@ public class Notifier(FilomatDbContext db, IHttpClientFactory httpFactory, IConf
     public const string HttpClientName = "ntfy";
     public const string UrlKey = "ntfy.url";
     public const string TokenKey = "ntfy.token";
+    public const string LanguageKey = "ntfy.language";
 
     public async Task<NtfySettings> GetSettingsAsync(CancellationToken cancellationToken = default)
     {
-        var stored = await db.Settings.Where(s => s.Key == UrlKey || s.Key == TokenKey).ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
+        var stored = await db.Settings.Where(s => s.Key == UrlKey || s.Key == TokenKey || s.Key == LanguageKey)
+            .ToDictionaryAsync(s => s.Key, s => s.Value, cancellationToken);
+        var language = L.Normalize(stored.GetValueOrDefault(LanguageKey) ?? configuration["Ntfy:Language"]);
         if (stored.GetValueOrDefault(UrlKey) is { Length: > 0 } url)
-            return new NtfySettings(url, stored.GetValueOrDefault(TokenKey), true);
-        return new NtfySettings(Clean(configuration["Ntfy:Url"]), Clean(configuration["Ntfy:Token"]), false);
+            return new NtfySettings(url, stored.GetValueOrDefault(TokenKey), true, language);
+        return new NtfySettings(Clean(configuration["Ntfy:Url"]), Clean(configuration["Ntfy:Token"]), false, language);
     }
 
-    /// <summary>Speichert das Ziel; eine leere Adresse fällt auf die Server-Konfiguration zurück. <c>token = null</c> behält den alten.</summary>
-    public async Task SaveSettingsAsync(string? url, string? token, CancellationToken cancellationToken = default)
+    /// <summary>Sprache der Meldungen; Texte dafür entstehen innerhalb von <c>using var _ = L.Use(await notifier.LanguageAsync())</c>.</summary>
+    public async Task<string> LanguageAsync(CancellationToken cancellationToken = default) =>
+        L.Normalize((await db.Settings.FindAsync([LanguageKey], cancellationToken))?.Value ?? configuration["Ntfy:Language"]);
+
+    /// <summary>
+    /// Speichert das Ziel; eine leere Adresse fällt auf die Server-Konfiguration zurück. <c>token = null</c> behält den alten,
+    /// <c>language = null</c> die bisherige Sprache.
+    /// </summary>
+    public async Task SaveSettingsAsync(string? url, string? token, string? language = null, CancellationToken cancellationToken = default)
     {
         await SetAsync(UrlKey, Clean(url), cancellationToken);
+        if (language is not null) await SetAsync(LanguageKey, L.Normalize(language), cancellationToken);
         if (token is not null || Clean(url) is null) await SetAsync(TokenKey, Clean(token), cancellationToken);
         await db.SaveChangesAsync(cancellationToken);
     }

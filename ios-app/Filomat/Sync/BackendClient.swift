@@ -296,6 +296,8 @@ struct BackendClient {
         var request = URLRequest(url: baseURL.appendingPathComponent(path), timeoutInterval: 15)
         request.httpMethod = method
         if let apiKey, !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key") }
+        // Hinweise und Fehlermeldungen des Backends in der Sprache der App
+        request.setValue(Bundle.main.preferredLocalizations.first ?? "de", forHTTPHeaderField: "Accept-Language")
         return request
     }
 

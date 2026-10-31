@@ -85,7 +85,7 @@ public static class SyncEndpoints
             if ((containerByTag.TryGetValue(incoming.RfidTag, out var owner) && owner != incoming.Id)
                 || itemByTag.ContainsKey(incoming.RfidTag))
             {
-                skipped.Add($"Container '{incoming.Name}': Tag {incoming.RfidTag} ist bereits vergeben.");
+                skipped.Add(L.F("Container '{0}': Tag {1} ist bereits vergeben.", incoming.Name, incoming.RfidTag));
                 continue;
             }
 
@@ -116,7 +116,7 @@ public static class SyncEndpoints
             if ((itemByTag.TryGetValue(incoming.RfidTag, out var owner) && owner != incoming.Id)
                 || containerByTag.ContainsKey(incoming.RfidTag))
             {
-                skipped.Add($"Filament '{incoming.Name}': Tag {incoming.RfidTag} ist bereits vergeben.");
+                skipped.Add(L.F("Filament '{0}': Tag {1} ist bereits vergeben.", incoming.Name, incoming.RfidTag));
                 continue;
             }
 
@@ -152,7 +152,7 @@ public static class SyncEndpoints
                     if (tag.Length == 0 || tag == incoming.RfidTag) continue;
                     if ((itemByTag.TryGetValue(tag, out var tagOwner) && tagOwner != incoming.Id) || containerByTag.ContainsKey(tag))
                     {
-                        skipped.Add($"Filament '{incoming.Name}': Tag {tag} ist bereits vergeben.");
+                        skipped.Add(L.F("Filament '{0}': Tag {1} ist bereits vergeben.", incoming.Name, tag));
                         continue;
                     }
                     extra.Add(tag);

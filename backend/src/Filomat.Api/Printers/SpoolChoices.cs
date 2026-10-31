@@ -65,14 +65,15 @@ public class SpoolQuestion(SpoolStock spools, Notifier notifier, PrinterStatusCa
         // Einmal pro Kopf, Sorte und Auswahl, nicht bei jedem Abgleich
         if (!cache.FirstTime($"unclear|{printer.Id}|{tool}|{item.Id}|{string.Join(",", loose.Select(s => s.Id))}")) return;
 
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
         var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), tool);
         var where = place.Length > 0 ? $"{printer.Name} {place}" : printer.Name;
         static string Label(Spool s) => s.RemainingWeight is { } grams ? $"#{s.Number} ({grams:0} g)" : $"#{s.Number}";
         var actions = address.Url is { } url
             ? loose.Take(3).Select(s => new NtfyAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
             : new List<NtfyAction>();
-        var message = $"{item.Name} erkannt, lose liegen {string.Join(", ", loose.Select(Label))}. "
-            + (actions.Count == loose.Count ? "Tippe auf die Spule, die drin steckt." : "Wählen kannst du in der App beim Drucker.");
-        await notifier.SendAsync($"{where}: Welche Spule?", message, "question", cancellationToken: cancellationToken, actions: actions);
+        var message = L.F("{0} erkannt, lose liegen {1}.", item.Name, string.Join(", ", loose.Select(Label))) + " "
+            + (actions.Count == loose.Count ? L.T("Tippe auf die Spule, die drin steckt.") : L.T("Wählen kannst du in der App beim Drucker."));
+        await notifier.SendAsync(L.F("{0}: Welche Spule?", where), message, "question", cancellationToken: cancellationToken, actions: actions);
     }
 }

@@ -30,6 +30,7 @@ dotnet test
 | `Filomat:PrinterSyncInterval` | `Filomat__PrinterSyncInterval` | Abstand des Drucker-Abgleichs, Standard `00:02:00`; `00:00:00` schaltet ihn ab |
 | – | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | Nextcloud-Sicherung, siehe unten |
 | `Ntfy:Url`, `Ntfy:Token` | `Ntfy__Url`, `Ntfy__Token` (in `backend/.env`: `NTFY_URL`, `NTFY_TOKEN`) | Meldungen über ntfy, falls in der App keine Adresse eingestellt ist; siehe unten |
+| `Ntfy:Language` | `Ntfy__Language` | Sprache der Meldungen (`de`, `en`), solange sie nicht in einer App gespeichert wurde; Standard `de` |
 | `Filomat:PublicUrl` | `Filomat__PublicUrl` | Adresse, unter der das Handy das Backend erreicht, für die Knöpfe in ntfy-Meldungen; ohne gilt die Adresse, mit der die App zuletzt zugegriffen hat |
 | `Backup:At` | `Backup__At` | Uhrzeit der nächtlichen Sicherung, Standard `03:00` (`Backup:TimeZone`, Standard `Europe/Berlin`); leer für nur manuelle |
 
@@ -61,7 +62,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | PUT | `/api/printers/{id}/reader` | NFC-Leser am Drucker meldet den ganzen Stand: `{"slots": ["04378F53CB2A81", null, …]}` (ab Slot 0); Antwort pro Slot `empty`/`known`/`unknown`/`container` mit Kurztext |
 | POST | `/api/printers/{id}/reader/tap` | Tipp-Modus: `{"slot": 4, "tag": "…"}`, die Spule der Sorte kommt in diesen Slot |
 | GET | `/api/stats?months=12` | Verbrauch, Drucke, Abbrüche und Druckzeit pro Monat, Drucker, Sorte und Material |
-| GET · PUT | `/api/settings/notifications` | ntfy-Adresse für Meldungen (`{"url", "token"}`; leere Adresse = Server-Konfiguration, `token: null` behält ihn) |
+| GET · PUT | `/api/settings/notifications` | ntfy-Adresse für Meldungen (`{"url", "token", "language"}`; leere Adresse = Server-Konfiguration, `token: null` behält ihn, ohne `language` die Sprache aus `Accept-Language`) |
 | POST | `/api/settings/notifications/test` | Testmeldung schicken |
 | GET | `/api/version` | API-Stufe (`apiLevel`), älteste passende App-Stufe (`minAppLevel`) und laufender Commit; siehe „Versionen“ |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
@@ -115,9 +116,15 @@ Daraus entstehen Hinweise:
 - **Temperatur:** Die Düse heizt mehr als 5 °C außerhalb von `min_temp`–`max_temp` der Sorte, die gerade druckt.
 - **Feuchte:** ACE über 40 % bei PETG, TPU, PA, PC und anderen empfindlichen Materialien, sonst über 55 %; Bambu-AMS bei Stufe 1 oder 2 von 5.
 
+### Sprache
+
+Hinweise, Zustandstexte und Fehlermeldungen kommen in der Sprache aus `Accept-Language` (`de` oder `en`, sonst Deutsch); Apps und Web-Oberfläche schicken ihre eingestellte Sprache mit. Im Code bleiben die Texte deutsch und laufen über `L.T("…")` bzw. `L.F("… {0}", wert)` (`Localization/L.cs`); die englische Fassung steht in `Localization/English.cs`, der deutsche Text ist der Schlüssel. Meldungen, die im Hintergrund entstehen und gespeichert werden (Drucker nicht erreichbar, Sicherung, Updater), stehen dort unter `Messages` und werden erst für die Antwort übersetzt, auch mit eingesetzten Werten. Ein Test prüft, dass jeder Text eine englische Fassung hat.
+
 ### Meldungen über ntfy
 
 Mit einer ntfy-Adresse (in der App unter Drucker > Meldungen oder per `Ntfy__Url`) meldet das Backend beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers und einmal pro Druck, wenn eine Spule nicht reicht. Ein Thema auf [ntfy.sh](https://ntfy.sh) reicht (schwer erratbarer Name, z. B. `https://ntfy.sh/filomat-7f3k2q`), in der ntfy-App abonnieren; das klappt auch auf GrapheneOS ohne Google-Dienste. Für einen eigenen ntfy-Server mit Zugriffsschutz kommt der Token (`tk_…`) dazu.
+
+Die Meldungen kommen in der Sprache der App, die die ntfy-Adresse zuletzt gespeichert hat (Deutsch oder Englisch).
 
 Meldungen zu beendeten Drucken und Fehlern bringen ein Bild mit: was die Druckerkamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Kamerabilder gibt es bei Bambu P1/A1 (Port 6000, am Drucker muss die LAN-Liveansicht an sein) und bei Moonraker-Druckern, die eine Kamera unter `/server/webcams/list` mit Snapshot-Adresse führen (relative Adressen gehen an Port 80 des Druckers). Prusa und Kobra liefern nur das Vorschaubild. Das Bild geht als Anhang per PUT an ntfy; nimmt der Server keine Anhänge an (beim eigenen ntfy-Server braucht es `attachment-cache-dir`), kommt die Meldung ohne Bild.
 

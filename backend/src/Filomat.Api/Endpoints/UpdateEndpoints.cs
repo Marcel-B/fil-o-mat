@@ -59,9 +59,9 @@ public static class UpdateEndpoints
                 return NotSupported();
             var status = ReadStatus(configuration);
             if (status.State == "running")
-                return TypedResults.Problem("Die Aktualisierung läuft bereits.", statusCode: StatusCodes.Status409Conflict);
+                return TypedResults.Problem(L.T("Die Aktualisierung läuft bereits."), statusCode: StatusCodes.Status409Conflict);
             if (!status.UpdateAvailable)
-                return TypedResults.Problem("Es gibt keine neue Version.", statusCode: StatusCodes.Status409Conflict);
+                return TypedResults.Problem(L.T("Es gibt keine neue Version."), statusCode: StatusCodes.Status409Conflict);
             File.WriteAllText(Path.Combine(dir, RequestFile), "apply\n");
             return TypedResults.Accepted("/api/update", ReadStatus(configuration));
         }).WithSummary("Neue Version einspielen (das Backend startet dabei neu)");
@@ -70,7 +70,7 @@ public static class UpdateEndpoints
     }
 
     private static ProblemHttpResult NotSupported() => TypedResults.Problem(
-        "Auf dem Server ist kein Updater eingerichtet (deploy/updater/install.sh).",
+        L.T("Auf dem Server ist kein Updater eingerichtet (deploy/updater/install.sh)."),
         statusCode: StatusCodes.Status503ServiceUnavailable);
 
     private static string? UpdateDirectory(IConfiguration configuration) =>
@@ -105,7 +105,7 @@ public static class UpdateEndpoints
             commits,
             host.CheckedAt * 1000,
             state,
-            host.Message);
+            host.Message is { } message ? L.T(message) : null);
     }
 
     /// <summary>Format von <c>status.json</c>, wie es <c>filomat-update.sh</c> schreibt (Zeiten in Sekunden).</summary>

@@ -150,7 +150,7 @@ public class PrinterLive(
     {
         var status = entry?.Status ?? new PrinterStatus(printer.Enabled ? PrintState.Offline : PrintState.Idle,
             Message: printer.Enabled ? "Noch nicht abgefragt." : "Pausiert.");
-        status = WithReaderTags(printer, status);
+        status = Translated(WithReaderTags(printer, status));
         var placed = await PlacedAsync(printer, cancellationToken);
         var detected = await DetectedAsync(status, placed, cancellationToken);
         var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed, detected);
@@ -181,6 +181,13 @@ public class PrinterLive(
         }
         return result;
     }
+
+    /// <summary>Meldung und Heizungsnamen kommen deutsch von den Adaptern und werden erst für die Antwort übersetzt.</summary>
+    private static PrinterStatus Translated(PrinterStatus status) => status with
+    {
+        Message = status.Message is { } message ? L.T(message) : null,
+        Heaters = status.Heaters?.Select(h => h with { Name = L.T(h.Name) }).ToList(),
+    };
 
     /// <summary>Plättchen, die der NFC-Leser am Drucker meldet, als Tag des Slots (ohne Leser bleibt der Zustand, wie er ist).</summary>
     public static PrinterStatus WithReaderTags(Printer printer, PrinterStatus status)
@@ -239,9 +246,13 @@ public class PrinterLive(
     /// <summary>Fehler und Spulen, die nicht reichen, je einmal pro Druck.</summary>
     private async Task NotifyAsync(Printer printer, PrinterStatus status, PrinterStatus? previous, CancellationToken cancellationToken)
     {
-        if (status.State == PrintState.Error && previous is { State: not PrintState.Error })
-            await notifier.SendAsync($"{printer.Name}: Fehler",
-                status.Message ?? (status.JobName is { } job ? $"Der Druck {job} braucht Aufmerksamkeit." : "Der Drucker braucht Aufmerksamkeit."),
+        var error = status.State == PrintState.Error && previous is { State: not PrintState.Error };
+        if (!error && (!status.IsActive || status.JobGramsPerTool is null)) return;
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
+        if (error)
+            await notifier.SendAsync(L.F("{0}: Fehler", printer.Name),
+                status.Message is { } message ? L.T(message)
+                : status.JobName is { } job ? L.F("Der Druck {0} braucht Aufmerksamkeit.", job) : L.T("Der Drucker braucht Aufmerksamkeit."),
                 "warning", 4, cancellationToken: cancellationToken, image: token => GetPhotoAsync(printer, token));
 
         if (!status.IsActive || status.JobGramsPerTool is null) return;
@@ -250,7 +261,7 @@ public class PrinterLive(
         foreach (var hint in hints.Where(h => h.Kind == HintKind.SpoolShort))
         {
             if (!cache.FirstTime($"short|{printer.Id}|{status.JobKey ?? status.JobName}|{hint.Tool}")) continue;
-            await notifier.SendAsync($"{printer.Name}: Spule reicht nicht", $"{status.JobName}: {hint.Text}", "warning", 4,
+            await notifier.SendAsync(L.F("{0}: Spule reicht nicht", printer.Name), $"{status.JobName}: {hint.Text}", "warning", 4,
                 cancellationToken: cancellationToken);
         }
     }

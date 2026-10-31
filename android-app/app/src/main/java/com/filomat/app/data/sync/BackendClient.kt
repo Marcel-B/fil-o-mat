@@ -8,6 +8,7 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import com.filomat.app.i18n.I18n
 import com.filomat.app.i18n.tr
 
 class BackendException(message: String, val status: Int? = null) : IOException(message)
@@ -129,6 +130,8 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
             connection.readTimeout = readTimeout
             connection.setRequestProperty("Accept", "application/json, image/*")
             if (!apiKey.isNullOrEmpty()) connection.setRequestProperty("X-Api-Key", apiKey)
+            // Hinweise und Fehlermeldungen des Backends in der Sprache der App
+            connection.setRequestProperty("Accept-Language", if (I18n.english) "en" else "de")
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
