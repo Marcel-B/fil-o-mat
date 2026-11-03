@@ -39,8 +39,11 @@ pct status "$CTID" &>/dev/null && fail "Container $CTID existiert bereits. Ander
 
 info "Debian-12-Vorlage suchen"
 pveam update >/dev/null
-TEMPLATE="$(pveam available --section system | awk '/debian-12-standard/ {print $2}' | sort -V | tail -n1)"
-[[ -n "$TEMPLATE" ]] || fail "Keine debian-12-standard-Vorlage gefunden."
+# Proxmox listet Vorlagen für amd64 und arm64; ohne Filter gewinnt beim Sortieren arm64, und der LXC startet auf x86 nicht
+ARCH="$(dpkg --print-architecture)"
+TEMPLATE="$(pveam available --section system |
+  awk -v a="_${ARCH}.tar" '$2 ~ /^debian-12-standard_/ && index($2, a) {print $2}' | sort -V | tail -n1)"
+[[ -n "$TEMPLATE" ]] || fail "Keine debian-12-standard-Vorlage für $ARCH gefunden."
 if ! pveam list "$TEMPLATE_STORAGE" | grep -q "$TEMPLATE"; then
   info "Vorlage $TEMPLATE herunterladen"
   pveam download "$TEMPLATE_STORAGE" "$TEMPLATE"
