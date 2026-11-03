@@ -16,13 +16,16 @@ public class ConsumptionSync(
     PrinterLive live,
     Notifier notifier,
     SpoolQuestion question,
+    PrinterReachability reachability,
     ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
     private static readonly TimeSpan Overlap = TimeSpan.FromDays(2);
 
-    public async Task<int> SyncAsync(Printer printer, CancellationToken cancellationToken = default)
+    /// <param name="force">Auch einen ausgeschalteten Drucker im Backoff abfragen (Abgleich von Hand, neue Adresse).</param>
+    public async Task<int> SyncAsync(Printer printer, CancellationToken cancellationToken = default, bool force = false)
     {
+        if (!force && reachability.ShouldWait(printer.Id)) return 0;
         var type = FilomatMetrics.TypeLabel(printer.Type);
         var started = Stopwatch.GetTimestamp();
         // Was nicht als unerreichbar abgefangen wird (Datenbank, Programmfehler), zählt als failed
@@ -79,15 +82,20 @@ public class ConsumptionSync(
             }
             if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
+            reachability.Succeeded(printer);
+            printer.OfflineSince = null;
             reachable = true;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException
+                                   && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
+            // Ausgeschaltet ist kein Fehler; was ins Log kommt, entscheidet PrinterReachability
+            var outcome = reachability.Failed(printer, ex);
             printer.LastSyncError = ex.Message;
-            live.SetOffline(printer, ex.Message);
-            // Unlesbare Antwort: Der Drucker antwortet, aber nicht so, wie der Adapter es erwartet
-            result = ex is JsonException ? "failed" : "unreachable";
+            printer.OfflineSince = reachability.OfflineSince(printer.Id);
+            await live.SetOfflineAsync(printer, ex.Message, cancellationToken);
+            // failed: Der Drucker antwortet, aber nicht so, wie der Adapter es erwartet (Zugangsdaten, unlesbare Antwort)
+            result = outcome == PrinterReachability.Outcome.Offline ? "unreachable" : "failed";
         }
 
         printer.LastSyncAt = DateTime.UtcNow;

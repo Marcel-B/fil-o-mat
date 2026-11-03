@@ -14,7 +14,7 @@ namespace Filomat.Api.Monitoring;
 public static class FilomatMetrics
 {
     public static readonly Counter PrinterSyncs = Metrics.CreateCounter(
-        "filomat_printer_syncs_total", "Abgleiche mit Druckern nach Typ und Ergebnis (ok, unreachable, failed).", "type", "result");
+        "filomat_printer_syncs_total", "Abgleiche mit Druckern nach Typ und Ergebnis (ok, unreachable = aus, failed = Fehler).", "type", "result");
 
     public static readonly Histogram PrinterSyncDuration = Metrics.CreateHistogram(
         "filomat_printer_sync_duration_seconds", "Dauer eines Abgleichs mit einem Drucker.",
@@ -41,7 +41,7 @@ public static class FilomatMetrics
         "filomat_api_key_rejected_total", "/api-Aufrufe ohne oder mit falschem X-Api-Key.");
 
     private static readonly Gauge Printers = Metrics.CreateGauge(
-        "filomat_printers", "Drucker nach Typ und Zustand des letzten Abgleichs (reachable, unreachable, disabled).", "type", "state");
+        "filomat_printers", "Drucker nach Typ und Zustand des letzten Abgleichs (reachable, unreachable = aus, failed = antwortet mit Fehler, disabled).", "type", "state");
 
     private static readonly Gauge Spools = Metrics.CreateGauge(
         "filomat_spools", "Spulen nach Zustand: full (ungeöffnet im Lager), in_use, low (fast leer), empty.", "state");
@@ -62,12 +62,13 @@ public static class FilomatMetrics
     /// <summary>Zählt den Bestand neu, direkt bevor /metrics antwortet; die Abfrage läuft im Scope dieser Anfrage.</summary>
     public static async Task RefreshAsync(FilomatDbContext db, CancellationToken cancellationToken)
     {
-        var printers = await db.Printers.Select(p => new { p.Type, p.Enabled, p.LastSyncError }).ToListAsync(cancellationToken);
+        var printers = await db.Printers.Select(p => new { p.Type, p.Enabled, p.LastSyncError, p.OfflineSince }).ToListAsync(cancellationToken);
         foreach (var type in Enum.GetValues<PrinterType>())
         {
             var ofType = printers.Where(p => p.Type == type).ToList();
             Printers.WithLabels(TypeLabel(type), "reachable").Set(ofType.Count(p => p.Enabled && p.LastSyncError is null));
-            Printers.WithLabels(TypeLabel(type), "unreachable").Set(ofType.Count(p => p.Enabled && p.LastSyncError is not null));
+            Printers.WithLabels(TypeLabel(type), "unreachable").Set(ofType.Count(p => p.Enabled && p.OfflineSince is not null));
+            Printers.WithLabels(TypeLabel(type), "failed").Set(ofType.Count(p => p.Enabled && p.LastSyncError is not null && p.OfflineSince is null));
             Printers.WithLabels(TypeLabel(type), "disabled").Set(ofType.Count(p => !p.Enabled));
         }
 

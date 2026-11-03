@@ -60,5 +60,9 @@ public class Printer
     public DateTime? ReaderSeenAt { get; set; }
 
     public DateTime? LastSyncAt { get; set; }
+    /// <summary>Fehler beim letzten Abgleich; auch "nicht erreichbar", dann ist zusätzlich <see cref="OfflineSince"/> gesetzt.</summary>
     public string? LastSyncError { get; set; }
+
+    /// <summary>Seit wann der Drucker nicht antwortet (ausgeschaltet, nicht im Netz); <c>null</c>, wenn er antwortet.</summary>
+    public DateTime? OfflineSince { get; set; }
 }

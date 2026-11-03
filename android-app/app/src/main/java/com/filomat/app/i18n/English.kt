@@ -357,6 +357,7 @@ internal object English {
         "Zu vorhandenem Filament hinzufügen" to "Add to existing filament",
         "Zugangscode" to "Access code",
         "Zuletzt abgeglichen %s" to "Last synced %s",
+        "Aus oder nicht erreichbar · %s" to "Off or not reachable · %s",
         "Zuletzt geprüft %s, Branch %s." to "Last checked %1\$s, branch %2\$s.",
         "Zum Zusammenführen muss das Backend verbunden sein." to "The backend must be connected to merge.",
         "Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor." to "The address from the server configuration applies at the moment. An address entered here takes precedence.",

@@ -118,13 +118,19 @@ Daraus entstehen Hinweise:
 - **Temperatur:** Die Düse heizt mehr als 5 °C außerhalb von `min_temp`–`max_temp` der Sorte, die gerade druckt.
 - **Feuchte:** ACE über 40 % bei PETG, TPU, PA, PC und anderen empfindlichen Materialien, sonst über 55 %; Bambu-AMS bei Stufe 1 oder 2 von 5.
 
+### Ausgeschaltete Drucker
+
+Ein Drucker, der nicht antwortet (Verbindung abgelehnt, keine Route, Name unbekannt, Zeitüberschreitung), ist aus und kein Fehler (`Printers/PrinterReachability.cs`). Ins Log kommt nur der Wechsel, einmal als Info („nicht erreichbar, vermutlich ausgeschaltet“, „wieder erreichbar, war 3 h nicht erreichbar“), dazwischen nur Debug. Eine Warning gibt es nur, wenn der Drucker antwortet, aber etwas nicht stimmt: abgelehnter API-Schlüssel oder Zugangscode, LAN-Modus aus, falsche Seriennummer, unlesbare Antwort. Auch dann nur einmal pro Fehlertext. Am Drucker steht dann `offlineSince` (seit wann er aus ist) neben `lastSyncError`; Apps und Web-Oberfläche zeigen ihn grau statt rot.
+
+Nach drei Versuchen ins Leere fragt das Backend einen ausgeschalteten Drucker nur noch alle 10 Minuten ab, auch bei `GET /api/printers/status`; der Abgleich von Hand (`POST /api/printers/{id}/sync`) und das Ändern der Adresse fragen sofort. Verschwindet ein Drucker mitten im Druck (unter 95 %), gibt es eine Warning und eine ntfy-Meldung, einmal pro Druck.
+
 ### Sprache
 
 Hinweise, Zustandstexte und Fehlermeldungen kommen in der Sprache aus `Accept-Language` (`de` oder `en`, sonst Deutsch); Apps und Web-Oberfläche schicken ihre eingestellte Sprache mit. Im Code bleiben die Texte deutsch und laufen über `L.T("…")` bzw. `L.F("… {0}", wert)` (`Localization/L.cs`); die englische Fassung steht in `Localization/English.cs`, der deutsche Text ist der Schlüssel. Meldungen, die im Hintergrund entstehen und gespeichert werden (Drucker nicht erreichbar, Sicherung, Updater), stehen dort unter `Messages` und werden erst für die Antwort übersetzt, auch mit eingesetzten Werten. Ein Test prüft, dass jeder Text eine englische Fassung hat.
 
 ### Meldungen über ntfy
 
-Mit einer ntfy-Adresse (in der App unter Drucker > Meldungen oder per `Ntfy__Url`) meldet das Backend beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers und einmal pro Druck, wenn eine Spule nicht reicht. Ein Thema auf [ntfy.sh](https://ntfy.sh) reicht (schwer erratbarer Name, z. B. `https://ntfy.sh/filomat-7f3k2q`), in der ntfy-App abonnieren; das klappt auch auf GrapheneOS ohne Google-Dienste. Für einen eigenen ntfy-Server mit Zugriffsschutz kommt der Token (`tk_…`) dazu.
+Mit einer ntfy-Adresse (in der App unter Drucker > Meldungen oder per `Ntfy__Url`) meldet das Backend beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers, einmal pro Druck, wenn eine Spule nicht reicht, und wenn ein Drucker mitten im Druck nicht mehr antwortet. Ein Thema auf [ntfy.sh](https://ntfy.sh) reicht (schwer erratbarer Name, z. B. `https://ntfy.sh/filomat-7f3k2q`), in der ntfy-App abonnieren; das klappt auch auf GrapheneOS ohne Google-Dienste. Für einen eigenen ntfy-Server mit Zugriffsschutz kommt der Token (`tk_…`) dazu.
 
 Die Meldungen kommen in der Sprache der App, die die ntfy-Adresse zuletzt gespeichert hat (Deutsch oder Englisch).
 
@@ -173,9 +179,9 @@ Für den Monitoring-Stack aus Tonwerk-AI (`deploy/monitoring/`, Prometheus, Loki
 
 | Messwert | Art | Labels | Bedeutung |
 |---|---|---|---|
-| `filomat_printer_syncs_total` | Zähler | `type`, `result` | Abgleiche: `ok`, `unreachable` (Drucker aus oder nicht im Netz), `failed` (unlesbare Antwort oder Fehler im Backend) |
+| `filomat_printer_syncs_total` | Zähler | `type`, `result` | Abgleiche: `ok`, `unreachable` (Drucker aus oder nicht im Netz), `failed` (Drucker antwortet mit Fehler, z. B. abgelehnter Schlüssel, unlesbare Antwort, oder Fehler im Backend); ausgeschaltete Drucker im Backoff zählen nicht mit |
 | `filomat_printer_sync_duration_seconds` | Histogramm | `type` | Dauer eines Abgleichs |
-| `filomat_printers` | Gauge | `type`, `state` | Drucker nach letztem Abgleich: `reachable`, `unreachable`, `disabled` |
+| `filomat_printers` | Gauge | `type`, `state` | Drucker nach letztem Abgleich: `reachable`, `unreachable` (aus), `failed` (antwortet mit Fehler), `disabled` |
 | `filomat_print_jobs_total` | Zähler | `type` | neu gebuchte Drucke |
 | `filomat_filament_used_grams_total` | Zähler | `type` | gebuchter Verbrauch in Gramm |
 | `filomat_spools` | Gauge | `state` | `full` (ungeöffnet im Lager), `in_use`, `low` (fast leer, dieselbe Schwelle wie die Meldungen), `empty` |

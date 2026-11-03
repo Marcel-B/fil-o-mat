@@ -105,6 +105,7 @@ export default {
     humidityLevel: 'Stufe {level}/5',
     lastSync: 'Abgleich {ago}',
     readerSeen: 'NFC-Leser {ago}',
+    offlineSince: 'Aus oder nicht erreichbar · {ago}',
     type: 'Typ',
     address: 'Adresse',
     namePlaceholder: 'z. B. Snapmaker U1',

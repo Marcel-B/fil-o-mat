@@ -71,6 +71,8 @@ export interface Printer {
   lastSyncAt: string | null
   lastSyncError: string | null
   readerSeenAt: string | null
+  /** Seit wann der Drucker nicht antwortet (aus oder nicht im Netz); dann ist lastSyncError kein echter Fehler. */
+  offlineSince?: string | null
 }
 
 export type PrintState = 'Idle' | 'Printing' | 'Paused' | 'Finished' | 'Cancelled' | 'Error' | 'Offline'

@@ -86,8 +86,15 @@ public class MetricsTests : IDisposable
         Assert.Equal(jobs + 1, await ValueAsync("filomat_print_jobs_total{type=\"moonraker\"}"));
         Assert.Equal(grams + 15, await ValueAsync("filomat_filament_used_grams_total{type=\"moonraker\"}"), 3);
 
-        // 401 vom Drucker: PrinterUnavailableException im Adapter, der Drucker gilt als unerreichbar
+        // 401 vom Drucker: Er antwortet, lehnt aber ab
         _moonraker.Status = HttpStatusCode.Unauthorized;
+        var failed = await ValueAsync("filomat_printer_syncs_total{type=\"moonraker\",result=\"failed\"}");
+        await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
+        Assert.Equal(failed + 1, await ValueAsync("filomat_printer_syncs_total{type=\"moonraker\",result=\"failed\"}"));
+        Assert.True(await ValueAsync("filomat_printers{type=\"moonraker\",state=\"failed\"}") >= 1);
+
+        // Ausgeschaltet: keine Antwort
+        _moonraker.Throw = new HttpRequestException(HttpRequestError.ConnectionError, "Connection refused");
         var unreachable = await ValueAsync("filomat_printer_syncs_total{type=\"moonraker\",result=\"unreachable\"}");
         await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
         Assert.Equal(unreachable + 1, await ValueAsync("filomat_printer_syncs_total{type=\"moonraker\",result=\"unreachable\"}"));

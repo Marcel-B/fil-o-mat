@@ -12,6 +12,7 @@ public record PrinterRequest(string Name, PrinterType Type, string BaseUrl, stri
 public record PrinterUpdateRequest(string Name, string BaseUrl, string? ApiKey, bool Enabled);
 
 /// <summary>Drucker ohne gespeicherten Schlüssel.</summary>
+/// <param name="LastSyncError">Fehler beim letzten Abgleich. Ist <paramref name="OfflineSince"/> gesetzt, ist er nur aus (kein Fehler).</param>
 public record PrinterResponse(
     string Id,
     string Name,
@@ -25,12 +26,13 @@ public record PrinterResponse(
     DateTime? LastJobEndedAt,
     DateTime? LastSyncAt,
     string? LastSyncError,
-    DateTime? ReaderSeenAt = null)
+    DateTime? ReaderSeenAt = null,
+    DateTime? OfflineSince = null)
 {
     public static PrinterResponse From(Printer p) => new(
         p.Id, p.Name, p.Type, p.BaseUrl, !string.IsNullOrEmpty(p.ApiKey), p.Enabled, p.ContainerId,
         p.ToolCount ?? (p.Type == PrinterType.SnapmakerU1 ? 4 : 1),
-        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError, p.ReaderSeenAt);
+        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError, p.ReaderSeenAt, p.OfflineSince);
 }
 
 public record SyncResponse(int Recorded, string? Error);
@@ -89,7 +91,7 @@ public static class PrinterEndpoints
             string id, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken) =>
         {
             if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
-            var recorded = await sync.SyncAsync(printer, cancellationToken);
+            var recorded = await sync.SyncAsync(printer, cancellationToken, force: true);
             return TypedResults.Ok(new SyncResponse(recorded, printer.LastSyncError));
         });
 
@@ -192,12 +194,13 @@ public static class PrinterEndpoints
         db.Printers.Add(printer);
         await db.SaveChangesAsync();
         // Gleich abgleichen, damit eingelegte Spulen sofort im Container stehen; Fehler stehen danach am Drucker
-        await sync.SyncAsync(printer, cancellationToken);
+        await sync.SyncAsync(printer, cancellationToken, force: true);
         return TypedResults.Created($"/api/printers/{printer.Id}", PrinterResponse.From(printer));
     }
 
     private static async Task<Results<Ok<PrinterResponse>, NotFound, ValidationProblem>> UpdateAsync(
-        string id, PrinterUpdateRequest request, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken)
+        string id, PrinterUpdateRequest request, FilomatDbContext db, ConsumptionSync sync, PrinterReachability reachability,
+        CancellationToken cancellationToken)
     {
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
@@ -218,15 +221,18 @@ public static class PrinterEndpoints
         await db.SaveChangesAsync();
         // Neue Adresse oder neuer Schlüssel (z. B. nach einer neuen IP per DHCP) gleich ausprobieren,
         // damit der alte Fehler nicht stehen bleibt
-        if (connectionChanged && printer.Enabled) await sync.SyncAsync(printer, cancellationToken);
+        if (connectionChanged) reachability.Forget(printer.Id);
+        if (connectionChanged && printer.Enabled) await sync.SyncAsync(printer, cancellationToken, force: true);
         return TypedResults.Ok(PrinterResponse.From(printer));
     }
 
     /// <summary>Entfernt den Drucker samt Container; eingelegte Spulen wandern nach "Lose", der Verbrauchsverlauf der Spulen bleibt.</summary>
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db, PrinterStatusCache cache)
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db, PrinterStatusCache cache,
+        PrinterReachability reachability)
     {
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
         cache.Remove(printer.Id);
+        reachability.Forget(printer.Id);
 
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == printer.ContainerId)

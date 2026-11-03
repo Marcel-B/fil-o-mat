@@ -21,9 +21,13 @@ public class FakeMoonraker : HttpMessageHandler
     /// <summary>Bilder pro Adresse (mit Host), als JPEG.</summary>
     public Dictionary<string, byte[]> Images { get; } = [];
 
+    /// <summary>Wie ein ausgeschalteter Drucker: Jede Anfrage scheitert mit diesem Fehler.</summary>
+    public Exception? Throw { get; set; }
+
     protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
         Requests.Add(request);
+        if (Throw is { } error) return Task.FromException<HttpResponseMessage>(error);
         if (Images.TryGetValue(request.RequestUri!.GetLeftPart(UriPartial.Path), out var image))
         {
             var content = new ByteArrayContent(image);
