@@ -61,7 +61,7 @@ public static class SpoolEndpoints
     }
 
     /// <summary>
-    /// Knöpfe in ntfy-Meldungen („Welche Spule steckt in Kopf 4?“). Liegt außerhalb von <c>/api</c>, damit kein API-Schlüssel
+    /// Knöpfe in Meldungen („Welche Spule steckt in Kopf 4?“). Liegt außerhalb von <c>/api</c>, damit kein API-Schlüssel
     /// in der Meldung stehen muss; das Einmal-Token aus der Meldung legt genau eine Spule in genau einen Kopf.
     /// </summary>
     public static IEndpointRouteBuilder MapSpoolChoiceEndpoints(this IEndpointRouteBuilder app)

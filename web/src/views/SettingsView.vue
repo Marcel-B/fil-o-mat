@@ -43,29 +43,35 @@ async function saveKey() {
   }
 }
 
-// Meldungen
-const ntfy = ref<NotificationSettings | null>(null)
-const ntfyUrl = ref('')
-const ntfyToken = ref('')
-const ntfySaving = ref(false)
-async function loadNtfy() {
-  ntfy.value = await api.get<NotificationSettings>('/settings/notifications')
-  ntfyUrl.value = ntfy.value.fromApp ? (ntfy.value.url ?? '') : ''
-  ntfyToken.value = ''
+// Meldungen über Onkel Bummel
+const notifications = ref<NotificationSettings | null>(null)
+const notifyServer = ref('')
+const notifyTopic = ref('')
+const notifyToken = ref('')
+const notifySaving = ref(false)
+async function loadNotifications() {
+  notifications.value = await api.get<NotificationSettings>('/settings/notifications')
+  notifyServer.value = notifications.value.fromApp ? (notifications.value.server ?? '') : ''
+  notifyTopic.value = notifications.value.fromApp ? (notifications.value.topic ?? '') : ''
+  notifyToken.value = ''
 }
-async function saveNtfy() {
-  ntfySaving.value = true
+async function saveNotifications() {
+  notifySaving.value = true
   try {
-    ntfy.value = await api.put<NotificationSettings>('/settings/notifications', { url: ntfyUrl.value, token: ntfyToken.value || null })
-    ntfyToken.value = ''
+    notifications.value = await api.put<NotificationSettings>('/settings/notifications', {
+      server: notifyServer.value,
+      topic: notifyTopic.value,
+      token: notifyToken.value || null,
+    })
+    notifyToken.value = ''
     toast.add({ severity: 'success', summary: t('common.saved'), life: 2500 })
   } catch (e) {
     fail(t('common.saveFailed'))(e)
   } finally {
-    ntfySaving.value = false
+    notifySaving.value = false
   }
 }
-async function testNtfy() {
+async function testNotification() {
   try {
     await api.post('/settings/notifications/test')
     toast.add({ severity: 'success', summary: t('settings.testSent'), life: 3000 })
@@ -129,7 +135,7 @@ function waitForRestart() {
 onUnmounted(() => window.clearInterval(poll))
 
 function loadAll() {
-  loadNtfy().catch(() => {})
+  loadNotifications().catch(() => {})
   api.get<BackupStatus>('/backup').then((b) => (backup.value = b), () => {})
   api.get<UpdateStatus>('/update').then((u) => {
     update.value = u
@@ -185,23 +191,36 @@ const short = (sha: string | null | undefined) => sha?.slice(0, 7) ?? '–'
     </Card>
 
     <Card>
-      <template #title>{{ t('settings.ntfy') }}</template>
+      <template #title>{{ t('settings.notifications') }}</template>
       <template #subtitle>
-        {{ t('settings.ntfyHint') }}
+        {{ t('settings.notificationsHint') }}
       </template>
       <template #content>
-        <div v-if="ntfy" class="flex flex-col gap-3">
-          <Message v-if="ntfy.configured && !ntfy.fromApp" severity="info" size="small" :closable="false">
-            {{ t('settings.ntfyFromServer', { url: ntfy.url }) }}
+        <div v-if="notifications" class="flex flex-col gap-3">
+          <Message v-if="notifications.configured && !notifications.fromApp" severity="info" size="small" :closable="false">
+            {{ t('settings.notificationsFromServer', { server: notifications.server, topic: notifications.topic }) }}
           </Message>
-          <label class="flex flex-col gap-1 text-sm">{{ t('printers.address') }}<InputText v-model="ntfyUrl" :placeholder="t('settings.ntfyUrlPlaceholder')" /></label>
           <label class="flex flex-col gap-1 text-sm">
-            {{ t('settings.ntfyToken') }}
-            <Password v-model="ntfyToken" :feedback="false" toggle-mask fluid :placeholder="ntfy?.hasToken ? t('common.keptPlaceholder') : t('common.none')" />
+            {{ t('settings.notificationsServer') }}
+            <InputText v-model="notifyServer" placeholder="https://onkel-bummel.example.ts.net" />
+          </label>
+          <label class="flex flex-col gap-1 text-sm">
+            {{ t('settings.notificationsTopic') }}
+            <InputText v-model="notifyTopic" placeholder="filomat" />
+          </label>
+          <label class="flex flex-col gap-1 text-sm">
+            {{ t('settings.notificationsToken') }}
+            <Password
+              v-model="notifyToken"
+              :feedback="false"
+              toggle-mask
+              fluid
+              :placeholder="notifications?.fromApp && notifications?.hasToken ? t('common.keptPlaceholder') : 'ob_…'"
+            />
           </label>
           <div class="flex justify-end gap-2">
-            <Button :label="t('settings.testMessage')" severity="secondary" outlined :disabled="!ntfy?.configured" @click="testNtfy" />
-            <Button :label="t('common.save')" :loading="ntfySaving" @click="saveNtfy" />
+            <Button :label="t('settings.testMessage')" severity="secondary" outlined :disabled="!notifications?.configured" @click="testNotification" />
+            <Button :label="t('common.save')" :loading="notifySaving" @click="saveNotifications" />
           </div>
         </div>
       </template>

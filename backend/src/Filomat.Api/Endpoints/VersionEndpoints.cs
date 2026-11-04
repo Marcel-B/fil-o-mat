@@ -7,10 +7,14 @@ namespace Filomat.Api.Endpoints;
 /// </summary>
 public static class ApiVersion
 {
-    /// <summary>1: <c>/api/version</c> eingeführt.</summary>
-    public const int Level = 1;
+    /// <summary>
+    /// 1: <c>/api/version</c> eingeführt.
+    /// 2: Meldungen über Onkel Bummel, <c>/api/settings/notifications</c> mit <c>server</c>, <c>topic</c>, <c>token</c> statt <c>url</c>.
+    /// </summary>
+    public const int Level = 2;
 
-    public const int MinAppLevel = 1;
+    /// <summary>2: Apps der Stufe 1 schicken für Meldungen noch <c>url</c> (ntfy).</summary>
+    public const int MinAppLevel = 2;
 }
 
 /// <param name="ApiLevel">Stufe dieses Backends.</param>

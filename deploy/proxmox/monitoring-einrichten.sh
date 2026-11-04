@@ -27,7 +27,7 @@ pct exec "$CTID" -- env LOKI_URL="$LOKI_URL" LOKI_HOST="$LOKI_HOST" bash -euo pi
   git log -1 --oneline
   cd backend
   touch .env
-  # Nur diese drei Zeilen ersetzen, der Rest (API-Schlüssel, Nextcloud, ntfy, COMPOSE_FILE) bleibt
+  # Nur diese drei Zeilen ersetzen, der Rest (API-Schlüssel, Nextcloud, Meldungen, COMPOSE_FILE) bleibt
   sed -i "/^MONITORING_\(METRICS\|LOKI_URL\|LOKI_HOST\)=/d" .env
   printf "MONITORING_METRICS=true\nMONITORING_LOKI_URL=%s\nMONITORING_LOKI_HOST=%s\n" "$LOKI_URL" "$LOKI_HOST" >> .env
   chmod 600 .env

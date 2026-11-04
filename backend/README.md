@@ -29,9 +29,10 @@ dotnet test
 | `Filomat:ApiKey` | `Filomat__ApiKey` | Optionaler Schlüssel; wenn gesetzt, muss jeder `/api`-Aufruf den Header `X-Api-Key` mitschicken |
 | `Filomat:PrinterSyncInterval` | `Filomat__PrinterSyncInterval` | Abstand des Drucker-Abgleichs, Standard `00:02:00`; `00:00:00` schaltet ihn ab |
 | – | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | Nextcloud-Sicherung, siehe unten |
-| `Ntfy:Url`, `Ntfy:Token` | `Ntfy__Url`, `Ntfy__Token` (in `backend/.env`: `NTFY_URL`, `NTFY_TOKEN`) | Meldungen über ntfy, falls in der App keine Adresse eingestellt ist; siehe unten |
-| `Ntfy:Language` | `Ntfy__Language` | Sprache der Meldungen (`de`, `en`), solange sie nicht in einer App gespeichert wurde; Standard `de` |
-| `Filomat:PublicUrl` | `Filomat__PublicUrl` | Adresse, unter der das Handy das Backend erreicht, für die Knöpfe in ntfy-Meldungen; ohne gilt die Adresse, mit der die App zuletzt zugegriffen hat |
+| `Notifications:Server`, `Notifications:Topic`, `Notifications:Token` | `Notifications__Server`, `Notifications__Topic`, `Notifications__Token` (in `backend/.env`: `NOTIFICATIONS_SERVER`, `NOTIFICATIONS_TOPIC`, `NOTIFICATIONS_TOKEN`) | Meldungen über Onkel Bummel, falls in der App kein Ziel eingestellt ist; siehe unten |
+| `Notifications:Language` | `Notifications__Language` | Sprache der Meldungen (`de`, `en`), solange sie nicht in einer App gespeichert wurde; Standard `de` (das alte `Ntfy__Language` gilt weiter) |
+| `Notifications:RetryDelay` | `Notifications__RetryDelay` | Wartezeit vor dem zweiten Versuch, wenn Onkel Bummel nicht antwortet (der dritte wartet doppelt so lange); Standard `00:00:02` |
+| `Filomat:PublicUrl` | `Filomat__PublicUrl` | Adresse, unter der das Handy das Backend erreicht, für die Knöpfe in Meldungen und den Link beim Antippen; ohne gilt die Adresse, mit der die App zuletzt zugegriffen hat |
 | `Monitoring:Metrics` | `Monitoring__Metrics` (in `backend/.env`: `MONITORING_METRICS`) | `true` schaltet `/metrics` für Prometheus ein; Standard aus, dann 404 |
 | `Monitoring:Loki:Url`, `Monitoring:Loki:Host` | `Monitoring__Loki__Url`, `Monitoring__Loki__Host` (in `backend/.env`: `MONITORING_LOKI_URL`, `MONITORING_LOKI_HOST`) | Logzeilen zusätzlich an Loki, z. B. `http://monitoring:3100`; leer heißt aus. Host ist das Label `host`, ohne gilt der Rechnername |
 | `Backup:At` | `Backup__At` | Uhrzeit der nächtlichen Sicherung, Standard `03:00` (`Backup:TimeZone`, Standard `Europe/Berlin`); leer für nur manuelle |
@@ -64,7 +65,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | PUT | `/api/printers/{id}/reader` | NFC-Leser am Drucker meldet den ganzen Stand: `{"slots": ["04378F53CB2A81", null, …]}` (ab Slot 0); Antwort pro Slot `empty`/`known`/`unknown`/`container` mit Kurztext |
 | POST | `/api/printers/{id}/reader/tap` | Tipp-Modus: `{"slot": 4, "tag": "…"}`, die Spule der Sorte kommt in diesen Slot |
 | GET | `/api/stats?months=12` | Verbrauch, Drucke, Abbrüche und Druckzeit pro Monat, Drucker, Sorte und Material |
-| GET · PUT | `/api/settings/notifications` | ntfy-Adresse für Meldungen (`{"url", "token", "language"}`; leere Adresse = Server-Konfiguration, `token: null` behält ihn, ohne `language` die Sprache aus `Accept-Language`) |
+| GET · PUT | `/api/settings/notifications` | Ziel für Meldungen auf Onkel Bummel (`{"server", "topic", "token", "language"}`; leerer Server = Server-Konfiguration, `token: null` behält ihn, ohne `language` die Sprache aus `Accept-Language`). Server mit `http://` oder `https://`, Topic `[a-z0-9_-]{1,64}`, Token `ob_…` |
 | POST | `/api/settings/notifications/test` | Testmeldung schicken |
 | GET | `/api/version` | API-Stufe (`apiLevel`), älteste passende App-Stufe (`minAppLevel`) und laufender Commit; siehe „Versionen“ |
 | GET | `/api/consumption?itemId=&printerId=&unassigned=true` | Verbrauchsbuchungen |
@@ -122,15 +123,27 @@ Daraus entstehen Hinweise:
 
 Hinweise, Zustandstexte und Fehlermeldungen kommen in der Sprache aus `Accept-Language` (`de` oder `en`, sonst Deutsch); Apps und Web-Oberfläche schicken ihre eingestellte Sprache mit. Im Code bleiben die Texte deutsch und laufen über `L.T("…")` bzw. `L.F("… {0}", wert)` (`Localization/L.cs`); die englische Fassung steht in `Localization/English.cs`, der deutsche Text ist der Schlüssel. Meldungen, die im Hintergrund entstehen und gespeichert werden (Drucker nicht erreichbar, Sicherung, Updater), stehen dort unter `Messages` und werden erst für die Antwort übersetzt, auch mit eingesetzten Werten. Ein Test prüft, dass jeder Text eine englische Fassung hat.
 
-### Meldungen über ntfy
+### Meldungen über Onkel Bummel
 
-Mit einer ntfy-Adresse (in der App unter Drucker > Meldungen oder per `Ntfy__Url`) meldet das Backend beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers und einmal pro Druck, wenn eine Spule nicht reicht. Ein Thema auf [ntfy.sh](https://ntfy.sh) reicht (schwer erratbarer Name, z. B. `https://ntfy.sh/filomat-7f3k2q`), in der ntfy-App abonnieren; das klappt auch auf GrapheneOS ohne Google-Dienste. Für einen eigenen ntfy-Server mit Zugriffsschutz kommt der Token (`tk_…`) dazu.
+Meldungen gehen an [Onkel Bummel](https://github.com/Marcel-B/onkel-bummel), den eigenen Push-Dienst mit iOS-App: beendete und abgebrochene Drucke mit Verbrauch und Restgewicht pro Spule („fast leer“ unter 10 % bzw. 50 g), Fehler des Druckers und einmal pro Druck, wenn eine Spule nicht reicht. Das Ziel besteht aus Server, Topic und Publish-Token und wird in der App unter Drucker > Meldungen (Web: Einstellungen) oder per `Notifications__Server`, `Notifications__Topic` und `Notifications__Token` eingestellt; ein Ziel aus der App geht vor.
 
-Die Meldungen kommen in der Sprache der App, die die ntfy-Adresse zuletzt gespeichert hat (Deutsch oder Englisch).
+Den Token legt man in Onkel Bummel unter Verwaltung → Publish-Tokens an oder im LXC auf der Kommandozeile, beschränkt auf das Topic:
 
-Meldungen zu beendeten Drucken und Fehlern bringen ein Bild mit: was die Druckerkamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Kamerabilder gibt es bei Bambu P1/A1 (Port 6000, am Drucker muss die LAN-Liveansicht an sein) und bei Moonraker-Druckern, die eine Kamera unter `/server/webcams/list` mit Snapshot-Adresse führen (relative Adressen gehen an Port 80 des Druckers). Prusa und Kobra liefern nur das Vorschaubild. Das Bild geht als Anhang per PUT an ntfy; nimmt der Server keine Anhänge an (beim eigenen ntfy-Server braucht es `attachment-cache-dir`), kommt die Meldung ohne Bild.
+```bash
+docker compose -f /opt/onkel-bummel/deploy/docker-compose.yml exec onkel-bummel dotnet OnkelBummel.Api.dll --create-token fil-o-mat filomat
+```
 
-Erkennt ein Drucker das Plättchen einer Sorte, von der mehrere Spulen lose liegen, legt das Backend die Spule ein, die in den letzten 30 Minuten angebrochen oder gewogen wurde. Ist das nicht eindeutig, fragt es per ntfy „Welche Spule?“ mit einem Knopf pro Spule (höchstens drei); der Knopf ruft `POST /choices/{token}` auf (Einmal-Token, einen Tag gültig, ohne API-Schlüssel). Wählen geht auch in der App beim Drucker.
+Er wird nur einmal angezeigt und gehört in die App (oder in `backend/.env` als `NOTIFICATIONS_TOKEN`), nicht ins Repo. In der Onkel-Bummel-App das Topic abonnieren; „Testmeldung“ in den Einstellungen prüft den Weg.
+
+Das Backend schickt jede Meldung als `POST {server}/api/v1/messages` (`multipart/form-data`: `topic`, `title`, `message`, `priority`, `tags`, `click`, `actions`, Bild als `file`) mit `Authorization: Bearer ob_…`. Antwortet der Server nicht, mit 5xx oder 429, versucht es das bis zu dreimal; ein `Idempotency-Key` pro Meldung sorgt dafür, dass daraus keine doppelten Meldungen werden. Fehler wie `401` (Token unbekannt) oder `403` (Topic nicht erlaubt) zeigt die Testmeldung mit dem Text aus der Problem-JSON-Antwort. Antippen öffnet die Druckerseite der Web-Oberfläche (unter `Filomat:PublicUrl` bzw. der zuletzt gesehenen Adresse).
+
+Die Meldungen kommen in der Sprache der App, die das Ziel zuletzt gespeichert hat (Deutsch oder Englisch).
+
+Meldungen zu beendeten Drucken und Fehlern bringen ein Bild mit: was die Druckerkamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Kamerabilder gibt es bei Bambu P1/A1 (Port 6000, am Drucker muss die LAN-Liveansicht an sein) und bei Moonraker-Druckern, die eine Kamera unter `/server/webcams/list` mit Snapshot-Adresse führen (relative Adressen gehen an Port 80 des Druckers). Prusa und Kobra liefern nur das Vorschaubild. Lehnt Onkel Bummel das Bild ab (`400`, `413`, `415`), kommt die Meldung ohne Bild.
+
+Erkennt ein Drucker das Plättchen einer Sorte, von der mehrere Spulen lose liegen, legt das Backend die Spule ein, die in den letzten 30 Minuten angebrochen oder gewogen wurde. Ist das nicht eindeutig, fragt es per Meldung „Welche Spule?“ mit einem Knopf pro Spule (höchstens drei); der Knopf ruft `POST /choices/{token}` auf (Einmal-Token, einen Tag gültig, ohne API-Schlüssel). Wählen geht auch in der App beim Drucker.
+
+**Umstieg von ntfy:** Die früheren Einstellungen `Ntfy__Url` und `Ntfy__Token` (bzw. `NTFY_URL`, `NTFY_TOKEN` in `backend/.env`) und eine in der App gespeicherte ntfy-Adresse werden nicht mehr verwendet und lassen sich nicht übernehmen, weil ntfy-Themen und -Tokens bei Onkel Bummel nicht gelten. Die Sprache bleibt. Bis ein neues Ziel eingestellt ist, verschickt das Backend keine Meldungen; ist noch `Ntfy__Url` gesetzt, steht beim Start ein Hinweis im Log. Die `NTFY_*`-Zeilen in `backend/.env` können weg.
 
 ### Tags auf Musterplättchen
 
@@ -142,7 +155,7 @@ Gebucht wird auf die Spule, die an diesem Drucker-Kopf steckt. Steckt dort keine
 
 ### NFC-Leser am Drucker
 
-Drucker, die die Plättchen nicht selbst lesen (Prusa, Bambu, Kobra), bekommen einen ESP32 mit NFC-Leser; Aufbau und ESPHome-Konfigurationen in [`reader/`](../reader/README.md). Der Leser meldet, welches Plättchen in welchem Slot steckt. Ein neu eingestecktes Plättchen legt die Spule seiner Sorte in den Slot, wie bei den Köpfen der U1; steckte sie vorher in einem anderen Slot desselben Druckers, wandert sie mit. Die Meldung jede Minute ändert nichts, solange das Plättchen bleibt, damit ein Umstecken in der App nicht überschrieben wird. Ein herausgezogenes Plättchen legt die Spule nicht ins Lager. Unbekannte Plättchen kommen als ntfy-Meldung; nach dem Zuordnen in der App gelten sie beim nächsten Melden als neu. Solange der Leser sich meldet (höchstens 5 min her), zeigt der Druckerzustand die Plättchen als Tag des Slots, inklusive Hinweis, wenn in der App eine andere Sorte dort steckt.
+Drucker, die die Plättchen nicht selbst lesen (Prusa, Bambu, Kobra), bekommen einen ESP32 mit NFC-Leser; Aufbau und ESPHome-Konfigurationen in [`reader/`](../reader/README.md). Der Leser meldet, welches Plättchen in welchem Slot steckt. Ein neu eingestecktes Plättchen legt die Spule seiner Sorte in den Slot, wie bei den Köpfen der U1; steckte sie vorher in einem anderen Slot desselben Druckers, wandert sie mit. Die Meldung jede Minute ändert nichts, solange das Plättchen bleibt, damit ein Umstecken in der App nicht überschrieben wird. Ein herausgezogenes Plättchen legt die Spule nicht ins Lager. Unbekannte Plättchen kommen als Meldung; nach dem Zuordnen in der App gelten sie beim nächsten Melden als neu. Solange der Leser sich meldet (höchstens 5 min her), zeigt der Druckerzustand die Plättchen als Tag des Slots, inklusive Hinweis, wenn in der App eine andere Sorte dort steckt.
 
 ## Sicherung in die Nextcloud
 
@@ -180,7 +193,7 @@ Für den Monitoring-Stack aus Tonwerk-AI (`deploy/monitoring/`, Prometheus, Loki
 | `filomat_filament_used_grams_total` | Zähler | `type` | gebuchter Verbrauch in Gramm |
 | `filomat_spools` | Gauge | `state` | `full` (ungeöffnet im Lager), `in_use`, `low` (fast leer, dieselbe Schwelle wie die Meldungen), `empty` |
 | `filomat_containers`, `filomat_items` | Gauge | – | Container und Filamentsorten |
-| `filomat_notifications_total` | Zähler | `result` | Meldungen über ntfy, `ok` oder `failed` |
+| `filomat_notifications_total` | Zähler | `result` | Meldungen an Onkel Bummel, `ok` oder `failed` (nach allen Versuchen) |
 | `filomat_backup_runs_total` | Zähler | `result` | Nextcloud-Sicherungen, `ok` oder `failed` |
 | `filomat_backup_last_success_timestamp_seconds` | Gauge | – | Ende der letzten erfolgreichen Sicherung; fehlt, solange es keine gab |
 | `filomat_api_key_rejected_total` | Zähler | – | `/api`-Aufrufe mit fehlendem oder falschem `X-Api-Key` |

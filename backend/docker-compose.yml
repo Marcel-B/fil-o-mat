@@ -15,9 +15,10 @@ services:
       NEXTCLOUD_WEBDAV_URL: "${NEXTCLOUD_WEBDAV_URL:-}"
       NEXTCLOUD_USERNAME: "${NEXTCLOUD_USERNAME:-}"
       NEXTCLOUD_APP_PASSWORD: "${NEXTCLOUD_APP_PASSWORD:-}"
-      # Optional: Meldungen über ntfy, falls in der App keine Adresse eingestellt ist
-      Ntfy__Url: "${NTFY_URL:-}"
-      Ntfy__Token: "${NTFY_TOKEN:-}"
+      # Optional: Meldungen über Onkel Bummel, falls in der App kein Ziel eingestellt ist (siehe README)
+      Notifications__Server: "${NOTIFICATIONS_SERVER:-}"
+      Notifications__Topic: "${NOTIFICATIONS_TOPIC:-}"
+      Notifications__Token: "${NOTIFICATIONS_TOKEN:-}"
       # Optional: /metrics für Prometheus und Logzeilen an Loki (siehe README, „Überwachung“)
       Monitoring__Metrics: "${MONITORING_METRICS:-false}"
       Monitoring__Loki__Url: "${MONITORING_LOKI_URL:-}"

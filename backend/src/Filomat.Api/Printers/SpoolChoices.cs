@@ -6,7 +6,7 @@ using Filomat.Api.Notifications;
 namespace Filomat.Api.Printers;
 
 /// <summary>
-/// Einmal-Tokens für die Knöpfe einer ntfy-Meldung, mit der das Backend fragt, welche Spule in einem Kopf steckt.
+/// Einmal-Tokens für die Knöpfe einer Meldung, mit der das Backend fragt, welche Spule in einem Kopf steckt.
 /// Nur im Speicher: nach einem Neustart sind sie abgelaufen, dann wählt man in der App.
 /// </summary>
 public class SpoolChoices(TimeProvider time)
@@ -37,7 +37,7 @@ public class SpoolChoices(TimeProvider time)
 }
 
 /// <summary>
-/// Adresse, unter der die Apps das Backend erreichen; daraus entstehen die Links der Knöpfe in ntfy-Meldungen.
+/// Adresse, unter der die Apps das Backend erreichen; daraus entstehen die Links der Knöpfe in Meldungen.
 /// <c>Filomat:PublicUrl</c> legt sie fest, sonst gilt die Adresse des letzten Aufrufs einer App.
 /// </summary>
 public class BackendAddress(IConfiguration configuration)
@@ -54,10 +54,10 @@ public class BackendAddress(IConfiguration configuration)
     }
 }
 
-/// <summary>Fragt per ntfy, welche Spule in einem Kopf steckt, wenn ein Plättchen erkannt wurde und mehrere Spulen lose liegen.</summary>
+/// <summary>Fragt per Meldung, welche Spule in einem Kopf steckt, wenn ein Plättchen erkannt wurde und mehrere Spulen lose liegen.</summary>
 public class SpoolQuestion(SpoolStock spools, Notifier notifier, PrinterStatusCache cache, SpoolChoices choices, BackendAddress address)
 {
-    /// <summary>Fragt per ntfy, welche der losen Spulen in diesem Kopf steckt, mit einem Knopf pro Spule (höchstens drei).</summary>
+    /// <summary>Fragt per Meldung, welche der losen Spulen in diesem Kopf steckt, mit einem Knopf pro Spule (höchstens drei).</summary>
     public async Task AskAsync(Printer printer, int tool, Item item, CancellationToken cancellationToken)
     {
         var loose = await spools.LooseAsync(item, cancellationToken);
@@ -70,8 +70,8 @@ public class SpoolQuestion(SpoolStock spools, Notifier notifier, PrinterStatusCa
         var where = place.Length > 0 ? $"{printer.Name} {place}" : printer.Name;
         static string Label(Spool s) => s.RemainingWeight is { } grams ? $"#{s.Number} ({grams:0} g)" : $"#{s.Number}";
         var actions = address.Url is { } url
-            ? loose.Take(3).Select(s => new NtfyAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
-            : new List<NtfyAction>();
+            ? loose.Take(3).Select(s => new NotificationAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
+            : new List<NotificationAction>();
         var message = L.F("{0} erkannt, lose liegen {1}.", item.Name, string.Join(", ", loose.Select(Label))) + " "
             + (actions.Count == loose.Count ? L.T("Tippe auf die Spule, die drin steckt.") : L.T("Wählen kannst du in der App beim Drucker."));
         await notifier.SendAsync(L.F("{0}: Welche Spule?", where), message, "question", cancellationToken: cancellationToken, actions: actions);

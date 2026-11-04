@@ -44,7 +44,7 @@ Ein ESP32 mit NFC-Leser meldet dem Backend, welches Musterplättchen in welchem 
 
 ## Bedienung
 
-- **Fach-Leser:** Plättchen einstecken = Spule eingelegt. Herausziehen ändert nichts am Bestand (die Spule bleibt im Slot, bis ein anderes Plättchen kommt oder sie in der App umgelegt wird). Das Display am C3 zeigt die Sorte mit Spulennummer, „Unbekannt“ bei einem Plättchen ohne Filament (dazu kommt eine ntfy-Meldung) oder einen Fehler, wenn das Backend nicht antwortet.
+- **Fach-Leser:** Plättchen einstecken = Spule eingelegt. Herausziehen ändert nichts am Bestand (die Spule bleibt im Slot, bis ein anderes Plättchen kommt oder sie in der App umgelegt wird). Das Display am C3 zeigt die Sorte mit Spulennummer, „Unbekannt“ bei einem Plättchen ohne Filament (dazu kommt eine Meldung über Onkel Bummel) oder einen Fehler, wenn das Backend nicht antwortet.
 - **Tipp-Modus (Kobra):** Plättchen an den Leser halten, das Display zeigt die Sorte. BOOT-Taste drücken, jeder Druck einen Slot weiter (1–4 Rack, 5–8 ACE). 4 s nach dem letzten Druck kommt die Spule in den Slot, das Display bestätigt. Ohne Tastendruck bricht der Leser nach 15 s ab.
 
 ## Worauf achten

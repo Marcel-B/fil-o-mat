@@ -202,16 +202,17 @@ data class StatsResponse(
 
 @Serializable
 data class NotificationSettings(
-    val url: String? = null,
+    val server: String? = null,
+    val topic: String? = null,
     val hasToken: Boolean = false,
-    /** `false`, wenn die Adresse aus der Server-Konfiguration kommt */
+    /** `false`, wenn das Ziel aus der Server-Konfiguration kommt */
     val fromApp: Boolean = false,
     val configured: Boolean = false
 )
 
-/** [token] `null` lässt den gespeicherten Token, ein leerer Text löscht ihn. */
+/** Leerer [server] schaltet zurück auf die Server-Konfiguration; [token] `null` lässt den gespeicherten Token. */
 @Serializable
-data class NotificationSettingsRequest(val url: String?, val token: String? = null)
+data class NotificationSettingsRequest(val server: String?, val topic: String?, val token: String? = null)
 
 /** "1,2 kg" ab 1000 g, sonst "340 g" */
 fun gramsText(grams: Double): String =

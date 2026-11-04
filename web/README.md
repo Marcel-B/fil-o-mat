@@ -2,7 +2,7 @@
 
 Vue 3, PrimeVue 4, Tailwind CSS 4 und Pinia. Läuft im selben Docker-Image wie das Backend und ist unter dessen Adresse erreichbar (z. B. `http://<lxc>:8080/`).
 
-Kann dasselbe wie die Apps, außer NFC: Drucker mit Zustand, Spulen pro Kopf und Hinweisen (alle 15 s neu), Spule einlegen oder wiegen, Filamente (Sorten) anlegen, bearbeiten und zusammenführen, Spulen anbrechen, Container, offene Verbrauchsbuchungen zuordnen, Statistik, ntfy, Sicherung und Update. Tags (Musterplättchen) kommen weiter per App dazu; Container ohne Tag bekommen ein Platzhalter-Tag `WEB_…`.
+Kann dasselbe wie die Apps, außer NFC: Drucker mit Zustand, Spulen pro Kopf und Hinweisen (alle 15 s neu), Spule einlegen oder wiegen, Filamente (Sorten) anlegen, bearbeiten und zusammenführen, Spulen anbrechen, Container, offene Verbrauchsbuchungen zuordnen, Statistik, Meldungen (Onkel Bummel), Sicherung und Update. Tags (Musterplättchen) kommen weiter per App dazu; Container ohne Tag bekommen ein Platzhalter-Tag `WEB_…`.
 
 Deutsch oder Englisch (wie der Browser oder fest gewählt) und hell, dunkel oder wie das System stellt man unter Einstellungen > Darstellung ein; die Wahl bleibt im Browser. Texte stehen in `src/locales/de.ts` und `en.ts` (vue-i18n), die Texte der PrimeVue-Komponenten in `src/locales/primevue.ts`. Hinweise und Fehlermeldungen, die vom Backend kommen, bleiben vorerst deutsch.
 
