@@ -188,8 +188,10 @@ export interface StatsResponse {
   types: { type: string; grams: number }[]
 }
 
+/** Ziel für Meldungen auf einem Onkel-Bummel-Server. */
 export interface NotificationSettings {
-  url: string | null
+  server: string | null
+  topic: string | null
   hasToken: boolean
   fromApp: boolean
   configured: boolean

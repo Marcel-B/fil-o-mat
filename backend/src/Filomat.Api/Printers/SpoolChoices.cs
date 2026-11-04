@@ -6,7 +6,7 @@ using Filomat.Api.Notifications;
 namespace Filomat.Api.Printers;
 
 /// <summary>
-/// Einmal-Tokens für die Knöpfe einer ntfy-Meldung, mit der das Backend fragt, welche Spule in einem Kopf steckt.
+/// Einmal-Tokens für die Knöpfe einer Meldung, mit der das Backend fragt, welche Spule in einem Kopf steckt.
 /// Nur im Speicher: nach einem Neustart sind sie abgelaufen, dann wählt man in der App.
 /// </summary>
 public class SpoolChoices(TimeProvider time)
@@ -37,8 +37,9 @@ public class SpoolChoices(TimeProvider time)
 }
 
 /// <summary>
-/// Adresse, unter der die Apps das Backend erreichen; daraus entstehen die Links der Knöpfe in ntfy-Meldungen.
-/// <c>Filomat:PublicUrl</c> legt sie fest, sonst gilt die Adresse des letzten Aufrufs einer App.
+/// Adresse, unter der die Apps das Backend erreichen; daraus entstehen die Links der Knöpfe in Meldungen.
+/// <c>Filomat:PublicUrl</c> legt sie fest, sonst gilt die Adresse des letzten Aufrufs einer App. Aufrufe über
+/// <c>localhost</c> oder eine Loopback-Adresse (z. B. curl im Container) zählen nicht, das Handy erreicht sie nicht.
 /// </summary>
 public class BackendAddress(IConfiguration configuration)
 {
@@ -50,14 +51,23 @@ public class BackendAddress(IConfiguration configuration)
     {
         var proto = request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? request.Scheme;
         var host = request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? request.Host.Value;
-        if (!string.IsNullOrEmpty(host)) _seen = $"{proto}://{host}{request.PathBase}";
+        if (!string.IsNullOrEmpty(host) && !IsLoopback(host)) _seen = $"{proto}://{host}{request.PathBase}";
+    }
+
+    /// <summary><c>localhost</c>, <c>*.localhost</c>, <c>127.x.x.x</c> oder <c>[::1]</c>, jeweils mit oder ohne Port.</summary>
+    public static bool IsLoopback(string host)
+    {
+        var name = new HostString(host).Host.Trim('[', ']');
+        return name.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+               || System.Net.IPAddress.TryParse(name, out var ip) && System.Net.IPAddress.IsLoopback(ip);
     }
 }
 
-/// <summary>Fragt per ntfy, welche Spule in einem Kopf steckt, wenn ein Plättchen erkannt wurde und mehrere Spulen lose liegen.</summary>
+/// <summary>Fragt per Meldung, welche Spule in einem Kopf steckt, wenn ein Plättchen erkannt wurde und mehrere Spulen lose liegen.</summary>
 public class SpoolQuestion(SpoolStock spools, Notifier notifier, PrinterStatusCache cache, SpoolChoices choices, BackendAddress address)
 {
-    /// <summary>Fragt per ntfy, welche der losen Spulen in diesem Kopf steckt, mit einem Knopf pro Spule (höchstens drei).</summary>
+    /// <summary>Fragt per Meldung, welche der losen Spulen in diesem Kopf steckt, mit einem Knopf pro Spule (höchstens drei).</summary>
     public async Task AskAsync(Printer printer, int tool, Item item, CancellationToken cancellationToken)
     {
         var loose = await spools.LooseAsync(item, cancellationToken);
@@ -70,8 +80,8 @@ public class SpoolQuestion(SpoolStock spools, Notifier notifier, PrinterStatusCa
         var where = place.Length > 0 ? $"{printer.Name} {place}" : printer.Name;
         static string Label(Spool s) => s.RemainingWeight is { } grams ? $"#{s.Number} ({grams:0} g)" : $"#{s.Number}";
         var actions = address.Url is { } url
-            ? loose.Take(3).Select(s => new NtfyAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
-            : new List<NtfyAction>();
+            ? loose.Take(3).Select(s => new NotificationAction(Label(s), $"{url}/choices/{choices.Add(s.Id, printer.Id, tool)}")).ToList()
+            : new List<NotificationAction>();
         var message = L.F("{0} erkannt, lose liegen {1}.", item.Name, string.Join(", ", loose.Select(Label))) + " "
             + (actions.Count == loose.Count ? L.T("Tippe auf die Spule, die drin steckt.") : L.T("Wählen kannst du in der App beim Drucker."));
         await notifier.SendAsync(L.F("{0}: Welche Spule?", where), message, "question", cancellationToken: cancellationToken, actions: actions);

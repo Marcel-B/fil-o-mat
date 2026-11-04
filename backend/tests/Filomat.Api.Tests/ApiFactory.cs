@@ -24,8 +24,8 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt die Nextcloud; ohne bleibt die Sicherung aus.</summary>
     public HttpMessageHandler? NextcloudHandler { get; init; }
 
-    /// <summary>Ersetzt ntfy; ohne ist keine Adresse für Meldungen eingestellt.</summary>
-    public HttpMessageHandler? NtfyHandler { get; init; }
+    /// <summary>Ersetzt Onkel Bummel; ohne ist kein Ziel für Meldungen eingestellt.</summary>
+    public HttpMessageHandler? NotificationHandler { get; init; }
 
     /// <summary>Ordner, den sich API und Updater teilen (status.json, request).</summary>
     public string? UpdateDirectory { get; init; }
@@ -48,11 +48,14 @@ public class ApiFactory : WebApplicationFactory<Program>
             builder.ConfigureTestServices(services =>
                 services.AddHttpClient(Filomat.Api.Backup.WebDavClient.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => nextcloud));
         }
-        if (NtfyHandler is { } ntfy)
+        if (NotificationHandler is { } notifications)
         {
-            builder.UseSetting("Ntfy:Url", "https://ntfy.test/filomat");
+            builder.UseSetting("Notifications:Server", "https://bummel.test");
+            builder.UseSetting("Notifications:Topic", "filomat");
+            builder.UseSetting("Notifications:Token", "ob_test");
+            builder.UseSetting("Notifications:RetryDelay", "00:00:00");
             builder.ConfigureTestServices(services =>
-                services.AddHttpClient(Filomat.Api.Notifications.Notifier.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => ntfy));
+                services.AddHttpClient(Filomat.Api.Notifications.Notifier.HttpClientName).ConfigurePrimaryHttpMessageHandler(() => notifications));
         }
         if (PrinterHandler is { } handler)
             builder.ConfigureTestServices(services =>

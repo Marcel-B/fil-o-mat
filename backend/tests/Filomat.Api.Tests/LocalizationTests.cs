@@ -12,13 +12,13 @@ namespace Filomat.Api.Tests;
 public class LocalizationTests : IDisposable
 {
     private readonly FakeMoonraker _moonraker = new();
-    private readonly FakeNtfy _ntfy = new();
+    private readonly FakeOnkelBummel _bummel = new();
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
     public LocalizationTests()
     {
-        _factory = new ApiFactory { PrinterHandler = _moonraker, NtfyHandler = _ntfy };
+        _factory = new ApiFactory { PrinterHandler = _moonraker, NotificationHandler = _bummel };
         _client = _factory.CreateClient();
     }
 
@@ -74,7 +74,7 @@ public class LocalizationTests : IDisposable
     public async Task NotificationsUseTheLanguageOfTheAppThatSetThemUp()
     {
         var saved = await _client.SendAsync(English(HttpMethod.Put, "/api/settings/notifications",
-            new NotificationSettingsRequest("https://ntfy.test/filomat", null)));
+            new NotificationSettingsRequest("https://bummel.test", "filomat", "ob_test")));
         Assert.Equal("en", (await saved.Content.ReadFromJsonAsync<NotificationSettingsResponse>())!.Language);
 
         var printer = (await (await _client.PostAsJsonAsync("/api/printers",
@@ -90,7 +90,7 @@ public class LocalizationTests : IDisposable
         // Der Abgleich selbst kommt hier ohne Sprache an, die Meldung bleibt trotzdem englisch
         await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
 
-        var message = Assert.Single(_ntfy.Messages);
+        var message = Assert.Single(_bummel.Messages);
         Assert.Equal("Voron: benchy.gcode finished", message.Title);
         Assert.Equal("PLA V1 #1 −15 g, 985 g left\nPrint time 1:23 h", message.Body);
     }

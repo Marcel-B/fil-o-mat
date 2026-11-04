@@ -72,7 +72,7 @@ public class PrinterStatusCache
     }
 }
 
-/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über ntfy.</summary>
+/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über Onkel Bummel.</summary>
 public class PrinterLive(
     FilomatDbContext db,
     PrinterStatusCache cache,
@@ -288,7 +288,7 @@ public class PrinterLive(
 
     /// <summary>
     /// Ein Drucker, der aus ist, ist kein Fehler; einer, der mitten im Druck verschwindet (Strom, Netzwerk, Absturz), schon.
-    /// Gemeldet wird einmal pro Druck, als Warning und über ntfy.
+    /// Gemeldet wird einmal pro Druck, als Warning und als Meldung (Onkel Bummel).
     /// </summary>
     private async Task NotifyVanishedAsync(Printer printer, PrinterStatus? previous, CancellationToken cancellationToken)
     {

@@ -529,12 +529,13 @@ private fun MonthBars(stats: StatsResponse, withYear: Boolean) {
     }
 }
 
-/** ntfy-Adresse für Meldungen bei Druckende, Fehlern und Spulen, die nicht reichen. */
+/** Ziel auf einem Onkel-Bummel-Server für Meldungen bei Druckende, Fehlern und Spulen, die nicht reichen. */
 @Composable
 fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
     val scope = rememberCoroutineScope()
     var settings by remember { mutableStateOf<NotificationSettings?>(null) }
-    var url by remember { mutableStateOf("") }
+    var server by remember { mutableStateOf("") }
+    var topic by remember { mutableStateOf("") }
     var token by remember { mutableStateOf("") }
     var isWorking by remember { mutableStateOf(false) }
     var message by remember { mutableStateOf<String?>(null) }
@@ -545,7 +546,8 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
         try {
             val loaded = client.notificationSettings()
             settings = loaded
-            url = if (loaded.fromApp) loaded.url.orEmpty() else ""
+            server = if (loaded.fromApp) loaded.server.orEmpty() else ""
+            topic = if (loaded.fromApp) loaded.topic.orEmpty() else ""
         } catch (e: Exception) {
             errorMessage = ContainerStore.describe(e)
         }
@@ -557,29 +559,37 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
-                    value = url,
-                    onValueChange = { url = it },
-                    label = { Text(tr("ntfy-Thema")) },
-                    placeholder = { Text("https://ntfy.sh/filomat-…") },
+                    value = server,
+                    onValueChange = { server = it },
+                    label = { Text(tr("Onkel-Bummel-Server")) },
+                    placeholder = { Text("https://onkel-bummel.…ts.net") },
                     singleLine = true,
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri),
                     modifier = Modifier.fillMaxWidth()
                 )
                 OutlinedTextField(
+                    value = topic,
+                    onValueChange = { topic = it },
+                    label = { Text(tr("Topic")) },
+                    placeholder = { Text("filomat") },
+                    singleLine = true,
+                    modifier = Modifier.fillMaxWidth()
+                )
+                OutlinedTextField(
                     value = token,
                     onValueChange = { token = it },
-                    label = { Text(if (settings?.hasToken == true) tr("Token (leer = unverändert)") else tr("Token (optional)")) },
+                    label = { Text(if (settings?.fromApp == true && settings?.hasToken == true) tr("Token (leer = unverändert)") else tr("Publish-Token (ob_…)")) },
                     singleLine = true,
                     visualTransformation = PasswordVisualTransformation(),
                     modifier = Modifier.fillMaxWidth()
                 )
                 Text(
-                    tr("Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren (klappt auch ohne Google-Dienste)."),
+                    tr("Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht und Bild, Fehler und Spulen, die für den laufenden Druck nicht reichen. Den Token in Onkel Bummel unter Verwaltung → Publish-Tokens für das Topic anlegen. Ohne Server gilt die Server-Konfiguration."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
                 if (settings?.configured == true && settings?.fromApp == false) {
-                    Text(tr("Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor."), style = MaterialTheme.typography.bodySmall)
+                    Text(tr("Zurzeit gilt das Ziel aus der Server-Konfiguration. Ein Server hier geht vor."), style = MaterialTheme.typography.bodySmall)
                 }
                 TextButton(enabled = !isWorking && settings?.configured == true, onClick = {
                     val client = store.backend ?: return@TextButton
@@ -607,11 +617,11 @@ fun NotificationDialog(store: ContainerStore, onDismiss: () -> Unit) {
                 scope.launch {
                     try {
                         settings = client.saveNotificationSettings(
-                            NotificationSettingsRequest(url.trim(), token.trim().ifEmpty { null })
+                            NotificationSettingsRequest(server.trim(), topic.trim(), token.trim().ifEmpty { null })
                         )
                         token = ""
                         errorMessage = null
-                        message = if (url.isBlank()) tr("Adresse entfernt.") else tr("Gesichert.")
+                        message = if (server.isBlank()) tr("Ziel entfernt.") else tr("Gesichert.")
                     } catch (e: Exception) {
                         errorMessage = ContainerStore.describe(e)
                     }

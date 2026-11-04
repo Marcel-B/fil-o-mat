@@ -6,7 +6,7 @@ namespace Filomat.Api.Localization;
 /// <summary>
 /// Übersetzt Texte für Apps und Meldungen. Der Code bleibt deutsch, der deutsche Text ist der Schlüssel in
 /// <see cref="English.Texts"/> (wie in den Apps). Die Sprache kommt aus <see cref="CultureInfo.CurrentUICulture"/>:
-/// bei Anfragen aus <c>Accept-Language</c>, bei ntfy-Meldungen aus der Einstellung (<see cref="Use"/>).
+/// bei Anfragen aus <c>Accept-Language</c>, bei Meldungen aus der Einstellung (<see cref="Use"/>).
 /// </summary>
 public static class L
 {
@@ -50,7 +50,7 @@ public static class L
     public static string Normalize(string? language) =>
         language?.Trim().ToLowerInvariant() is { Length: >= 2 } code && code[..2] == EnglishCode ? EnglishCode : German;
 
-    /// <summary>Stellt die Sprache bis zum <c>Dispose</c> um, z. B. für ntfy-Meldungen aus dem Hintergrund.</summary>
+    /// <summary>Stellt die Sprache bis zum <c>Dispose</c> um, z. B. für Meldungen aus dem Hintergrund.</summary>
     public static IDisposable Use(string? language)
     {
         var previous = CultureInfo.CurrentUICulture;

@@ -5,6 +5,7 @@ using Filomat.Api.Data;
 using Filomat.Api.Domain;
 using Filomat.Api.Endpoints;
 using Filomat.Api.Printers;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Filomat.Api.Tests;
@@ -13,14 +14,15 @@ namespace Filomat.Api.Tests;
 public class SnapmakerU1Tests : IDisposable
 {
     private readonly FakeMoonraker _printer = new();
-    private readonly FakeNtfy _ntfy = new();
+    private readonly FakeOnkelBummel _bummel = new();
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
     public SnapmakerU1Tests()
     {
-        _factory = new ApiFactory { PrinterHandler = _printer, NtfyHandler = _ntfy };
-        _client = _factory.CreateClient();
+        _factory = new ApiFactory { PrinterHandler = _printer, NotificationHandler = _bummel };
+        // Wie das Handy: eine Adresse, die nicht localhost ist (die zählt nicht für Knöpfe in Meldungen)
+        _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://filomat.test") });
         _printer.Routes["/printer/objects/query"] = """
             {"result":{"eventtime":731304.1,"status":{
               "filament_detect":{"info":[
@@ -164,23 +166,29 @@ public class SnapmakerU1Tests : IDisposable
         Assert.Equal(2, (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!.Count);
 
         // Per Knopf in der Meldung gewählt: #1 steckt in Kopf 2, der Abgleich lässt sie dort
-        var question = Assert.Single(_ntfy.Messages, m => m.Title == "Snapmaker U1 Kopf 2: Welche Spule?");
+        var question = Assert.Single(_bummel.Messages, m => m.Title == "Snapmaker U1 Kopf 2: Welche Spule?");
         Assert.Equal("Sunlu PLA erkannt, lose liegen #1 (792 g), #2 (184 g). Tippe auf die Spule, die drin steckt.", question.Body);
-        var buttons = question.Actions!.Split("; ");
-        Assert.Equal(2, buttons.Length);
-        Assert.StartsWith("http, #1 (792 g), http://localhost/choices/", buttons[0]);
-        var choice = buttons[0].Split(", ")[2];
+        var buttons = question.ActionList;
+        Assert.Equal(2, buttons.Count);
+        Assert.Equal(("#1 (792 g)", "POST", true), (buttons[0].GetProperty("label").GetString(), buttons[0].GetProperty("method").GetString(),
+            buttons[0].GetProperty("clear").GetBoolean()));
+        var choice = buttons[0].GetProperty("url").GetString()!;
+        Assert.StartsWith("http://filomat.test/choices/", choice);
+        Assert.Equal("http://filomat.test/drucker", question.Click);
+        // Ein Aufruf über localhost (z. B. curl im Container) ändert die gemerkte Adresse nicht
+        await _factory.CreateClient().GetAsync("/api/version");
+        Assert.Equal("http://filomat.test", _factory.Services.GetRequiredService<BackendAddress>().Url);
         var chosen = await _client.PostAsync(new Uri(choice).PathAndQuery, null);
         Assert.Equal(HttpStatusCode.OK, chosen.StatusCode);
         Assert.Contains("#1 steckt jetzt in Snapmaker U1 Kopf 2.", await chosen.Content.ReadAsStringAsync());
         // Die anderen Knöpfe derselben Frage verfallen
-        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync(new Uri(buttons[1].Split(", ")[2]).PathAndQuery, null)).StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, (await _client.PostAsync(new Uri(buttons[1].GetProperty("url").GetString()!).PathAndQuery, null)).StatusCode);
 
         await _client.PostAsync($"/api/printers/{u1.Id}/sync", null);
         spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
         Assert.Equal((u1.Id, 1, 792d), (spools[0].PrinterId, spools[0].Tool!.Value, spools[0].RemainingWeight!.Value));
         Assert.Null(spools[1].PrinterId);
-        Assert.Single(_ntfy.Messages, m => m.Title.EndsWith("Welche Spule?"));
+        Assert.Single(_bummel.Messages, m => m.Title.EndsWith("Welche Spule?"));
         live = (await _client.GetFromJsonAsync<PrinterLiveResponse>($"/api/printers/{u1.Id}/status"))!;
         Assert.DoesNotContain(live.Hints, h => h.Kind == HintKind.SpoolUnclear);
     }
@@ -206,6 +214,21 @@ public class SnapmakerU1Tests : IDisposable
         var spools = (await _client.GetFromJsonAsync<List<Spool>>($"/api/spools?itemId={black.Id}"))!;
         Assert.Equal((u1.Id, 1, 792d), (spools[0].PrinterId, spools[0].Tool!.Value, spools[0].RemainingWeight!.Value));
         Assert.Null(spools[1].PrinterId);
-        Assert.DoesNotContain(_ntfy.Messages, m => m.Title.EndsWith("Welche Spule?"));
+        Assert.DoesNotContain(_bummel.Messages, m => m.Title.EndsWith("Welche Spule?"));
     }
+}
+
+public class BackendAddressTests
+{
+    [Theory]
+    [InlineData("localhost", true)]
+    [InlineData("localhost:8080", true)]
+    [InlineData("LOCALHOST", true)]
+    [InlineData("filomat.localhost", true)]
+    [InlineData("127.0.0.1:8080", true)]
+    [InlineData("[::1]:8080", true)]
+    [InlineData("filomat.example.ts.net", false)]
+    [InlineData("192.168.2.10:8080", false)]
+    [InlineData("localhost.example.de", false)]
+    public void RecognisesLoopbackHosts(string host, bool loopback) => Assert.Equal(loopback, BackendAddress.IsLoopback(host));
 }

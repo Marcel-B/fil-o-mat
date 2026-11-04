@@ -27,7 +27,7 @@ public static class FilomatMetrics
         "filomat_filament_used_grams_total", "Gebuchter Filamentverbrauch in Gramm nach Druckertyp.", "type");
 
     public static readonly Counter Notifications = Metrics.CreateCounter(
-        "filomat_notifications_total", "Meldungen über ntfy nach Ergebnis (ok, failed).", "result");
+        "filomat_notifications_total", "Meldungen an Onkel Bummel nach Ergebnis (ok, failed).", "result");
 
     public static readonly Counter BackupRuns = Metrics.CreateCounter(
         "filomat_backup_runs_total", "Nextcloud-Sicherungen nach Ergebnis (ok, failed).", "result");

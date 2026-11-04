@@ -235,17 +235,20 @@ struct StatsResponse: Decodable {
 
 // MARK: - Meldungen
 
+/// Ziel für Meldungen auf einem Onkel-Bummel-Server.
 struct NotificationSettings: Decodable, Equatable {
-    var url: String?
+    var server: String?
+    var topic: String?
     var hasToken: Bool
-    /// `false`, wenn die Adresse aus der Server-Konfiguration kommt
+    /// `false`, wenn das Ziel aus der Server-Konfiguration kommt
     var fromApp: Bool
     var configured: Bool
 }
 
-/// `token` `nil` lässt den gespeicherten Token, ein leerer Text löscht ihn.
+/// Leerer `server` schaltet zurück auf die Server-Konfiguration; `token` `nil` lässt den gespeicherten Token.
 struct NotificationSettingsRequest: Encodable {
-    var url: String?
+    var server: String?
+    var topic: String?
     var token: String?
 }
 

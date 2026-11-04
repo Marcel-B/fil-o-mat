@@ -37,13 +37,13 @@ public class ReachabilityTests : IDisposable
         new SocketException((int)SocketError.ConnectionRefused));
 
     private readonly FakeMoonraker _moonraker = new();
-    private readonly FakeNtfy _ntfy = new();
+    private readonly FakeOnkelBummel _notifications = new();
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
     public ReachabilityTests()
     {
-        _factory = new ApiFactory { PrinterHandler = _moonraker, NtfyHandler = _ntfy };
+        _factory = new ApiFactory { PrinterHandler = _moonraker, NotificationHandler = _notifications };
         _client = _factory.CreateClient();
     }
 
@@ -146,7 +146,7 @@ public class ReachabilityTests : IDisposable
         stored = (await _client.GetFromJsonAsync<PrinterResponse>($"/api/printers/{printer.Id}"))!;
         Assert.Null(stored.OfflineSince);
         Assert.Null(stored.LastSyncError);
-        Assert.Empty(_ntfy.Messages);
+        Assert.Empty(_notifications.Messages);
     }
 
     [Fact]
@@ -161,7 +161,7 @@ public class ReachabilityTests : IDisposable
         await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
         await _client.GetAsync($"/api/printers/{printer.Id}/status");
 
-        var message = Assert.Single(_ntfy.Messages);
+        var message = Assert.Single(_notifications.Messages);
         Assert.Equal("Voron: nicht mehr erreichbar", message.Title);
         Assert.Contains("mitten im Druck wuerfel", message.Body);
     }
@@ -175,7 +175,7 @@ public class ReachabilityTests : IDisposable
 
         _moonraker.Throw = Refused;
         await _client.PostAsync($"/api/printers/{printer.Id}/sync", null);
-        Assert.Empty(_ntfy.Messages);
+        Assert.Empty(_notifications.Messages);
     }
 
     // Eigene Adresse und Datei: MoonrakerAdapter merkt sich Metadaten pro Adresse und Datei über alle Tests hinweg

@@ -59,9 +59,9 @@ struct BackendVersion: Codable, Equatable {
 /// Passen App und Backend zusammen? Die Stufen erklärt `backend/README.md` unter „Versionen“.
 enum ApiCompatibility: Equatable {
     /// API-Stufe, gegen die diese App gebaut ist.
-    static let appLevel = 1
+    static let appLevel = 2
     /// Kleinste Backend-Stufe, mit der diese App alles kann.
-    static let minBackendLevel = 1
+    static let minBackendLevel = 2
 
     case compatible
     case backendOutdated
