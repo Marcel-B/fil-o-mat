@@ -107,7 +107,7 @@ public class PrinterReader(FilomatDbContext db, SpoolStock spools, Notifier noti
     /// <summary>
     /// Legt die Spule der Sorte in den Slot. Steckt sie schon in einem anderen Slot dieses Druckers (Plättchen umgesteckt),
     /// wandert sie mit, statt dass eine neue angebrochen wird; außer der Leser meldet dort noch ein Plättchen derselben Sorte.
-    /// Liegen mehrere Spulen der Sorte lose und ist keine gerade gewogen, wird per ntfy nachgefragt (dann <c>null</c>).
+    /// Liegen mehrere Spulen der Sorte lose und ist keine gerade gewogen, wird per Meldung nachgefragt (dann <c>null</c>).
     /// </summary>
     private async Task<Spool?> LoadAsync(Printer printer, Item item, int slot, IReadOnlyList<string?>? reported,
         CancellationToken cancellationToken)

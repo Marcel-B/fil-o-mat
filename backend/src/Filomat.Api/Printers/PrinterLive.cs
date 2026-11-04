@@ -72,7 +72,7 @@ public class PrinterStatusCache
     }
 }
 
-/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über ntfy.</summary>
+/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über Onkel Bummel.</summary>
 public class PrinterLive(
     FilomatDbContext db,
     PrinterStatusCache cache,

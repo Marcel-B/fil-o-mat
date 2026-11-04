@@ -27,7 +27,7 @@ public static class English
         ["Düse"] = "Nozzle",
         ["Bett"] = "Bed",
 
-        // ntfy-Meldungen
+        // Meldungen über Onkel Bummel
         ["{0}: Fehler"] = "{0}: error",
         ["Der Druck {0} braucht Aufmerksamkeit."] = "The print {0} needs attention.",
         ["Der Drucker braucht Aufmerksamkeit."] = "The printer needs attention.",
@@ -68,8 +68,12 @@ public static class English
         ["Gewicht darf nicht negativ sein."] = "Weight must not be negative.",
         ["Die Lichtdurchlässigkeit darf nicht negativ sein."] = "The transmission distance must not be negative.",
         ["Adresse muss mit http:// oder https:// beginnen."] = "Address must start with http:// or https://.",
-        ["Adresse muss mit http:// oder https:// beginnen, z. B. https://ntfy.sh/mein-thema."] =
-            "Address must start with http:// or https://, e.g. https://ntfy.sh/my-topic.",
+        ["Adresse muss mit http:// oder https:// beginnen, z. B. https://onkel-bummel.example.ts.net."] =
+            "Address must start with http:// or https://, e.g. https://onkel-bummel.example.ts.net.",
+        ["Topic: nur Kleinbuchstaben, Ziffern, _ und -, höchstens 64 Zeichen, z. B. filomat."] =
+            "Topic: only lowercase letters, digits, _ and -, at most 64 characters, e.g. filomat.",
+        ["Token muss mit ob_ beginnen (in Onkel Bummel unter Verwaltung → Publish-Tokens)."] =
+            "Token must start with ob_ (in Onkel Bummel under Administration → Publish tokens).",
         ["Zugangscode fehlt (am Drucker unter Einstellungen > WLAN)."] = "Access code is missing (on the printer under Settings > WLAN).",
         ["Container mit ID '{0}' existiert bereits."] = "Container with ID '{0}' already exists.",
         ["Filament mit ID '{0}' existiert bereits."] = "Filament with ID '{0}' already exists.",
@@ -85,8 +89,8 @@ public static class English
         ["Dieser Verbrauch ist bereits einer Spule zugeordnet."] = "This consumption is already assigned to a spool.",
         ["Die Auswahl ist abgelaufen. Bitte in der App im Drucker wählen."] = "The choice has expired. Please choose in the app at the printer.",
         ["#{0} steckt jetzt in {1}."] = "#{0} is now in {1}.",
-        ["Keine ntfy-Adresse eingestellt."] = "No ntfy address set.",
-        ["ntfy antwortet nicht wie erwartet: {0}"] = "ntfy doesn’t answer as expected: {0}",
+        ["Kein Ziel für Meldungen eingestellt (Server, Topic und Token)."] = "No notification target set (server, topic and token).",
+        ["Onkel Bummel antwortet nicht wie erwartet: {0}"] = "Onkel Bummel doesn’t answer as expected: {0}",
         ["Gelöschter Drucker"] = "Deleted printer",
         ["Ohne Zuordnung"] = "Unassigned",
         ["Es läuft schon eine Sicherung"] = "A backup is already running",

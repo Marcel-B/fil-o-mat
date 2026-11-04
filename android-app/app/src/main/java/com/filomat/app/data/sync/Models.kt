@@ -256,10 +256,10 @@ enum class ApiCompatibility(private val text: String?) {
 
     companion object {
         /** API-Stufe, gegen die diese App gebaut ist. */
-        const val APP_LEVEL = 1
+        const val APP_LEVEL = 2
 
         /** Kleinste Backend-Stufe, mit der diese App alles kann. */
-        const val MIN_BACKEND_LEVEL = 1
+        const val MIN_BACKEND_LEVEL = 2
 
         /** `version == null`: das Backend kennt `/api/version` noch nicht (Stufe 0). */
         fun of(version: BackendVersion?, appLevel: Int = APP_LEVEL, minBackendLevel: Int = MIN_BACKEND_LEVEL): ApiCompatibility = when {

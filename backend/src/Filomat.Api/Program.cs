@@ -61,6 +61,9 @@ if (monitoring.LokiConfigured)
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app.Services);
+// Meldungen liefen früher über ntfy; dessen Adresse passt nicht zu Onkel Bummel und wird nicht übernommen
+if (!string.IsNullOrWhiteSpace(app.Configuration["Ntfy:Url"]) && string.IsNullOrWhiteSpace(app.Configuration["Notifications:Server"]))
+    app.Logger.LogWarning("Ntfy__Url wird nicht mehr verwendet; Meldungen gehen an Onkel Bummel, siehe Notifications__Server, __Topic und __Token");
 
 app.UseExceptionHandler();
 if (monitoring.Metrics)
@@ -91,7 +94,7 @@ app.MapOpenApi();
 // Optionaler API-Schlüssel: ist "Filomat:ApiKey" gesetzt, muss jeder /api-Aufruf ihn im Header X-Api-Key mitschicken.
 var apiKey = app.Configuration["Filomat:ApiKey"];
 var api = app.MapGroup("/api");
-// Unter dieser Adresse erreichen die Apps das Backend; daraus entstehen die Knöpfe in ntfy-Meldungen
+// Unter dieser Adresse erreichen die Apps das Backend; daraus entstehen die Knöpfe in Meldungen
 var backendAddress = app.Services.GetRequiredService<BackendAddress>();
 app.Use(async (context, next) =>
 {

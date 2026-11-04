@@ -381,16 +381,6 @@
         }
       }
     },
-    "Adresse entfernt." : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "Address removed."
-          }
-        }
-      }
-    },
     "Aktualisieren …" : {
       "localizations" : {
         "en" : {
@@ -861,12 +851,12 @@
         }
       }
     },
-    "Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren. Ein Token ist nur für einen geschützten eigenen Server nötig." : {
+    "Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht und Bild, Fehler und Spulen, die für den laufenden Druck nicht reichen. Den Token in Onkel Bummel unter Verwaltung → Publish-Tokens für das Topic anlegen. Ohne Server gilt die Server-Konfiguration." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The backend reports finished and cancelled prints with the remaining weight, errors and spools that won’t last for the current print. A hard-to-guess topic on ntfy.sh is enough; subscribe to it in the ntfy app. A token is only needed for a protected server of your own."
+            "value" : "The backend reports finished and cancelled prints with the remaining weight and a picture, errors and spools that won’t last for the current print. Create the token for the topic in Onkel Bummel under Administration → Publish tokens. Without a server, the server configuration applies."
           }
         }
       }
@@ -2671,6 +2661,9 @@
         }
       }
     },
+    "Onkel Bummel" : {
+      "shouldTranslate" : false
+    },
     "Pausiert" : {
       "localizations" : {
         "en" : {
@@ -2727,6 +2720,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Protocol"
+          }
+        }
+      }
+    },
+    "Publish-Token (ob_…)" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Publish token (ob_…)"
           }
         }
       }
@@ -3271,12 +3274,12 @@
         }
       }
     },
-    "Token (optional)" : {
+    "Topic" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "Token (optional)"
+            "value" : "Topic"
           }
         }
       }
@@ -3601,6 +3604,16 @@
         }
       }
     },
+    "Ziel entfernt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Target removed."
+          }
+        }
+      }
+    },
     "Zu vorhandenem Filament hinzufügen" : {
       "localizations" : {
         "en" : {
@@ -3651,12 +3664,12 @@
         }
       }
     },
-    "Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor." : {
+    "Zurzeit gilt das Ziel aus der Server-Konfiguration (%@, Topic %@). Ein Server hier geht vor." : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
-            "value" : "The address from the server configuration applies at the moment. An address entered here takes precedence."
+            "value" : "The target from the server configuration applies at the moment (%1$@, topic %2$@). A server entered here takes precedence."
           }
         }
       }
@@ -3829,16 +3842,6 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "%@ left"
-          }
-        }
-      }
-    },
-    "ntfy-Thema" : {
-      "localizations" : {
-        "en" : {
-          "stringUnit" : {
-            "state" : "translated",
-            "value" : "ntfy topic"
           }
         }
       }
