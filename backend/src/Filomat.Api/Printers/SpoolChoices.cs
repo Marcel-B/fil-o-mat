@@ -38,7 +38,8 @@ public class SpoolChoices(TimeProvider time)
 
 /// <summary>
 /// Adresse, unter der die Apps das Backend erreichen; daraus entstehen die Links der Knöpfe in Meldungen.
-/// <c>Filomat:PublicUrl</c> legt sie fest, sonst gilt die Adresse des letzten Aufrufs einer App.
+/// <c>Filomat:PublicUrl</c> legt sie fest, sonst gilt die Adresse des letzten Aufrufs einer App. Aufrufe über
+/// <c>localhost</c> oder eine Loopback-Adresse (z. B. curl im Container) zählen nicht, das Handy erreicht sie nicht.
 /// </summary>
 public class BackendAddress(IConfiguration configuration)
 {
@@ -50,7 +51,16 @@ public class BackendAddress(IConfiguration configuration)
     {
         var proto = request.Headers["X-Forwarded-Proto"].FirstOrDefault() ?? request.Scheme;
         var host = request.Headers["X-Forwarded-Host"].FirstOrDefault() ?? request.Host.Value;
-        if (!string.IsNullOrEmpty(host)) _seen = $"{proto}://{host}{request.PathBase}";
+        if (!string.IsNullOrEmpty(host) && !IsLoopback(host)) _seen = $"{proto}://{host}{request.PathBase}";
+    }
+
+    /// <summary><c>localhost</c>, <c>*.localhost</c>, <c>127.x.x.x</c> oder <c>[::1]</c>, jeweils mit oder ohne Port.</summary>
+    public static bool IsLoopback(string host)
+    {
+        var name = new HostString(host).Host.Trim('[', ']');
+        return name.Equals("localhost", StringComparison.OrdinalIgnoreCase)
+               || name.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase)
+               || System.Net.IPAddress.TryParse(name, out var ip) && System.Net.IPAddress.IsLoopback(ip);
     }
 }
 
