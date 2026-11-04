@@ -5,6 +5,7 @@ using Filomat.Api.Data;
 using Filomat.Api.Domain;
 using Filomat.Api.Endpoints;
 using Filomat.Api.Printers;
+using Microsoft.AspNetCore.Mvc.Testing;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Filomat.Api.Tests;
@@ -20,7 +21,8 @@ public class SnapmakerU1Tests : IDisposable
     public SnapmakerU1Tests()
     {
         _factory = new ApiFactory { PrinterHandler = _printer, NotificationHandler = _bummel };
-        _client = _factory.CreateClient();
+        // Wie das Handy: eine Adresse, die nicht localhost ist (die zählt nicht für Knöpfe in Meldungen)
+        _client = _factory.CreateClient(new WebApplicationFactoryClientOptions { BaseAddress = new Uri("http://filomat.test") });
         _printer.Routes["/printer/objects/query"] = """
             {"result":{"eventtime":731304.1,"status":{
               "filament_detect":{"info":[
@@ -171,8 +173,11 @@ public class SnapmakerU1Tests : IDisposable
         Assert.Equal(("#1 (792 g)", "POST", true), (buttons[0].GetProperty("label").GetString(), buttons[0].GetProperty("method").GetString(),
             buttons[0].GetProperty("clear").GetBoolean()));
         var choice = buttons[0].GetProperty("url").GetString()!;
-        Assert.StartsWith("http://localhost/choices/", choice);
-        Assert.Equal("http://localhost/drucker", question.Click);
+        Assert.StartsWith("http://filomat.test/choices/", choice);
+        Assert.Equal("http://filomat.test/drucker", question.Click);
+        // Ein Aufruf über localhost (z. B. curl im Container) ändert die gemerkte Adresse nicht
+        await _factory.CreateClient().GetAsync("/api/version");
+        Assert.Equal("http://filomat.test", _factory.Services.GetRequiredService<BackendAddress>().Url);
         var chosen = await _client.PostAsync(new Uri(choice).PathAndQuery, null);
         Assert.Equal(HttpStatusCode.OK, chosen.StatusCode);
         Assert.Contains("#1 steckt jetzt in Snapmaker U1 Kopf 2.", await chosen.Content.ReadAsStringAsync());
@@ -211,4 +216,19 @@ public class SnapmakerU1Tests : IDisposable
         Assert.Null(spools[1].PrinterId);
         Assert.DoesNotContain(_bummel.Messages, m => m.Title.EndsWith("Welche Spule?"));
     }
+}
+
+public class BackendAddressTests
+{
+    [Theory]
+    [InlineData("localhost", true)]
+    [InlineData("localhost:8080", true)]
+    [InlineData("LOCALHOST", true)]
+    [InlineData("filomat.localhost", true)]
+    [InlineData("127.0.0.1:8080", true)]
+    [InlineData("[::1]:8080", true)]
+    [InlineData("filomat.example.ts.net", false)]
+    [InlineData("192.168.2.10:8080", false)]
+    [InlineData("localhost.example.de", false)]
+    public void RecognisesLoopbackHosts(string host, bool loopback) => Assert.Equal(loopback, BackendAddress.IsLoopback(host));
 }
