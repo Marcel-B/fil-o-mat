@@ -27,6 +27,7 @@ builder.Services.AddSingleton<IBambuLan, BambuLan>();
 builder.Services.AddTransient<IPrinterAdapter, BambuAdapter>();
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddSingleton<PrinterStatusCache>();
+builder.Services.AddSingleton<PrinterReachability>();
 builder.Services.AddScoped<PrinterLive>();
 builder.Services.AddHttpClient(Notifier.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<Notifier>();

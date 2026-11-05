@@ -197,6 +197,9 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("OfflineSince")
+                        .HasColumnType("TEXT");
+
                     b.Property<DateTime?>("ReaderSeenAt")
                         .HasColumnType("TEXT");
 

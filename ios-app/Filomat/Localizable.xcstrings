@@ -551,6 +551,16 @@
         }
       }
     },
+    "Aus oder nicht erreichbar · %@" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Off or not reachable · %@"
+          }
+        }
+      }
+    },
     "Ausgeschaltet fragt das Backend den Drucker nicht mehr ab, z. B. solange er nicht im Netz ist." : {
       "localizations" : {
         "en" : {

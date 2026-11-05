@@ -78,6 +78,7 @@ public class PrinterLive(
     PrinterStatusCache cache,
     IEnumerable<IPrinterAdapter> adapters,
     Notifier notifier,
+    PrinterReachability reachability,
     ILogger<PrinterLive> logger)
 {
     public IPrinterAdapter AdapterFor(Printer printer) => adapters.FirstOrDefault(a => a.Type == printer.Type)
@@ -94,11 +95,12 @@ public class PrinterLive(
         {
             status = await (adapter ?? AdapterFor(printer)).GetStatusAsync(printer, cancellationToken)
                      ?? new PrinterStatus(PrintState.Idle);
+            reachability.Succeeded(printer);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException
                                    && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogDebug(ex, "Zustand von {Printer} nicht abrufbar", printer.Name);
+            reachability.Failed(printer, ex);
             status = new PrinterStatus(PrintState.Offline, Message: ex.Message);
         }
         var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
@@ -106,9 +108,13 @@ public class PrinterLive(
         return status;
     }
 
-    /// <summary>Speichert "nicht erreichbar", wenn schon der Abgleich scheiterte.</summary>
-    public void SetOffline(Printer printer, string message) =>
-        cache.Set(printer.Id, new PrinterStatus(PrintState.Offline, Message: message), DateTime.UtcNow);
+    /// <summary>Speichert "nicht erreichbar", wenn schon der Abgleich scheiterte, und meldet, wenn dabei ein Druck lief.</summary>
+    public async Task SetOfflineAsync(Printer printer, string message, CancellationToken cancellationToken = default)
+    {
+        var status = new PrinterStatus(PrintState.Offline, Message: message);
+        var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
+        await NotifyAsync(printer, status, previous?.Status, cancellationToken);
+    }
 
     /// <summary>Zustand aller Drucker; was älter als <paramref name="maxAge"/> ist, wird beim Drucker neu abgefragt.</summary>
     public async Task<List<PrinterLiveResponse>> GetAllAsync(TimeSpan maxAge, CancellationToken cancellationToken = default)
@@ -124,7 +130,8 @@ public class PrinterLive(
     public async Task<PrinterLiveResponse> GetAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default)
     {
         var entry = cache.Get(printer.Id);
-        if (printer.Enabled && (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge))
+        // Ein ausgeschalteter Drucker im Backoff wird nicht bei jeder Anfrage der Apps neu angefragt (bis zu 15 s Wartezeit)
+        if (printer.Enabled && (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge && !reachability.ShouldWait(printer.Id)))
         {
             var gate = cache.LockFor(printer.Id);
             await gate.WaitAsync(cancellationToken);
@@ -132,7 +139,7 @@ public class PrinterLive(
             {
                 // Ein paralleler Aufruf hat vielleicht gerade abgefragt
                 entry = cache.Get(printer.Id);
-                if (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge)
+                if (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge && !reachability.ShouldWait(printer.Id))
                 {
                     await RefreshAsync(printer, cancellationToken: cancellationToken);
                     entry = cache.Get(printer.Id);
@@ -251,6 +258,11 @@ public class PrinterLive(
     /// <summary>Fehler und Spulen, die nicht reichen, je einmal pro Druck.</summary>
     private async Task NotifyAsync(Printer printer, PrinterStatus status, PrinterStatus? previous, CancellationToken cancellationToken)
     {
+        if (status.State == PrintState.Offline)
+        {
+            await NotifyVanishedAsync(printer, previous, cancellationToken);
+            return;
+        }
         var error = status.State == PrintState.Error && previous is { State: not PrintState.Error };
         if (!error && (!status.IsActive || status.JobGramsPerTool is null)) return;
         using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
@@ -269,5 +281,27 @@ public class PrinterLive(
             await notifier.SendAsync(L.F("{0}: Spule reicht nicht", printer.Name), $"{status.JobName}: {hint.Text}", "warning", 4,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    /// <summary>Ab hier gilt ein Druck als so gut wie fertig: Wer dann ausschaltet, hat nur das Ende verpasst.</summary>
+    private const double AlmostDonePercent = 95;
+
+    /// <summary>
+    /// Ein Drucker, der aus ist, ist kein Fehler; einer, der mitten im Druck verschwindet (Strom, Netzwerk, Absturz), schon.
+    /// Gemeldet wird einmal pro Druck, als Warning und als Meldung (Onkel Bummel).
+    /// </summary>
+    private async Task NotifyVanishedAsync(Printer printer, PrinterStatus? previous, CancellationToken cancellationToken)
+    {
+        if (previous is not { IsActive: true } || previous.Progress >= AlmostDonePercent) return;
+        if (!cache.FirstTime($"vanished|{printer.Id}|{previous.JobKey ?? previous.JobName}")) return;
+
+        logger.LogWarning("Drucker {Printer} mitten im Druck {Job} nicht mehr erreichbar ({Progress} %)",
+            printer.Name, previous.JobName, previous.Progress);
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
+        await notifier.SendAsync(L.F("{0}: nicht mehr erreichbar", printer.Name),
+            previous.JobName is { } job
+                ? L.F("Der Drucker antwortet mitten im Druck {0} nicht mehr. Strom oder Netzwerk weg?", job)
+                : L.T("Der Drucker antwortet mitten im Druck nicht mehr. Strom oder Netzwerk weg?"),
+            "warning", 4, cancellationToken: cancellationToken);
     }
 }

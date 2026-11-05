@@ -13,8 +13,11 @@ struct Printer: Identifiable, Codable, Hashable {
     var tools: Int?
     var lastSyncAt: String?
     var lastSyncError: String?
+    /// Seit wann der Drucker nicht antwortet (aus oder nicht im Netz); dann ist `lastSyncError` kein echter Fehler.
+    var offlineSince: String?
 
     var lastSyncDate: Date? { lastSyncAt.flatMap(BackendDate.parse) }
+    var offlineDate: Date? { offlineSince.flatMap(BackendDate.parse) }
     var toolCount: Int { max(tools ?? 1, 1) }
 
     /// "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf.

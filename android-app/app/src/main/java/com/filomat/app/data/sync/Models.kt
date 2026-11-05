@@ -167,12 +167,15 @@ data class Printer(
     /** Anzahl Köpfe bzw. Slots (U1: 4); ältere Backends liefern den Wert nicht. */
     val tools: Int? = null,
     val lastSyncAt: String? = null,
-    val lastSyncError: String? = null
+    val lastSyncError: String? = null,
+    /** Seit wann der Drucker nicht antwortet (aus oder nicht im Netz); dann ist [lastSyncError] kein echter Fehler. */
+    val offlineSince: String? = null
 ) {
     val printerType: PrinterType? get() = PrinterType.of(type)
     val typeTitle: String get() = printerType?.title ?: type
     val toolCount: Int get() = maxOf(tools ?: 1, 1)
     val lastSyncDate: Date? get() = lastSyncAt?.let(BackendDate::parse)
+    val offlineDate: Date? get() = offlineSince?.let(BackendDate::parse)
 
     /** "U1 Kopf 2", "Core One Slot 3" oder nur der Name bei einem Kopf. */
     fun placeName(tool: Int?): String {

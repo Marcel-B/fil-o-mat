@@ -173,7 +173,7 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
                     Text(
                         it,
                         style = MaterialTheme.typography.bodySmall,
-                        color = if (status.state == "Error" || status.state == "Offline") MaterialTheme.colorScheme.error
+                        color = if (status.state == "Error") MaterialTheme.colorScheme.error
                         else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }

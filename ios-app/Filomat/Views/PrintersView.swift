@@ -181,7 +181,12 @@ private struct PrinterRow: View {
             if let live, printer.enabled, printer.lastSyncError == nil {
                 PrinterStatusLine(live: live)
             }
-            if let error = printer.lastSyncError {
+            if let since = printer.offlineDate {
+                // Ausgeschaltet ist kein Fehler
+                Label("Aus oder nicht erreichbar · \(since.formatted(.relative(presentation: .named)))", systemImage: "power")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let error = printer.lastSyncError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.red)

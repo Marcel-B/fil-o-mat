@@ -198,7 +198,9 @@ const menuItems = computed(() => [
       <div class="flex flex-wrap gap-x-4 text-xs text-muted-color">
         <span>{{ t('printers.lastSync', { ago: ago(printer.lastSyncAt) }) }}</span>
         <span v-if="printer.readerSeenAt">{{ t('printers.readerSeen', { ago: ago(printer.readerSeenAt) }) }}</span>
-        <span v-if="printer.lastSyncError" class="text-red-500">{{ printer.lastSyncError }}</span>
+        <!-- Ausgeschaltet ist kein Fehler -->
+        <span v-if="printer.offlineSince">{{ t('printers.offlineSince', { ago: ago(printer.offlineSince) }) }}</span>
+        <span v-else-if="printer.lastSyncError" class="text-red-500">{{ printer.lastSyncError }}</span>
       </div>
     </template>
   </Card>

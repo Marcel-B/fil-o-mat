@@ -105,6 +105,7 @@ const en: typeof de = {
     humidityLevel: 'Level {level}/5',
     lastSync: 'Synced {ago}',
     readerSeen: 'NFC reader {ago}',
+    offlineSince: 'Off or not reachable · {ago}',
     type: 'Type',
     address: 'Address',
     namePlaceholder: 'e.g. Snapmaker U1',

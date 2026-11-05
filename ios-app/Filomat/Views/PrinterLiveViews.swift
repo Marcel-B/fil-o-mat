@@ -130,7 +130,7 @@ struct PrinterDetailView: View {
                 LabeledContent("Druckzeit", value: PrinterStatus.duration(elapsed))
             }
             if let message = status.message, !message.isEmpty {
-                Text(message).font(.caption).foregroundStyle(status.state == "Error" || status.state == "Offline" ? Color.red : Color.secondary)
+                Text(message).font(.caption).foregroundStyle(status.state == "Error" ? Color.red : Color.secondary)
             }
             if let thumbnail, status.hasJob {
                 HStack {
