@@ -91,13 +91,14 @@ struct PrinterDetailView: View {
             PrinterFormView(printer: printer) { await onChanged() }
         }
         .refreshable { await store.refreshPrinterLive() }
-        // Solange die Ansicht offen ist, alle 15 Sekunden nachfragen
+        // Solange die Ansicht offen ist, live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
         .task {
             while !Task.isCancelled {
-                await store.refreshPrinterLive()
+                if !store.printerLiveConnected { await store.refreshPrinterLive() }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+        .task { await store.followPrinterLive() }
         .task(id: live?.status.jobKey) { await loadThumbnail() }
     }
 

@@ -69,13 +69,17 @@ fun PrintersScreen(navController: NavController) {
 
     LaunchedEffect(sync.connected) { if (sync.connected) load() }
 
-    // Solange die Liste offen ist, den Zustand der Drucker alle 15 Sekunden holen
+    // Solange die Liste offen ist, kommt der Zustand live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
     LaunchedEffect(sync.connected) {
         while (sync.connected) {
-            store.refreshPrinterLive()
+            if (!store.printerLiveConnected.value) store.refreshPrinterLive()
             delay(PRINTER_LIVE_INTERVAL_MS)
         }
     }
+    LaunchedEffect(sync.connected) { if (sync.connected) store.followPrinterLive() }
+    // Abgleich gelaufen oder Drucker woanders geändert
+    val backendChanges by store.backendChanges.collectAsState()
+    LaunchedEffect(backendChanges) { if (backendChanges > 0) load() }
 
     Scaffold(
         topBar = {

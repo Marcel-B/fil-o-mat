@@ -11,7 +11,7 @@ namespace Filomat.Api.Printers;
 /// nach Fortschritt. Ohne Datei bleibt die Restmenge, die das AMS für Bambu-Spulen meldet.
 /// Slots: AMS-Einheit · 4 + Fach, danach die externe Spule; ohne AMS ein Slot.
 /// </summary>
-public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinterAdapter
+public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLiveReports? live = null) : IPrinterAdapter, IPrinterPush
 {
     public const int SlotsPerAms = 4;
 
@@ -56,11 +56,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
     {
-        if (!_reports.TryRemove(printer.Id, out var report))
-        {
-            var (serial, accessCode) = Credentials(printer.ApiKey);
-            report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
-        }
+        if (!_reports.TryRemove(printer.Id, out var report)) report = await QueryAsync(printer, cancellationToken);
         var print = report.Print;
         var ams = ReadAms(print);
         var slotCount = SlotCount(ams.Units);
@@ -138,8 +134,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     public async Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken)
     {
-        var (serial, accessCode) = Credentials(printer.ApiKey);
-        var print = (await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken)).Print;
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        var print = (await QueryAsync(printer, cancellationToken)).Print;
         var gcodeFile = print.GetStringOrNull("gcode_file");
         // Die 3MF ist mehrere MB groß; PrinterLive merkt sich das Bild pro Druck
         var file = await lan.DownloadAsync(printer.BaseUrl, accessCode, BambuLan.FileCandidates(gcodeFile, print.GetStringOrNull("subtask_name")), cancellationToken);
@@ -154,8 +150,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
-        var (serial, accessCode) = Credentials(printer.ApiKey);
-        var report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        var report = await QueryAsync(printer, cancellationToken);
         _reports[printer.Id] = report;
         var print = report.Print;
         var ams = ReadAms(print);
@@ -210,6 +206,37 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         }
         printer.AdapterStateJson = null;
         return finished;
+    }
+
+    /// <summary>Der Stand aus der offenen Verbindung von <see cref="WatchAsync"/>, sonst eine eigene Abfrage.</summary>
+    private Task<BambuReport> QueryAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        if (live?.Get(printer) is { } report) return Task.FromResult(report);
+        var (serial, accessCode) = Credentials(printer.ApiKey);
+        return lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+    }
+
+    /// <summary>
+    /// Bleibt per MQTT verbunden; solange die Verbindung steht, beantworten Zustand und Abgleich alles aus ihrem Stand,
+    /// ohne eigene Verbindung und ohne <c>pushall</c> (das die P1-Serie nicht zu oft bekommen soll).
+    /// </summary>
+    public async Task WatchAsync(Printer printer, Action changed, CancellationToken cancellationToken)
+    {
+        if (live is null) throw new InvalidOperationException("BambuLiveReports fehlt.");
+        var (serial, accessCode) = Credentials(printer.ApiKey);
+        var key = BambuLiveReports.Key(printer);
+        try
+        {
+            await lan.WatchAsync(printer.BaseUrl, accessCode, serial, report =>
+            {
+                live.Set(key, report);
+                changed();
+            }, cancellationToken);
+        }
+        finally
+        {
+            live.Remove(key);
+        }
     }
 
     /// <summary>Zugangscode, optional mit Seriennummer davor: <c>01P00A123456789:12345678</c>.</summary>
@@ -410,4 +437,18 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
             return null;
         }
     }
+}
+
+/// <summary>Stand aus den offenen MQTT-Verbindungen pro Drucker (Adresse und Zugang, damit eine geänderte Adresse nicht alte Werte liefert).</summary>
+public class BambuLiveReports
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BambuReport> _reports = new();
+
+    public static string Key(Printer printer) => $"{printer.Id}|{printer.BaseUrl}|{printer.ApiKey}";
+
+    public BambuReport? Get(Printer printer) => _reports.GetValueOrDefault(Key(printer));
+
+    public void Set(string key, BambuReport report) => _reports[key] = report;
+
+    public void Remove(string key) => _reports.TryRemove(key, out _);
 }

@@ -286,7 +286,64 @@ final class ContainerStore {
     func refreshPrinterLive() async {
         guard let backend else { return }
         guard let live = try? await backend.printerStatus() else { return }
+        setPrinterLive(live)
+    }
+
+    private func setPrinterLive(_ live: [PrinterLive]) {
         printerLive = Dictionary(live.map { ($0.printerId, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Der Zustand kommt gerade live vom Backend; Nachfragen alle 15 s ist dann überflüssig.
+    private(set) var printerLiveConnected = false
+    /// Zählt hoch, wenn das Backend geänderte Daten meldet (Abgleich, Änderung in einer anderen App).
+    private(set) var backendChanges = 0
+    private var liveFollowers = 0
+    private var liveTask: Task<Void, Never>?
+
+    /// Hält die Live-Verbindung (`/api/printers/events`), solange mindestens eine Ansicht das hier aufruft; für `.task`.
+    func followPrinterLive() async {
+        liveFollowers += 1
+        if liveTask == nil { liveTask = Task { await runPrinterLive() } }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3600))
+        }
+        liveFollowers -= 1
+        if liveFollowers == 0 {
+            liveTask?.cancel()
+            liveTask = nil
+            printerLiveConnected = false
+        }
+    }
+
+    private func runPrinterLive() async {
+        var delay = 2.0
+        while !Task.isCancelled {
+            if let backend {
+                do {
+                    for try await event in backend.printerEvents() {
+                        printerLiveConnected = true
+                        delay = 2
+                        switch event.name {
+                        case "status":
+                            if let live = try? BackendClient.decodePrinterStatus(Data(event.data.utf8)) { setPrinterLive(live) }
+                        case "changed":
+                            backendChanges += 1
+                        default:
+                            break
+                        }
+                    }
+                } catch BackendError.status(404) {
+                    // Älteres Backend ohne Live-Zustand: es bleibt beim Nachfragen
+                    printerLiveConnected = false
+                    return
+                } catch {
+                    // Netz weg, Backend neu gestartet: gleich neu verbinden
+                }
+            }
+            printerLiveConnected = false
+            try? await Task.sleep(for: .seconds(delay))
+            delay = min(delay * 2, 60)
+        }
     }
 
     /// Fehler (z. B. ein älteres Backend ohne `/api/backup`) zählen nicht als Sync-Fehler.

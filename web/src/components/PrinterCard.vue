@@ -4,6 +4,7 @@ import { useI18n } from 'vue-i18n'
 import { useConfirm } from 'primevue/useconfirm'
 import { useToast } from 'primevue/usetoast'
 import { useDataStore } from '@/stores/data'
+import { useLiveStore } from '@/stores/live'
 import { ago, duration, grams } from '@/format'
 import ColorDot from './ColorDot.vue'
 import PrinterThumbnail from './PrinterThumbnail.vue'
@@ -12,6 +13,7 @@ import type { Printer, PrinterLive, PrintState, ToolLive } from '@/types'
 const props = defineProps<{ printer: Printer; live: PrinterLive | undefined }>()
 const emit = defineEmits<{ edit: []; tool: [tool: ToolLive]; synced: [] }>()
 const store = useDataStore()
+const liveStore = useLiveStore()
 const toast = useToast()
 const confirm = useConfirm()
 const { t } = useI18n()
@@ -196,6 +198,9 @@ const menuItems = computed(() => [
     </template>
     <template #footer>
       <div class="flex flex-wrap gap-x-4 text-xs text-muted-color">
+        <span v-if="liveStore.connected && printer.enabled" class="inline-flex items-center gap-1" :title="t('printers.liveHint')">
+          <span class="inline-block h-2 w-2 rounded-full bg-green-500" />{{ t('printers.live') }}
+        </span>
         <span>{{ t('printers.lastSync', { ago: ago(printer.lastSyncAt) }) }}</span>
         <span v-if="printer.readerSeenAt">{{ t('printers.readerSeen', { ago: ago(printer.readerSeenAt) }) }}</span>
         <!-- Ausgeschaltet ist kein Fehler -->

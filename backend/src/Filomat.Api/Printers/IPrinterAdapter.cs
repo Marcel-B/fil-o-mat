@@ -61,6 +61,9 @@ public interface IPrinterAdapter
     Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken) =>
         Task.FromResult<Thumbnail?>(null);
 
+    /// <summary>Kürzester Abstand der Abfragen, solange jemand live zusieht (<see cref="PrinterLiveService"/>).</summary>
+    TimeSpan MinLiveInterval => TimeSpan.Zero;
+
     /// <summary>Aktuelles Bild der Druckerkamera, falls der Drucker eine im LAN anbietet.</summary>
     Task<Thumbnail?> GetSnapshotAsync(Printer printer, CancellationToken cancellationToken) =>
         Task.FromResult<Thumbnail?>(null);

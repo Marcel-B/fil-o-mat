@@ -17,6 +17,7 @@ public class ConsumptionSync(
     Notifier notifier,
     SpoolQuestion question,
     PrinterReachability reachability,
+    PrinterEvents events,
     ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
@@ -100,6 +101,8 @@ public class ConsumptionSync(
 
         printer.LastSyncAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        // Abgleichzeit, Restgewichte, Spulen in den Köpfen
+        events.DataChanged();
         if (recorded.Count > 0)
         {
             var type = FilomatMetrics.TypeLabel(printer.Type);

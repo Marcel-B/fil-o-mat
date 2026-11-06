@@ -29,6 +29,29 @@ public class FakeBambu : IBambuLan
         return Task.FromResult(new BambuReport(JsonDocument.Parse(Print).RootElement.Clone(), serial ?? "01P00A123456789"));
     }
 
+    private Action<BambuReport>? _watcher;
+
+    /// <summary>Gesetzt, sobald jemand per <see cref="WatchAsync"/> verbunden ist.</summary>
+    public TaskCompletionSource Watching { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+    public async Task WatchAsync(string baseUrl, string accessCode, string? serial, Action<BambuReport> report, CancellationToken cancellationToken)
+    {
+        _watcher = report;
+        Push();
+        Watching.TrySetResult();
+        try
+        {
+            await Task.Delay(Timeout.Infinite, cancellationToken);
+        }
+        finally
+        {
+            _watcher = null;
+        }
+    }
+
+    /// <summary>Schickt <see cref="Print"/> an die offene Verbindung, wie der Drucker eine Änderung meldet.</summary>
+    public void Push() => _watcher?.Invoke(new BambuReport(JsonDocument.Parse(Print).RootElement.Clone(), "01P00A123456789"));
+
     public Task<byte[]?> DownloadAsync(string baseUrl, string accessCode, IReadOnlyList<string> paths, CancellationToken cancellationToken)
     {
         Downloads.Add(paths);
@@ -376,6 +399,64 @@ public class BambuTests : IDisposable
         var wrong = await Assert.ThrowsAsync<PrinterUnavailableException>(() =>
             new BambuLan().QueryAsync($"http://127.0.0.1:{port}", "falsch", null, CancellationToken.None));
         Assert.Contains("MQTT", wrong.Message);
+        await server.StopAsync();
+    }
+
+    /// <summary>Dauerhafte Verbindung: einmal pushall, danach ergänzen Änderungen den Stand.</summary>
+    [Fact]
+    public async Task WatchesTheStateOverOneMqttConnection()
+    {
+        const string serial = "01P00A123456789";
+        var port = FreePort();
+        using var key = RSA.Create(2048);
+        using var cert = new CertificateRequest($"CN={serial}", key, HashAlgorithmName.SHA256, RSASignaturePadding.Pkcs1)
+            .CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
+        using var server = new MqttServerFactory().CreateMqttServer(new MqttServerOptionsBuilder()
+            .WithoutDefaultEndpoint()
+            .WithEncryptedEndpoint()
+            .WithEncryptedEndpointPort(port)
+            .WithEncryptedEndpointBoundIPAddress(IPAddress.Loopback)
+            .WithEncryptedEndpointBoundIPV6Address(IPAddress.None)
+            .WithEncryptionCertificate(new PrinterCertificate(X509CertificateLoader.LoadPkcs12(cert.Export(X509ContentType.Pfx), null)))
+            .Build());
+        var pushalls = 0;
+        server.InterceptingPublishAsync += async e =>
+        {
+            if (e.ApplicationMessage.Topic != $"device/{serial}/request" || !e.ApplicationMessage.ConvertPayloadToString().Contains("pushall")) return;
+            Interlocked.Increment(ref pushalls);
+            foreach (var payload in new[]
+                     {
+                         // Vor dem vollständigen Stand zählt nichts
+                         """{"print":{"mc_percent":41,"command":"push_status","msg":1}}""",
+                         $$"""{"print":{{FakeBambu.Report("RUNNING", 42, trayNow: 2)}}}""",
+                         """{"print":{"mc_percent":43,"command":"push_status","msg":1}}""",
+                     })
+                await server.InjectApplicationMessage(new InjectedMqttApplicationMessage(new MqttApplicationMessageBuilder()
+                    .WithTopic($"device/{serial}/report")
+                    .WithPayload(payload)
+                    .Build()) { SenderClientId = "printer" });
+        };
+        await server.StartAsync();
+
+        var reports = new List<BambuReport>();
+        using var stop = new CancellationTokenSource(TimeSpan.FromSeconds(20));
+        var watch = new BambuLan().WatchAsync($"http://127.0.0.1:{port}", "12345678", null, report =>
+        {
+            lock (reports)
+            {
+                reports.Add(report);
+                if (reports.Count == 2) stop.Cancel();
+            }
+        }, stop.Token);
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() => watch);
+
+        Assert.Equal(2, reports.Count);
+        Assert.Equal(serial, reports[0].Serial);
+        Assert.Equal(42, reports[0].Print.GetProperty("mc_percent").GetDouble());
+        Assert.Equal(43, reports[1].Print.GetProperty("mc_percent").GetDouble());
+        // Der Rest bleibt aus dem vollständigen Stand
+        Assert.Equal("RUNNING", reports[1].Print.GetProperty("gcode_state").GetString());
+        Assert.Equal(1, pushalls);
         await server.StopAsync();
     }
 

@@ -24,10 +24,12 @@ builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<Prusa
 builder.Services.AddHttpClient<IAnycubicLan, AnycubicLan>(client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddTransient<IPrinterAdapter, AnycubicAdapter>();
 builder.Services.AddSingleton<IBambuLan, BambuLan>();
+builder.Services.AddSingleton<BambuLiveReports>();
 builder.Services.AddTransient<IPrinterAdapter, BambuAdapter>();
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddSingleton<PrinterStatusCache>();
 builder.Services.AddSingleton<PrinterReachability>();
+builder.Services.AddSingleton<PrinterEvents>();
 builder.Services.AddScoped<PrinterLive>();
 builder.Services.AddHttpClient(Notifier.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<Notifier>();
@@ -42,6 +44,7 @@ builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IConfiguration>(),
     sp.GetRequiredService<ILogger<SpoolWeightCatalog>>()));
 builder.Services.AddHostedService<PrinterSyncService>();
+builder.Services.AddHostedService<PrinterLiveService>();
 builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.Section));
 builder.Services.AddHttpClient(WebDavClient.HttpClientName);
 builder.Services.AddSingleton<WebDavClient>();
@@ -97,11 +100,16 @@ var apiKey = app.Configuration["Filomat:ApiKey"];
 var api = app.MapGroup("/api");
 // Unter dieser Adresse erreichen die Apps das Backend; daraus entstehen die Knöpfe in Meldungen
 var backendAddress = app.Services.GetRequiredService<BackendAddress>();
+var printerEvents = app.Services.GetRequiredService<PrinterEvents>();
 app.Use(async (context, next) =>
 {
     if (context.Request.Path.StartsWithSegments("/api") && (string.IsNullOrEmpty(apiKey) || context.Request.Headers["X-Api-Key"] == apiKey))
         backendAddress.Remember(context.Request);
     await next(context);
+    // Andere offene Apps und Browser laden nach einer Änderung neu (/api/printers/events)
+    if (context.Request.Path.StartsWithSegments("/api") && !HttpMethods.IsGet(context.Request.Method)
+        && !HttpMethods.IsHead(context.Request.Method) && context.Response.StatusCode < 400)
+        printerEvents.DataChanged();
 });
 if (!string.IsNullOrEmpty(apiKey))
 {

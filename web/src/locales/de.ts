@@ -103,6 +103,8 @@ export default {
     reported: 'Drucker: {type}',
     needs: 'braucht {grams}',
     humidityLevel: 'Stufe {level}/5',
+    live: 'Live',
+    liveHint: 'Der Zustand kommt laufend vom Server.',
     lastSync: 'Abgleich {ago}',
     readerSeen: 'NFC-Leser {ago}',
     offlineSince: 'Aus oder nicht erreichbar · {ago}',

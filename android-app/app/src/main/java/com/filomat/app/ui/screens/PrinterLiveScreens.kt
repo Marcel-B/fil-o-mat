@@ -104,12 +104,14 @@ fun PrinterDetailScreen(printerId: String, navController: NavController) {
     var editing by remember { mutableStateOf(false) }
     var thumbnail by remember { mutableStateOf<ImageBitmap?>(null) }
 
+    // Live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
     LaunchedEffect(Unit) {
         while (true) {
-            store.refreshPrinterLive()
+            if (!store.printerLiveConnected.value) store.refreshPrinterLive()
             delay(PRINTER_LIVE_INTERVAL_MS)
         }
     }
+    LaunchedEffect(Unit) { store.followPrinterLive() }
     LaunchedEffect(live?.status?.jobKey, live?.status?.hasThumbnail) {
         if (live?.status?.hasThumbnail != true) {
             thumbnail = null

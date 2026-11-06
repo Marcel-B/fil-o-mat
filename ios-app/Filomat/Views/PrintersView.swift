@@ -81,14 +81,17 @@ struct PrintersView: View {
             }
         }
         .refreshable { await syncAll() }
-        // Solange die Liste offen ist, den Zustand alle 15 Sekunden holen
+        // Solange die Liste offen ist, kommt der Zustand live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
         .task {
             await load()
             while !Task.isCancelled {
-                await store.refreshPrinterLive()
+                if !store.printerLiveConnected { await store.refreshPrinterLive() }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+        .task { await store.followPrinterLive() }
+        // Abgleich gelaufen oder Drucker woanders geändert
+        .onChange(of: store.backendChanges) { Task { await load() } }
         .sheet(isPresented: $showingNotifications) {
             NotificationSettingsView()
         }
