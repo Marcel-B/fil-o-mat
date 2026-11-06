@@ -221,7 +221,54 @@ struct BackendClient {
 
     /// Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist.
     func printerStatus() async throws -> [PrinterLive] {
-        try Self.decoder.decode([PrinterLive].self, from: try await send(request("api/printers/status", method: "GET"), timeout: 30))
+        try Self.decodePrinterStatus(try await send(request("api/printers/status", method: "GET"), timeout: 30))
+    }
+
+    static func decodePrinterStatus(_ data: Data) throws -> [PrinterLive] {
+        try decoder.decode([PrinterLive].self, from: data)
+    }
+
+    /// Ereignis aus `/api/printers/events`: `status` (Daten wie `printerStatus()`) oder `changed` (Daten neu laden).
+    struct ServerEvent {
+        let name: String
+        let data: String
+    }
+
+    /// Server-Sent Events von `/api/printers/events`. Endet, wenn die Verbindung abreißt; ein Backend ohne den
+    /// Endpunkt wirft `BackendError.status(404)`.
+    func printerEvents() -> AsyncThrowingStream<ServerEvent, Error> {
+        var request = request("api/printers/events", method: "GET")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        // Der Server schickt spätestens alle 20 s etwas (": ping")
+        request.timeoutInterval = 60
+        let session = session
+        let eventsRequest = request
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response) = try await session.bytes(for: eventsRequest)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    if status == 401 { throw BackendError.unauthorized }
+                    guard (200..<300).contains(status) else { throw BackendError.status(status) }
+                    // `lines` lässt Leerzeilen weg; der Server schickt pro Ereignis genau eine data-Zeile nach event
+                    var name = "message"
+                    for try await line in bytes.lines {
+                        if line.hasPrefix("event:") {
+                            name = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                        } else if line.hasPrefix("data:") {
+                            var data = line.dropFirst(5)
+                            if data.first == " " { data = data.dropFirst() }
+                            continuation.yield(ServerEvent(name: name, data: String(data)))
+                            name = "message"
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     /// Vorschaubild des laufenden Drucks; `nil`, wenn der Drucker keins liefert.

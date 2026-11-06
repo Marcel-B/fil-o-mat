@@ -1,12 +1,13 @@
 using System.Collections.Concurrent;
 using System.Globalization;
+using System.Net.WebSockets;
 using System.Text.Json;
 using Filomat.Api.Domain;
 
 namespace Filomat.Api.Printers;
 
 /// <summary>Liest die Druckhistorie von Moonraker (<c>/server/history/list</c>).</summary>
-public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter
+public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter, IPrinterPush
 {
     public virtual PrinterType Type => PrinterType.Moonraker;
 
@@ -215,6 +216,112 @@ public class MoonrakerAdapter(HttpClient http) : IPrinterAdapter
             return new UriBuilder(absolute) { Host = printer.Host }.Uri;
         }
         return new Uri(new Uri($"{printer.Scheme}://{printer.Host}/"), snapshotUrl.TrimStart('/'));
+    }
+
+    /// <summary>Meldungen von Moonraker, nach denen sich der Zustand geändert haben kann.</summary>
+    private static readonly HashSet<string> ChangeNotifications =
+    [
+        "notify_status_update", "notify_klippy_ready", "notify_klippy_shutdown", "notify_klippy_disconnected",
+        "notify_history_changed", "notify_filelist_changed",
+    ];
+
+    /// <summary>
+    /// Abonniert über Moonrakers WebSocket (<c>/websocket</c>) dieselben Objekte wie <see cref="GetStatusAsync"/>. Moonraker
+    /// schickt dann jede Änderung (Temperaturen mehrmals pro Sekunde); den Takt der Abfragen bestimmt der Aufrufer.
+    /// Nach einem Neustart von Klipper gelten Abos nicht mehr, daher bei <c>notify_klippy_ready</c> neu abonnieren.
+    /// </summary>
+    public async Task WatchAsync(Printer printer, Action changed, CancellationToken cancellationToken)
+    {
+        using var socket = await ConnectWebSocketAsync(printer, cancellationToken);
+        var objects = (StatusObjects + ExtraStatusObjects).Split('&', StringSplitOptions.RemoveEmptyEntries)
+            .Distinct().ToDictionary(o => o, _ => (object?)null);
+        var subscribe = JsonSerializer.SerializeToUtf8Bytes(new
+        {
+            jsonrpc = "2.0",
+            method = "printer.objects.subscribe",
+            @params = new { objects },
+            id = 1,
+        });
+        await socket.SendAsync(subscribe, WebSocketMessageType.Text, true, cancellationToken);
+
+        using var message = new MemoryStream();
+        var buffer = new byte[16 * 1024];
+        while (socket.State == WebSocketState.Open)
+        {
+            message.SetLength(0);
+            WebSocketReceiveResult received;
+            do
+            {
+                received = await socket.ReceiveAsync(buffer, cancellationToken);
+                if (received.MessageType == WebSocketMessageType.Close) return;
+                message.Write(buffer, 0, received.Count);
+            } while (!received.EndOfMessage);
+
+            switch (ReadNotification(message.ToArray()))
+            {
+                case "error":
+                    throw new PrinterUnavailableException("Moonraker lehnt das Abo des Druckerzustands ab.");
+                case "notify_klippy_ready":
+                    await socket.SendAsync(subscribe, WebSocketMessageType.Text, true, cancellationToken);
+                    changed();
+                    break;
+                case { } method when method == "result" || ChangeNotifications.Contains(method):
+                    changed();
+                    break;
+            }
+        }
+    }
+
+    /// <summary>
+    /// <c>result</c> bzw. <c>error</c> bei der Antwort auf das Abo, sonst die Methode einer Benachrichtigung
+    /// (<c>notify_…</c>); <c>null</c> bei allem anderen.
+    /// </summary>
+    public static string? ReadNotification(byte[] json)
+    {
+        try
+        {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (root.ValueKind != JsonValueKind.Object) return null;
+            if (root.TryGetProperty("method", out var method) && method.ValueKind == JsonValueKind.String) return method.GetString();
+            if (root.TryGetProperty("id", out var id) && id.ValueKind == JsonValueKind.Number && id.GetInt32() == 1)
+                return root.TryGetProperty("error", out _) ? "error" : "result";
+            return null;
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>WebSocket-Adresse zur Druckeradresse: <c>http://drucker</c> → <c>ws://drucker/websocket</c>.</summary>
+    public static Uri WebSocketUri(string baseUrl)
+    {
+        var address = new UriBuilder(baseUrl.Contains("://") ? baseUrl : $"http://{baseUrl}");
+        address.Scheme = address.Scheme == "https" ? "wss" : "ws";
+        address.Path = address.Path.TrimEnd('/') + "/websocket";
+        return address.Uri;
+    }
+
+    protected virtual async Task<WebSocket> ConnectWebSocketAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        var socket = new ClientWebSocket();
+        if (!string.IsNullOrEmpty(printer.ApiKey)) socket.Options.SetRequestHeader("X-Api-Key", printer.ApiKey);
+        // Ein ausgeschalteter Drucker schließt die Verbindung nicht; ohne Antwort auf den Ping gilt sie als abgerissen
+        socket.Options.KeepAliveInterval = TimeSpan.FromSeconds(15);
+        socket.Options.KeepAliveTimeout = TimeSpan.FromSeconds(30);
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        try
+        {
+            await socket.ConnectAsync(WebSocketUri(printer.BaseUrl), timeout.Token);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
+        }
+        return socket;
     }
 
     protected async Task<JsonDocument> GetJsonAsync(Printer printer, string path, CancellationToken cancellationToken)

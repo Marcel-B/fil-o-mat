@@ -303,6 +303,57 @@ class ContainerStore private constructor(context: Context) {
         _printerLive.value = live.associateBy { it.printerId }
     }
 
+    private val _printerLiveConnected = MutableStateFlow(false)
+    /** Der Zustand kommt gerade live vom Backend; Nachfragen alle 15 s ist dann überflüssig. */
+    val printerLiveConnected: StateFlow<Boolean> = _printerLiveConnected.asStateFlow()
+
+    private val _backendChanges = MutableStateFlow(0)
+    /** Zählt hoch, wenn das Backend geänderte Daten meldet (Abgleich, Änderung in einer anderen App). */
+    val backendChanges: StateFlow<Int> = _backendChanges.asStateFlow()
+
+    private val liveFollowers = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * Hält die Live-Verbindung (`/api/printers/events`), solange der Aufrufer läuft (LaunchedEffect); verbindet nach
+     * Abbrüchen neu. Ein älteres Backend ohne den Endpunkt bleibt beim Nachfragen.
+     */
+    suspend fun followPrinterLive() {
+        liveFollowers.incrementAndGet()
+        var delayMs = 2_000L
+        try {
+            while (true) {
+                val client = backend
+                if (client != null) {
+                    try {
+                        client.printerEvents { name, data ->
+                            _printerLiveConnected.value = true
+                            delayMs = 2_000L
+                            when (name) {
+                                "status" -> runCatching { BackendClient.json.decodeFromString<List<PrinterLive>>(data) }
+                                    .getOrNull()?.let { live -> _printerLive.value = live.associateBy { it.printerId } }
+                                "changed" -> _backendChanges.update { it + 1 }
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: com.filomat.app.data.sync.BackendException) {
+                        if (e.status == 404) {
+                            _printerLiveConnected.value = false
+                            kotlinx.coroutines.awaitCancellation()
+                        }
+                    } catch (e: Exception) {
+                        // Netz weg, Backend neu gestartet: gleich neu verbinden
+                    }
+                }
+                _printerLiveConnected.value = false
+                kotlinx.coroutines.delay(delayMs)
+                delayMs = minOf(delayMs * 2, 60_000L)
+            }
+        } finally {
+            if (liveFollowers.decrementAndGet() == 0) _printerLiveConnected.value = false
+        }
+    }
+
     /** Übernimmt den Stand des Backends (z. B. Container, die auf einem anderen Gerät angelegt wurden). */
     suspend fun refresh() {
         val client = backend ?: return

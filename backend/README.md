@@ -28,6 +28,8 @@ dotnet test
 | `ConnectionStrings:Filomat` | `ConnectionStrings__Filomat` | SQLite-Datei, Standard `filomat.db` (im Container `/data/filomat.db`) |
 | `Filomat:ApiKey` | `Filomat__ApiKey` | Optionaler Schlüssel; wenn gesetzt, muss jeder `/api`-Aufruf den Header `X-Api-Key` mitschicken |
 | `Filomat:PrinterSyncInterval` | `Filomat__PrinterSyncInterval` | Abstand des Drucker-Abgleichs, Standard `00:02:00`; `00:00:00` schaltet ihn ab |
+| `Filomat:LiveInterval` | `Filomat__LiveInterval` | Solange jemand `/api/printers/events` offen hat: Abstand, in dem Drucker ohne eigene Meldungen abgefragt werden, Standard `00:00:05`; `00:00:00` schaltet den Live-Dienst ab |
+| `Filomat:LivePushInterval` | `Filomat__LivePushInterval` | Kürzester Abstand der Abfragen nach Meldungen von U1/Moonraker und Bambu, Standard `00:00:02` |
 | – | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | Nextcloud-Sicherung, siehe unten |
 | `Notifications:Server`, `Notifications:Topic`, `Notifications:Token` | `Notifications__Server`, `Notifications__Topic`, `Notifications__Token` (in `backend/.env`: `NOTIFICATIONS_SERVER`, `NOTIFICATIONS_TOPIC`, `NOTIFICATIONS_TOKEN`) | Meldungen über Onkel Bummel, falls in der App kein Ziel eingestellt ist; siehe unten |
 | `Notifications:Language` | `Notifications__Language` | Sprache der Meldungen (`de`, `en`), solange sie nicht in einer App gespeichert wurde; Standard `de` (das alte `Ntfy__Language` gilt weiter) |
@@ -60,6 +62,7 @@ Die OpenAPI-Beschreibung liegt unter `/openapi/v1.json`.
 | PUT | `/api/printers/{id}` | Name, Adresse, Schlüssel, aktiv/inaktiv; neue Adresse oder neuer Schlüssel gleicht sofort ab |
 | DELETE | `/api/printers/{id}` | Drucker und Container entfernen; Spulen wandern nach „Lose“ |
 | POST | `/api/printers/{id}/sync` | Sofort abgleichen |
+| GET | `/api/printers/events` | Server-Sent Events: sofort und bei jeder Änderung `event: status` (Daten wie `/api/printers/status`), `event: changed`, wenn Daten neu geladen werden sollten (Abgleich, Änderung über die API); `: ping` alle 20 s |
 | GET | `/api/printers/status` · `/api/printers/{id}/status` | Zustand (Druck, Fortschritt, Restzeit, Temperaturen, Slots, Feuchte), Spulen pro Kopf mit „reicht/reicht nicht“ und Hinweise; älter als 10 s wird neu abgefragt |
 | GET | `/api/printers/{id}/thumbnail` | Vorschaubild des laufenden Drucks (404, wenn es keins gibt) |
 | PUT | `/api/printers/{id}/reader` | NFC-Leser am Drucker meldet den ganzen Stand: `{"slots": ["04378F53CB2A81", null, …]}` (ab Slot 0); Antwort pro Slot `empty`/`known`/`unknown`/`container` mit Kurztext |
@@ -111,6 +114,8 @@ Slots: AMS-Einheit · 4 + Fach (Slot 1–4 erstes AMS), danach die externe Spule
 ### Zustand und Hinweise
 
 Nach jedem Abgleich und auf `GET /api/printers/status` fragt das Backend den Zustand ab, Anycubic und Bambu direkt aus der Meldung des Abgleichs. Moonraker liefert ihn über `printer/objects/query` (`print_stats`, `virtual_sdcard`, Heizungen, beim U1 dazu `filament_detect`) und die Slicer-Angaben der Datei über `server/files/metadata`, PrusaLink über `/api/v1/status` und `/api/v1/job`, Bambu aus dem `pushall`-Bericht, Anycubic aus `info` und der ACE-Meldung. Der Zustand liegt nur im Speicher.
+
+**Live:** Solange eine App oder ein Browser `/api/printers/events` offen hat, hält das Backend den Zustand selbst frisch und schickt jede Änderung sofort. Moonraker-Drucker (U1) abonniert es per WebSocket (`/websocket`, `printer.objects.subscribe`), Bambu bleibt per MQTT verbunden (einmal `pushall`, danach die Änderungen; Zustand und Abgleich brauchen dann keine eigene Verbindung). Nach einer Meldung fragt es höchstens alle 2 s ab (`Filomat:LivePushInterval`). Drucker ohne solche Meldungen (PrusaLink, Anycubic) und gepushte ohne Verbindung fragt es alle 5 s ab (`Filomat:LiveInterval`). 30 s nachdem der letzte Client gegangen ist, schließt es die Verbindungen wieder. Ohne Client bleibt es beim Abgleich alle zwei Minuten. Die Apps und die Web-Oberfläche fragen nur noch alle 15 s nach, wenn der Stream nicht steht (z. B. bei einem älteren Backend).
 
 Daraus entstehen Hinweise:
 

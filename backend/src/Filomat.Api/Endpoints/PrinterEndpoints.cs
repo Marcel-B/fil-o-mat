@@ -55,6 +55,9 @@ public static class PrinterEndpoints
         printers.MapGet("/status", (PrinterLive live, CancellationToken cancellationToken) => live.GetAllAsync(maxAge, cancellationToken))
             .WithSummary("Zustand aller Drucker mit Spulen pro Kopf und Hinweisen");
 
+        printers.MapGet("/events", StreamEventsAsync)
+            .WithSummary("Server-Sent Events: status (Zustand aller Drucker wie /status) bei jeder Änderung, changed, wenn sich Daten geändert haben");
+
         printers.MapGet("/{id}/status", async Task<Results<Ok<PrinterLiveResponse>, NotFound>> (
             string id, FilomatDbContext db, PrinterLive live, CancellationToken cancellationToken) =>
             await db.Printers.FindAsync([id], cancellationToken) is { } printer
@@ -243,5 +246,56 @@ public static class PrinterEndpoints
         if (await db.Containers.FindAsync(printer.ContainerId) is { } container) db.Containers.Remove(container);
         await db.SaveChangesAsync();
         return TypedResults.NoContent();
+    }
+
+    /// <summary>Ohne Änderung kommt nach so langer Zeit ein Kommentar, damit Proxys die Verbindung nicht schließen.</summary>
+    private static readonly TimeSpan KeepAlive = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Schickt sofort den Zustand aller Drucker (<c>event: status</c>, Daten wie <c>/status</c>), danach bei jeder Änderung
+    /// erneut, und <c>event: changed</c>, wenn Drucker, Spulen usw. neu geladen werden sollten (Abgleich, Änderung über
+    /// die API). Der Zustand kommt aus dem Speicher; frisch hält ihn <see cref="PrinterLiveService"/>, solange jemand zuhört.
+    /// </summary>
+    private static async Task StreamEventsAsync(HttpContext context, PrinterEvents events, IServiceScopeFactory scopes,
+        Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> json, CancellationToken cancellationToken)
+    {
+        var response = context.Response;
+        response.ContentType = "text/event-stream";
+        response.Headers.CacheControl = "no-cache";
+        // nginx und ähnliche Proxys sollen nicht puffern
+        response.Headers["X-Accel-Buffering"] = "no";
+        context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        using var listener = events.Subscribe();
+        string? last = null;
+        var sendStatus = true;
+        try
+        {
+            await response.WriteAsync("retry: 5000\n\n", cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (sendStatus)
+                {
+                    // Eigener Scope pro Runde: ein DbContext über Stunden sähe nur seinen alten Stand
+                    await using var scope = scopes.CreateAsyncScope();
+                    var printers = await scope.ServiceProvider.GetRequiredService<PrinterLive>().GetAllAsync(TimeSpan.MaxValue, cancellationToken);
+                    var data = System.Text.Json.JsonSerializer.Serialize(printers, json.Value.SerializerOptions);
+                    if (data != last)
+                    {
+                        await response.WriteAsync($"event: status\ndata: {data}\n\n", cancellationToken);
+                        last = data;
+                    }
+                }
+                await response.Body.FlushAsync(cancellationToken);
+                var (status, changed) = await listener.WaitAsync(KeepAlive, cancellationToken);
+                if (changed) await response.WriteAsync("event: changed\ndata: {}\n\n", cancellationToken);
+                else if (!status) await response.WriteAsync(": ping\n\n", cancellationToken);
+                sendStatus = status;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Client hat die Verbindung geschlossen
+        }
     }
 }

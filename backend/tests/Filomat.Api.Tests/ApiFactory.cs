@@ -27,6 +27,9 @@ public class ApiFactory : WebApplicationFactory<Program>
     /// <summary>Ersetzt Onkel Bummel; ohne ist kein Ziel für Meldungen eingestellt.</summary>
     public HttpMessageHandler? NotificationHandler { get; init; }
 
+    /// <summary>Takt des Live-Zustands, solange jemand /api/printers/events offen hat.</summary>
+    public TimeSpan LiveInterval { get; init; } = TimeSpan.FromSeconds(5);
+
     /// <summary>Ordner, den sich API und Updater teilen (status.json, request).</summary>
     public string? UpdateDirectory { get; init; }
 
@@ -40,6 +43,8 @@ public class ApiFactory : WebApplicationFactory<Program>
         // Kein Zugriff aufs Internet in Tests
         builder.UseSetting("Filomat:SpoolWeightCatalogUrl", "http://127.0.0.1:9/filaments.json");
         builder.UseSetting("Backup:At", "");
+        builder.UseSetting("Filomat:LiveInterval", LiveInterval.ToString());
+        builder.UseSetting("Filomat:LivePushInterval", "00:00:00.1");
         if (NextcloudHandler is { } nextcloud)
         {
             builder.UseSetting("Backup:WebDavUrl", "https://cloud.test/remote.php/dav/files/marcel/fil-o-mat");

@@ -4,16 +4,22 @@ import { useRoute } from 'vue-router'
 import { useI18n } from 'vue-i18n'
 import { usePrimeVue } from 'primevue/config'
 import { useDataStore } from '@/stores/data'
+import { useLiveStore } from '@/stores/live'
 import { primeLocales } from '@/locales/primevue'
 
 const store = useDataStore()
+const live = useLiveStore()
 const route = useRoute()
 const menuOpen = ref(false)
 const { t, locale } = useI18n()
 
 // Texte in PrimeVue-Komponenten folgen der gewählten Sprache
 const primevue = usePrimeVue()
-watch(locale, (l) => Object.assign(primevue.config.locale!, primeLocales[l as 'de' | 'en']))
+watch(locale, (l) => {
+  Object.assign(primevue.config.locale!, primeLocales[l as 'de' | 'en'])
+  // Hinweise im Druckerzustand kommen übersetzt vom Server
+  live.restart()
+})
 
 const nav = [
   { to: '/drucker', label: 'nav.printers', icon: 'pi pi-print' },
@@ -24,20 +30,26 @@ const nav = [
   { to: '/einstellungen', label: 'nav.settings', icon: 'pi pi-cog' },
 ]
 
-// Wie die Apps: alle zwei Minuten und beim Zurückkommen neu laden
+// Änderungen kommen live vom Server (stores/live.ts). Ohne Verbindung wie die Apps alle zwei Minuten neu laden;
+// beim Zurückkommen immer. Im Hintergrund bleibt die Verbindung zu, damit der Server die Drucker nicht umsonst abfragt.
 let timer: number | undefined
 const onVisible = () => {
-  if (document.visibilityState === 'visible') store.refresh()
+  if (document.visibilityState === 'visible') {
+    store.refresh()
+    live.start()
+  } else live.stop()
 }
 
 onMounted(() => {
   store.refresh()
-  timer = window.setInterval(() => document.visibilityState === 'visible' && store.refresh(), 120_000)
+  live.start()
+  timer = window.setInterval(() => document.visibilityState === 'visible' && !live.connected && store.refresh(), 120_000)
   document.addEventListener('visibilitychange', onVisible)
 })
 
 onUnmounted(() => {
   window.clearInterval(timer)
+  live.stop()
   document.removeEventListener('visibilitychange', onVisible)
 })
 </script>

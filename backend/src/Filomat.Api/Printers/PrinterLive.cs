@@ -79,6 +79,7 @@ public class PrinterLive(
     IEnumerable<IPrinterAdapter> adapters,
     Notifier notifier,
     PrinterReachability reachability,
+    PrinterEvents events,
     ILogger<PrinterLive> logger)
 {
     public IPrinterAdapter AdapterFor(Printer printer) => adapters.FirstOrDefault(a => a.Type == printer.Type)
@@ -104,6 +105,7 @@ public class PrinterLive(
             status = new PrinterStatus(PrintState.Offline, Message: ex.Message);
         }
         var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
+        events.StatusChanged();
         await NotifyAsync(printer, status, previous?.Status, cancellationToken);
         return status;
     }
@@ -113,6 +115,7 @@ public class PrinterLive(
     {
         var status = new PrinterStatus(PrintState.Offline, Message: message);
         var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
+        events.StatusChanged();
         await NotifyAsync(printer, status, previous?.Status, cancellationToken);
     }
 
@@ -127,7 +130,11 @@ public class PrinterLive(
         return result;
     }
 
-    public async Task<PrinterLiveResponse> GetAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default)
+    public async Task<PrinterLiveResponse> GetAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default) =>
+        await BuildAsync(printer, await EnsureFreshAsync(printer, maxAge, cancellationToken), cancellationToken);
+
+    /// <summary>Fragt beim Drucker nach, wenn der gespeicherte Zustand älter als <paramref name="maxAge"/> ist.</summary>
+    public async Task<PrinterStatusCache.Entry?> EnsureFreshAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default)
     {
         var entry = cache.Get(printer.Id);
         // Ein ausgeschalteter Drucker im Backoff wird nicht bei jeder Anfrage der Apps neu angefragt (bis zu 15 s Wartezeit)
@@ -150,7 +157,7 @@ public class PrinterLive(
                 gate.Release();
             }
         }
-        return await BuildAsync(printer, entry, cancellationToken);
+        return entry;
     }
 
     private async Task<PrinterLiveResponse> BuildAsync(Printer printer, PrinterStatusCache.Entry? entry, CancellationToken cancellationToken)

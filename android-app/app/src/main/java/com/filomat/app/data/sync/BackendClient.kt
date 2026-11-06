@@ -1,6 +1,9 @@
 package com.filomat.app.data.sync
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -72,6 +75,59 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
 
     /** Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist. */
     suspend fun printerStatus(): List<PrinterLive> = io { decode(send("GET", "api/printers/status")) }
+
+    /**
+     * Server-Sent Events von `/api/printers/events`: [onEvent] bekommt `status` (Daten wie [printerStatus]) oder
+     * `changed` (Daten neu laden). Kehrt zurück, wenn die Verbindung abreißt; ein Backend ohne den Endpunkt wirft
+     * [BackendException] mit Status 404.
+     */
+    suspend fun printerEvents(onEvent: (name: String, data: String) -> Unit) = coroutineScope {
+        val connection = URL("$baseUrl/api/printers/events").openConnection() as HttpURLConnection
+        // Lesen blockiert; beim Abbrechen der Koroutine die Verbindung schließen, damit es endet
+        val watchdog = launch {
+            try {
+                awaitCancellation()
+            } finally {
+                connection.disconnect()
+            }
+        }
+        try {
+            withContext(Dispatchers.IO) {
+                connection.connectTimeout = 10_000
+                // Der Server schickt spätestens alle 20 s etwas (": ping")
+                connection.readTimeout = 60_000
+                connection.setRequestProperty("Accept", "text/event-stream")
+                if (!apiKey.isNullOrEmpty()) connection.setRequestProperty("X-Api-Key", apiKey)
+                connection.setRequestProperty("Accept-Language", if (I18n.english) "en" else "de")
+                val status = connection.responseCode
+                if (status == 401) throw BackendException(tr("Der Server lehnt den API-Schlüssel ab."), status)
+                if (status !in 200..299) throw BackendException(tr("Der Server antwortet mit Fehler %s.", status), status)
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                    var name = "message"
+                    val data = StringBuilder()
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        when {
+                            line.isEmpty() -> {
+                                if (data.isNotEmpty()) onEvent(name, data.toString())
+                                name = "message"
+                                data.clear()
+                            }
+                            line.startsWith("event:") -> name = line.substring(6).trim()
+                            line.startsWith("data:") -> {
+                                if (data.isNotEmpty()) data.append('\n')
+                                data.append(line.substring(5).removePrefix(" "))
+                            }
+                            // Kommentare (": ping") und retry: nichts zu tun
+                        }
+                    }
+                }
+            }
+        } finally {
+            watchdog.cancel()
+            connection.disconnect()
+        }
+    }
 
     /** Vorschaubild des laufenden Drucks; `null`, wenn der Drucker keins liefert. */
     suspend fun printerThumbnail(id: String): ByteArray? = io {

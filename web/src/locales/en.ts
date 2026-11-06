@@ -103,6 +103,8 @@ const en: typeof de = {
     reported: 'Printer: {type}',
     needs: 'needs {grams}',
     humidityLevel: 'Level {level}/5',
+    live: 'Live',
+    liveHint: 'The state is streamed from the server.',
     lastSync: 'Synced {ago}',
     readerSeen: 'NFC reader {ago}',
     offlineSince: 'Off or not reachable · {ago}',

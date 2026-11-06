@@ -4,33 +4,27 @@ import { useI18n } from 'vue-i18n'
 import { useToast } from 'primevue/usetoast'
 import { api } from '@/api'
 import { useDataStore } from '@/stores/data'
+import { useLiveStore } from '@/stores/live'
 import { displayTitle, formatDateTime, grams, printerPlace } from '@/format'
 import ColorDot from '@/components/ColorDot.vue'
 import InsertSpoolDialog from '@/components/InsertSpoolDialog.vue'
 import PrinterCard from '@/components/PrinterCard.vue'
 import PrinterDialog from '@/components/PrinterDialog.vue'
 import SpoolDialog from '@/components/SpoolDialog.vue'
-import type { Consumption, Printer, PrinterLive, Spool, ToolLive } from '@/types'
+import type { Consumption, Printer, Spool, ToolLive } from '@/types'
 
 const store = useDataStore()
 const toast = useToast()
 const { t } = useI18n()
 
-const live = ref<PrinterLive[]>([])
-const liveById = computed(() => new Map(live.value.map((l) => [l.printerId, l])))
-const loadingLive = ref(false)
+const live = useLiveStore()
+const liveById = computed(() => live.byId)
+const loadingLive = computed(() => live.loading)
 
-// Wie die Apps: alle 15 s, solange die Seite sichtbar ist (das Backend fragt die Drucker höchstens alle 10 s)
+// Live über den Server (stores/live.ts); ohne Verbindung wie die Apps alle 15 s nachfragen, solange die Seite sichtbar ist
 async function loadLive() {
-  if (loadingLive.value || document.visibilityState !== 'visible') return
-  loadingLive.value = true
-  try {
-    live.value = await api.get<PrinterLive[]>('/printers/status')
-  } catch {
-    // Fehler zeigt schon der Hinweis oben
-  } finally {
-    loadingLive.value = false
-  }
+  if (document.visibilityState !== 'visible') return
+  await live.load()
 }
 
 const unassigned = ref<Consumption[]>([])
@@ -46,11 +40,13 @@ let timer: number | undefined
 onMounted(() => {
   loadLive()
   loadUnassigned()
-  timer = window.setInterval(loadLive, 15_000)
+  timer = window.setInterval(() => !live.connected && loadLive(), 15_000)
 })
 onUnmounted(() => window.clearInterval(timer))
-// Spule eingelegt oder umgesteckt: Köpfe und Hinweise gleich neu
-watch(() => store.spools, loadLive)
+// Spule eingelegt oder umgesteckt: Köpfe und Hinweise gleich neu (live schickt der Server sie selbst)
+watch(() => store.spools, () => !live.connected && loadLive())
+// Nach einem Abgleich (neue Drucke) auch den Verbrauch ohne Spule
+watch(() => store.printers, loadUnassigned)
 
 async function reloadAll() {
   await Promise.all([store.refresh(), loadLive(), loadUnassigned()])

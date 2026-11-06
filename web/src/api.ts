@@ -83,3 +83,40 @@ export const api = {
     return response.ok ? response.blob() : null
   },
 }
+
+/** Ereignis aus /api/printers/events. */
+export interface ServerEvent {
+  event: string
+  data: string
+}
+
+/**
+ * Liest Server-Sent Events. EventSource kann keinen API-Schlüssel mitschicken, daher fetch mit gestreamter Antwort.
+ * Endet, wenn der Server die Verbindung schließt oder signal abbricht; wirft bei Fehlern (z. B. 401, Netz weg).
+ */
+export async function readEvents(path: string, onEvent: (event: ServerEvent) => void, signal: AbortSignal): Promise<void> {
+  const response = await fetch(`/api${path}`, { headers: { ...headers(false), Accept: 'text/event-stream' }, signal })
+  if (!response.ok || !response.body) throw new ApiError(await errorMessage(response), response.status)
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader()
+  let buffer = ''
+  let event = 'message'
+  let data: string[] = []
+  for (;;) {
+    const { value, done } = await reader.read()
+    if (done) return
+    buffer += value
+    let newline: number
+    while ((newline = buffer.indexOf('\n')) >= 0) {
+      const line = buffer.slice(0, newline).replace(/\r$/, '')
+      buffer = buffer.slice(newline + 1)
+      if (line === '') {
+        if (data.length) onEvent({ event, data: data.join('\n') })
+        event = 'message'
+        data = []
+      } else if (line.startsWith('event:')) event = line.slice(6).trim()
+      else if (line.startsWith('data:')) data.push(line.slice(5).replace(/^ /, ''))
+      // Kommentare (": ping") und retry: nichts zu tun
+    }
+  }
+}
+
