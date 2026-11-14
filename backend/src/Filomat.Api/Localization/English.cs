@@ -145,6 +145,8 @@ public static class English
         ["GitHub nicht erreichbar, letzte Prüfung {0} ging nicht."] = "GitHub not reachable, the last check at {0} failed.",
         ["GitHub nicht erreichbar."] = "GitHub not reachable.",
         ["Aktualisierung läuft."] = "Update running.",
+        ["Warte auf das fertige Image aus GitHub Actions."] = "Waiting for the finished image from GitHub Actions.",
+        ["Kein fertiges Image, das Backend wird im LXC gebaut."] = "No finished image, the backend is being built in the LXC.",
         ["git merge ging nicht (lokale Änderungen im Checkout?)."] = "git merge failed (local changes in the checkout?).",
         ["Neues Image ließ sich nicht bauen, die bisherige Version läuft weiter."] = "The new image couldn’t be built, the previous version keeps running.",
         ["Das Backend antwortet nach dem Update nicht (docker compose logs)."] = "The backend doesn’t answer after the update (docker compose logs).",
