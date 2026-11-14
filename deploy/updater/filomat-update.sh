@@ -77,6 +77,17 @@ check() {
   write_status "$state" "$message"
 }
 
+# Bei wenig Platz vor dem Bauen den ganzen Build-Cache leeren; der Build lädt dann alles neu, passt aber hinein
+free_space() {
+  local avail
+  avail="$(df --output=avail -k /var/lib/docker 2>/dev/null | tail -1 | tr -d ' ')"
+  if [[ -n "$avail" ]] && (( avail < 3 * 1024 * 1024 )); then
+    log "Nur $((avail / 1024)) MB frei, leere den Docker-Build-Cache"
+    docker builder prune -af >/dev/null || true
+    docker image prune -f >/dev/null || true
+  fi
+}
+
 apply() {
   fetch || { write_status failed "GitHub nicht erreichbar."; return 1; }
   local old
@@ -96,6 +107,7 @@ apply() {
   # systemd-Units können sich mit dem neuen Stand geändert haben
   "$REPO/deploy/updater/install.sh" --units-only || log "Units nicht erneuert"
 
+  free_space
   if ! (cd "$REPO/backend" && docker compose build --quiet); then
     # Das alte Image läuft weiter; den Checkout zurücksetzen, damit Stand und laufende Version passen
     git -C "$REPO" reset --quiet --hard "$old"
@@ -107,6 +119,8 @@ apply() {
   for _ in $(seq 1 60); do
     if curl -fs "http://localhost:$PORT/health" >/dev/null; then
       docker image prune -f >/dev/null || true
+      # Der Build-Cache wächst sonst mit jedem Update, bis die Platte voll ist (alte Basis-Images, npm, NuGet)
+      docker builder prune -af --filter until=168h >/dev/null || true
       write_status idle ""
       log "Fertig"
       return 0
