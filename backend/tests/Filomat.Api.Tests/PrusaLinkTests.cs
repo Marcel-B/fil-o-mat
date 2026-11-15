@@ -23,8 +23,8 @@ public class PrusaLinkTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private static string Job(string state, double progress, string meta) => $$$"""
-        {"id":17,"state":"{{{state}}}","progress":{{{progress}}},"time_printing":1200,
+    private static string Job(string state, double progress, string meta, int? remaining = null) => $$$"""
+        {"id":17,"state":"{{{state}}}","progress":{{{progress}}},"time_printing":1200,{{{(remaining is { } r ? $"\"time_remaining\":{r}," : "")}}}
          "file":{"name":"BOX~1.BGC","display_name":"box_0.4n_0.2mm_PLA_COREONE_1h.bgcode","path":"/usb","m_timestamp":1760000000,
                  "meta":{{{meta}}}}}
         """;
@@ -96,5 +96,72 @@ public class PrusaLinkTests : IDisposable
         var entries = (await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!;
         Assert.Equal([1, 3], entries.Select(e => e.Tool).Order());
         Assert.All(entries, e => Assert.Equal("cancelled", e.Status));
+    }
+
+    [Fact]
+    public async Task BooksAPrintAsCompletedWhenItDisappearsAfterItsRemainingTime()
+    {
+        var printer = await CreatePrinterAsync("Tifa");
+        var (item, _) = await PlaceSpoolAsync("T1", printer.Id, 0);
+
+        // Letzter Abgleich kurz vor Schluss, danach ist der Druck weg (Platte entnommen oder Drucker aus)
+        const string meta = """{"filament used [g]":20.0,"filament used [mm]":6700,"filament_type":"PLA"}""";
+        _printer.Routes["/api/v1/job"] = Job("PRINTING", 97, meta, remaining: 40);
+        await SyncAsync(printer.Id);
+        _printer.Routes["/api/v1/job"] = "";
+        _printer.Routes["/api/v1/status"] = """{"printer":{"state":"IDLE"}}""";
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        var entry = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("completed", entry.Status);
+        Assert.Equal(980, await RemainingAsync(item.Id));
+    }
+
+    [Fact]
+    public async Task BooksAPrintAsCompletedWhenThePrinterStillShowsFinished()
+    {
+        var printer = await CreatePrinterAsync("MK4S");
+        await PlaceSpoolAsync("T2", printer.Id, 0);
+
+        const string meta = """{"filament used [g]":20.0,"filament used [mm]":6700,"filament_type":"PLA"}""";
+        _printer.Routes["/api/v1/job"] = Job("PRINTING", 80, meta, remaining: 1800);
+        await SyncAsync(printer.Id);
+        _printer.Routes["/api/v1/job"] = "";
+        _printer.Routes["/api/v1/status"] = """{"printer":{"state":"FINISHED"}}""";
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        var entry = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("completed", entry.Status);
+    }
+
+    [Fact]
+    public async Task KeepsAPrintCancelledThatDisappearsLongBeforeItsEnd()
+    {
+        var printer = await CreatePrinterAsync("MK4S");
+        await PlaceSpoolAsync("T3", printer.Id, 0);
+
+        const string meta = """{"filament used [g]":20.0,"filament used [mm]":6700,"filament_type":"PLA"}""";
+        _printer.Routes["/api/v1/job"] = Job("PRINTING", 97, meta, remaining: 1800);
+        await SyncAsync(printer.Id);
+        _printer.Routes["/api/v1/job"] = "";
+        _printer.Routes["/api/v1/status"] = """{"printer":{"state":"IDLE"}}""";
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        var entry = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
+        Assert.Equal("cancelled", entry.Status);
+    }
+
+    [Theory]
+    [InlineData(99.6, null, 0, true)]
+    [InlineData(97, 100, 120, true)]
+    [InlineData(97, 600, 120, false)]
+    [InlineData(60, 3 * 3600, 24 * 3600, false)]
+    [InlineData(90, 600, 900, true)]
+    [InlineData(97, null, 3600, false)]
+    public void DecidesFromProgressAndRemainingTime(double progress, int? remaining, int secondsLater, bool finished)
+    {
+        var seen = new DateTime(2026, 11, 15, 12, 0, 0, DateTimeKind.Utc);
+        var job = new PrusaLinkAdapter.TrackedJob("1", "x", progress, null, null, null, null, null, null, remaining, seen);
+        Assert.Equal(finished, PrusaLinkAdapter.LooksFinished(job, seen.AddSeconds(secondsLater)));
     }
 }

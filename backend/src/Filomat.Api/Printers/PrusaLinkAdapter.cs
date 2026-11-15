@@ -28,7 +28,23 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         string? FilamentType,
         IReadOnlyList<double>? GramsPerTool,
         IReadOnlyList<double>? LengthPerTool,
-        double? TimePrinting = null);
+        double? TimePrinting = null,
+        double? TimeRemaining = null,
+        DateTime? SeenAt = null);
+
+    /// <summary>
+    /// Ob ein verschwundener Druck fertig geworden ist. Der Abgleich läuft nur alle paar Minuten, und nach dem Ende
+    /// (Druckplatte entnommen, Drucker ausgeschaltet) meldet PrusaLink oft keinen Druck mehr: der letzte gesehene
+    /// Fortschritt liegt dann knapp unter 100 %. Fertig ist der Druck, wenn die beim letzten Abgleich gemeldete
+    /// Restzeit inzwischen abgelaufen war und nur noch wenig fehlte.
+    /// </summary>
+    public static bool LooksFinished(TrackedJob job, DateTime now)
+    {
+        if (job.Progress >= 99.5) return true;
+        if (job.TimeRemaining is not { } remaining || remaining < 0 || job.SeenAt is not { } seen) return false;
+        var nearlyDone = job.Progress >= 95 || remaining <= TimeSpan.FromMinutes(15).TotalSeconds;
+        return nearlyDone && now >= seen.AddSeconds(remaining) - TimeSpan.FromMinutes(1);
+    }
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
@@ -46,8 +62,19 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
 
         if (job is null)
         {
-            // Kein Druck mehr: der gemerkte ist inzwischen beendet
-            if (tracked is not null) finished.Add(Finish(tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled", tracked.Progress));
+            // Kein Druck mehr: der gemerkte ist inzwischen beendet. Steht der Drucker noch auf „fertig“ oder
+            // „abgebrochen“, gilt das, sonst entscheidet die Restzeit vom letzten Abgleich.
+            if (tracked is not null)
+            {
+                var printerState = await GetPrinterStateAsync(printer, cancellationToken);
+                finished.Add(printerState switch
+                {
+                    "FINISHED" => Finish(tracked, "completed", 100),
+                    "STOPPED" => Finish(tracked, "cancelled", tracked.Progress),
+                    _ when LooksFinished(tracked, DateTime.UtcNow) => Finish(tracked, "completed", 100),
+                    _ => Finish(tracked, "cancelled", tracked.Progress),
+                });
+            }
             printer.AdapterStateJson = null;
             return finished;
         }
@@ -55,7 +82,7 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         var root = job.RootElement;
         var current = await ReadJobAsync(printer, root, tracked, cancellationToken);
         if (tracked is not null && tracked.JobId != current.JobId)
-            finished.Add(Finish(tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled", tracked.Progress));
+            finished.Add(LooksFinished(tracked, DateTime.UtcNow) ? Finish(tracked, "completed", 100) : Finish(tracked, "cancelled", tracked.Progress));
 
         var state = root.GetStringOrNull("state");
         if (state is "FINISHED" or "STOPPED" or "ERROR")
@@ -143,8 +170,16 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         var progress = job.GetDoubleOrNull("progress") ?? 0;
 
         var timePrinting = job.GetDoubleOrNull("time_printing");
+        var timeRemaining = job.GetDoubleOrNull("time_remaining");
+        var seenAt = DateTime.UtcNow;
         if (tracked is not null && tracked.JobId == jobId)
-            return tracked with { Progress = Math.Max(tracked.Progress, progress), TimePrinting = timePrinting ?? tracked.TimePrinting };
+            return tracked with
+            {
+                Progress = Math.Max(tracked.Progress, progress),
+                TimePrinting = timePrinting ?? tracked.TimePrinting,
+                TimeRemaining = timeRemaining,
+                SeenAt = seenAt,
+            };
 
         // Slicer-Angaben stehen je nach Firmware direkt im Job oder nur bei der Datei
         file.TryGetProperty("meta", out var meta);
@@ -163,7 +198,9 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             meta.GetStringOrNull("filament_type"),
             PerTool(meta, "filament used [g] per tool"),
             PerTool(meta, "filament used [mm] per tool"),
-            timePrinting);
+            timePrinting,
+            timeRemaining,
+            seenAt);
     }
 
     private static PrintJob Finish(TrackedJob job, string status, double progress)
@@ -204,6 +241,20 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             return JsonSerializer.Deserialize<TrackedJob>(printer.AdapterStateJson);
         }
         catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Zustand aus <c>/api/v1/status</c> (z. B. FINISHED, STOPPED, IDLE) oder <c>null</c>.</summary>
+    private async Task<string?> GetPrinterStateAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var status = await GetJsonAsync(printer, "api/v1/status", cancellationToken);
+            return status is not null && status.RootElement.TryGetProperty("printer", out var state) ? state.GetStringOrNull("state") : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException && !cancellationToken.IsCancellationRequested)
         {
             return null;
         }
