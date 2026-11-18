@@ -23,8 +23,8 @@ public class PrusaLinkTests : IDisposable
 
     public void Dispose() => _factory.Dispose();
 
-    private static string Job(string state, double progress, string meta, int? remaining = null) => $$$"""
-        {"id":17,"state":"{{{state}}}","progress":{{{progress}}},"time_printing":1200,{{{(remaining is { } r ? $"\"time_remaining\":{r}," : "")}}}
+    private static string Job(string state, double progress, string meta, int? remaining = null, int printing = 1200) => $$$"""
+        {"id":17,"state":"{{{state}}}","progress":{{{progress}}},"time_printing":{{{printing}}},{{{(remaining is { } r ? $"\"time_remaining\":{r}," : "")}}}
          "file":{"name":"BOX~1.BGC","display_name":"box_0.4n_0.2mm_PLA_COREONE_1h.bgcode","path":"/usb","m_timestamp":1760000000,
                  "meta":{{{meta}}}}}
         """;
@@ -259,5 +259,39 @@ public class PrusaLinkTests : IDisposable
         var seen = new DateTime(2026, 11, 15, 12, 0, 0, DateTimeKind.Utc);
         var job = new PrusaLinkAdapter.TrackedJob("1", "x", progress, null, null, null, null, null, null, remaining, seen);
         Assert.Equal(finished, PrusaLinkAdapter.LooksFinished(job, seen.AddSeconds(secondsLater)));
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task BooksAReprintWithTheSameJobIdAsANewPrint(bool rebootInBetween)
+    {
+        // Mini: Druck abgebrochen, dieselbe Datei noch einmal gedruckt; nach einem Neustart beginnt die Job-ID wieder
+        // bei derselben Zahl. Der zweite, fertige Druck darf nicht als der alte, abgebrochene durchgehen.
+        var printer = await CreatePrinterAsync("Vincent");
+        var (item, _) = await PlaceSpoolAsync("V1", printer.Id, 0);
+
+        const string meta = """{"filament used [g]":20.0,"filament used [mm]":6700,"filament_type":"PLA"}""";
+        _printer.Routes["/api/v1/job"] = Job("PRINTING", 30, meta, printing: 600);
+        await SyncAsync(printer.Id);
+        _printer.Routes["/api/v1/job"] = Job("STOPPED", 30, meta, printing: 600);
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+        // Der abgebrochene Druck bleibt angezeigt, bis der nächste anfängt
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        if (rebootInBetween)
+        {
+            _printer.Routes["/api/v1/job"] = "";
+            Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        }
+
+        _printer.Routes["/api/v1/job"] = Job("PRINTING", 10, meta, printing: 120);
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+        _printer.Routes["/api/v1/job"] = Job("FINISHED", 100, meta, printing: 2400);
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+
+        var entries = (await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!;
+        Assert.Equal(["cancelled", "completed"], entries.Select(e => e.Status).Order());
+        Assert.Equal(1000 - 6 - 20, await RemainingAsync(item.Id));
     }
 }
