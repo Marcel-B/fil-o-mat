@@ -9,6 +9,7 @@ import com.filomat.app.data.PlaceTarget
 import com.filomat.app.ui.screens.BackendScreen
 import com.filomat.app.ui.screens.ContainerScanScreen
 import com.filomat.app.ui.screens.PlaceFlowScreen
+import com.filomat.app.ui.screens.SpoolsScreen
 import com.filomat.app.ui.screens.StockScreen
 import com.filomat.app.ui.screens.TransmissionScreen
 import com.filomat.app.ui.screens.ContainerDetailScreen
@@ -59,6 +60,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
         composable("items") {
             ItemsOverviewScreen(navController = navController)
+        }
+        composable("spools") {
+            SpoolsScreen(navController = navController)
         }
         composable("item/{itemId}") { backStackEntry ->
             ItemDetailScreen(

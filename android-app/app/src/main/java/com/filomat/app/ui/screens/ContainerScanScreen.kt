@@ -1,5 +1,6 @@
 package com.filomat.app.ui.screens
 
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.material.icons.Icons
@@ -84,12 +85,14 @@ fun ContainerScanScreen(navController: NavController) {
 }
 
 @Composable
-fun PrinterContent(printer: Printer, state: StoreState) {
+fun PrinterContent(printer: Printer, state: StoreState, onSpoolClick: ((Spool) -> Unit)? = null) {
     SectionCard(tr("Drucker %s", printer.name)) {
         for (tool in 0 until printer.toolCount) {
             val label = if (printer.toolCount > 1) printer.placeName(tool) else tr("Eingelegt")
             val spool = state.spoolIn(printer.id, tool)
-            InfoRow(label, spool?.let { spoolName(it, state) + (it.remainingWeight?.let { g -> " · " + GramText.label(g) } ?: "") } ?: tr("frei"))
+            SpoolInfoRow(spool, onSpoolClick) {
+                InfoRow(label, spool?.let { spoolName(it, state) + (it.remainingWeight?.let { g -> " · " + GramText.label(g) } ?: "") } ?: tr("frei"))
+            }
         }
     }
 }
@@ -114,11 +117,23 @@ private fun ContainerContent(container: Container, state: StoreState, onOpen: ()
 
 /** Spulen, die in einem Container liegen. */
 @Composable
-fun OpenedSpoolsCard(spools: List<Spool>, state: StoreState) {
+fun OpenedSpoolsCard(spools: List<Spool>, state: StoreState, onSpoolClick: ((Spool) -> Unit)? = null) {
     SectionCard(tr("Spulen (%s)", spools.size)) {
         spools.forEach { spool ->
-            InfoRow(spoolName(spool, state), spool.remainingWeight?.let(GramText::label) ?: tr("Rest unbekannt"))
+            SpoolInfoRow(spool, onSpoolClick) {
+                InfoRow(spoolName(spool, state), spool.remainingWeight?.let(GramText::label) ?: tr("Rest unbekannt"))
+            }
         }
+    }
+}
+
+/** Zeile, die mit [onClick] die Spule öffnet; ohne Spule oder Aktion nur Anzeige. */
+@Composable
+private fun SpoolInfoRow(spool: Spool?, onClick: ((Spool) -> Unit)?, content: @Composable () -> Unit) {
+    if (spool != null && onClick != null) {
+        Box(Modifier.fillMaxWidth().clickable { onClick(spool) }.padding(vertical = 4.dp)) { content() }
+    } else {
+        content()
     }
 }
 

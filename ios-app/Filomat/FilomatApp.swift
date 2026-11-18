@@ -37,8 +37,11 @@ struct ContentView: View {
                 .tabItem { Label("Container", systemImage: "archivebox") }
             NavigationStack { ScanView() }
                 .tabItem { Label("Scannen", systemImage: "wave.3.right") }
+            // Sorten und Spulen getrennt, wie in der Web-Oberfläche
             NavigationStack { ItemsOverviewView() }
-                .tabItem { Label("Filamente", systemImage: "magnifyingglass") }
+                .tabItem { Label("Filamente", systemImage: "paintpalette") }
+            NavigationStack { SpoolsView() }
+                .tabItem { Label("Spulen", systemImage: "circle.circle") }
             NavigationStack { PrintersView() }
                 .tabItem { Label("Drucker", systemImage: "printer") }
         }

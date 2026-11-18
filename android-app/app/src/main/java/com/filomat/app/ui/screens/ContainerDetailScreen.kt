@@ -38,6 +38,7 @@ fun ContainerDetailScreen(
     val storeState by containerStore.state.collectAsState(initial = com.filomat.app.data.sync.StoreState())
     var showingEditContainer by remember { mutableStateOf(false) }
     var showingDeleteDialog by remember { mutableStateOf(false) }
+    var spoolToEdit by remember { mutableStateOf<com.filomat.app.data.sync.Spool?>(null) }
     
     LaunchedEffect(containerId) {
         containerStore.containers.collect { containerList ->
@@ -122,12 +123,12 @@ fun ContainerDetailScreen(
                 // Der Container eines Druckers: was in seinen Köpfen oder Slots steckt
                 val printer = storeState.printerOwning(cont.id)
                 if (printer != null) {
-                    item { PrinterContent(printer, storeState) }
+                    item { PrinterContent(printer, storeState) { spoolToEdit = it } }
                 }
                 // Sorten stehen unter "Filamente"; ein Container kennt nur die Spulen, die darin liegen
                 val spools = storeState.spoolsIn(cont.id)
                 if (spools.isNotEmpty()) {
-                    item { OpenedSpoolsCard(spools, storeState) }
+                    item { OpenedSpoolsCard(spools, storeState) { spoolToEdit = it } }
                 } else if (printer == null) {
                     item {
                         Text(
@@ -149,6 +150,20 @@ fun ContainerDetailScreen(
             }
         }
         
+        spoolToEdit?.let { spool ->
+            SpoolEditDialog(
+                spool = spool,
+                emptySpoolWeight = storeState.item(spool.itemId)?.spoolWeight,
+                state = storeState,
+                store = containerStore,
+                onDismiss = { spoolToEdit = null },
+                onOpenItem = { item ->
+                    spoolToEdit = null
+                    navController.navigate("item/${item.id}")
+                }
+            )
+        }
+
         if (showingEditContainer && container != null) {
             EditContainerDialog(
                 container = container!!,
