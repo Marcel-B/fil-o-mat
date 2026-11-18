@@ -50,7 +50,7 @@ Die Texte stehen auf Deutsch im Code und in `Filomat/Localizable.xcstrings` mit 
 - **Filament-Tag lesen**: listet alles auf, was auf einem Tag steht (UID, Chip-Typ, Speicher, alle NDEF-Records, jedes Feld des OpenSpool-JSON, auch unbekannte wie `subtype` vom U1) und was Fil-o-mat zu der Sorte bzw. dem Container weiß.
 - **Unformatierte Tags**: iOS kann Tags nicht NDEF-formatieren. NTAG213/215/216 sind ab Werk formatiert und funktionieren direkt.
 - **Schutz vor Verwechslungen**: Ein Tag, das schon zu einem Container oder Filament gehört, wird nicht versehentlich überschrieben.
-- **Filament-Übersicht** zeigt alle Filamente, auch herausgenommene ohne Container.
+- **Filamente und Spulen getrennt** (wie in der Web-Oberfläche): Der Tab „Filamente“ zeigt die Sorten mit Vorrat und Gesamtgewicht, der Tab „Spulen“ jede angebrochene Spule mit Restgewicht und Platz (Filter: alle, im Drucker, im Lager). Ein Tipp öffnet die Spule zum Wiegen, Umstecken oder Leermelden, von dort geht es weiter zur Sorte.
 - **Datenhaltung**: JSON-Datei im App-Container (Application Support). Die Daten werden nicht zwischen Android und iOS synchronisiert; die Tags selbst sind aber kompatibel (gleiche UID-Kennung, gleiches OpenSpool-JSON).
 
 ## Projektstruktur

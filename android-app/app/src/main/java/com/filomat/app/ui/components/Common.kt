@@ -38,10 +38,11 @@ import com.filomat.app.nfc.NFCReader
 import com.filomat.app.nfc.ScannedTag
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -63,7 +64,9 @@ import com.filomat.app.i18n.tr
 enum class MainTab(val route: String, val label: String, val icon: ImageVector) {
     CONTAINERS("containers", tr("Container"), Icons.Default.Archive),
     SCAN("scan", tr("Scannen"), Icons.Default.QrCodeScanner),
-    ITEMS("items", tr("Filamente"), Icons.Default.Search),
+    // Sorten und Spulen getrennt, wie in der Web-Oberfläche
+    ITEMS("items", tr("Filamente"), Icons.Default.Palette),
+    SPOOLS("spools", tr("Spulen"), Icons.Default.Album),
     PRINTERS("printers", tr("Drucker"), Icons.Default.Print)
 }
 

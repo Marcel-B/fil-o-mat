@@ -24,7 +24,6 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import android.graphics.Color as AndroidColor
-import com.filomat.app.data.Container
 import com.filomat.app.data.ContainerStore
 import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
@@ -41,7 +40,6 @@ fun ItemsOverviewScreen(
     val context = LocalContext.current
     val containerStore = remember { ContainerStore.get(context) }
     var allItems by remember { mutableStateOf<List<Item>>(emptyList()) }
-    var allContainers by remember { mutableStateOf<List<Container>>(emptyList()) }
     var searchQuery by remember { mutableStateOf("") }
     var itemToDelete by remember { mutableStateOf<Item?>(null) }
     var showingDeleteDialog by remember { mutableStateOf(false) }
@@ -53,7 +51,6 @@ fun ItemsOverviewScreen(
 
     LaunchedEffect(Unit) {
         containerStore.state.collect { state ->
-            allContainers = state.containers
             allItems = state.items
             allSpools = state.spools
         }
@@ -143,7 +140,6 @@ fun ItemsOverviewScreen(
                         items(items) { item ->
                             ItemOverviewCard(
                                 item = item,
-                                containers = allContainers,
                                 spools = allSpools.filter { it.itemId == item.id }.sortedBy { it.number },
                                 isPossibleDuplicate = item.duplicateKey()?.let { key -> allItems.any { it.id != item.id && it.duplicateKey() == key } } == true,
                                 onOpen = { navController.navigate("item/${item.id}") },
@@ -220,6 +216,14 @@ fun ItemsOverviewScreen(
     }
 }
 
+/** Restgewicht der angebrochenen Spulen plus volle Spulen im Vorrat; ungewogene zählen als voll. */
+private fun totalGrams(item: Item, spools: List<Spool>): Double? {
+    val stock = item.spoolsInStock ?: 0
+    if (spools.isEmpty() && stock == 0) return null
+    val total = spools.sumOf { it.remainingWeight ?: item.netWeight ?: 0.0 } + stock * (item.netWeight ?: 0.0)
+    return total.takeIf { it > 0 }
+}
+
 @Composable
 private fun OverviewField(label: String, value: String) {
     Row(horizontalArrangement = Arrangement.spacedBy(4.dp)) {
@@ -232,19 +236,12 @@ private fun OverviewField(label: String, value: String) {
 @Composable
 fun ItemOverviewCard(
     item: Item,
-    containers: List<Container>,
     spools: List<Spool> = emptyList(),
     isPossibleDuplicate: Boolean = false,
     onOpen: () -> Unit = {},
     onDelete: () -> Unit,
     onEdit: () -> Unit
 ) {
-    // Finde Container-Name für dieses Item
-    val containerName = remember(item.containerId, containers) {
-        item.containerId?.let { containerId ->
-            containers.firstOrNull { it.id == containerId }?.name
-        } ?: "Lose"
-    }
     Card(
         onClick = onOpen,
         modifier = Modifier.fillMaxWidth(),
@@ -445,22 +442,7 @@ fun ItemOverviewCard(
                             }
                         }
                         
-                        // Container
-                        Row(
-                            horizontalArrangement = Arrangement.spacedBy(4.dp),
-                            verticalAlignment = Alignment.CenterVertically
-                        ) {
-                            Text(
-                                text = tr("Container:"),
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
-                            Text(
-                                text = containerName,
-                                style = MaterialTheme.typography.bodySmall
-                            )
-                        }
-
+                        // Wo die Spulen liegen, steht unter "Spulen"; hier nur, was es von der Sorte gibt
                         if (spools.isNotEmpty()) {
                             OverviewField(tr("Angebrochen:"), spools.joinToString(", ") { spool ->
                                 spool.remainingWeight?.let { "#${spool.number} ${GramText.label(it)}" } ?: "#${spool.number}"
@@ -469,6 +451,7 @@ fun ItemOverviewCard(
                         item.spoolsInStock?.takeIf { it > 0 }?.let { stock ->
                             OverviewField(tr("Vorrat:"), if (stock == 1) tr("1 Spule") else tr("%s Spulen", stock))
                         }
+                        totalGrams(item, spools)?.let { OverviewField(tr("Gesamt:"), GramText.label(it)) }
                         item.transmissionText()?.let { OverviewField(tr("TD:"), it) }
                         if (isPossibleDuplicate) {
                             Text(tr("⚠ Möglicherweise doppelt"), style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.error)
