@@ -34,6 +34,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
     /// <param name="ProgressPerTray">Fortschritt in Prozentpunkten pro <c>tray_now</c>.</param>
     /// <param name="RemainAtStart">AMS-Restmenge pro Fach beim ersten Blick auf den Druck.</param>
     /// <param name="Filaments">Slicer-Angaben aus der Druckdatei, falls gefunden.</param>
+    /// <param name="RemainingSeconds">Restzeit beim letzten Abgleich, an dem der Druck lief.</param>
+    /// <param name="SeenAt">Zeit dieses Abgleichs.</param>
     public record TrackedJob(
         string JobId,
         string Key,
@@ -46,7 +48,9 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
         Dictionary<int, double> RemainAtStart,
         IReadOnlyList<SlicedFilament>? Filaments,
         int FileAttempts,
-        DateTime? StartedAt = null);
+        DateTime? StartedAt = null,
+        int? RemainingSeconds = null,
+        DateTime? SeenAt = null);
 
     /// <summary>AMS-Einheiten, Fächer (Schlüssel wie <c>tray_now</c>) und das fördernde Fach.</summary>
     public record AmsState(int Units, Dictionary<int, Tray> Trays, int? Now);
@@ -171,11 +175,14 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
 
         // Ein anderer Druck: der gemerkte ist vorbei, ohne dass ein Abgleich sein Ende sah. Ein fallender Fortschritt
         // zählt nur bei einem laufenden Druck; nach FINISH meldet der P1S den Fortschritt nicht immer mit.
-        if (tracked is not null && (named && tracked.Key != key
+        // FINISH und FAILED gelten dem gemerkten Druck, auch wenn Datei oder Name jetzt anders lauten: ein neuer Druck
+        // braucht allein zum Vorbereiten länger als zwei Abgleiche und wäre als laufend aufgefallen.
+        var ended = state is "FINISH" or "FAILED";
+        if (tracked is not null && (named && tracked.Key != key && !ended
                                     || taskId is not null && tracked.TaskId is not null && taskId != tracked.TaskId
                                     || running && reported is { } percent && percent + 10 < tracked.Progress))
         {
-            finished.Add(Finish(printer, tracked, Ended(tracked)));
+            finished.Add(Finish(printer, tracked, Ended(tracked, DateTime.UtcNow)));
             tracked = null;
         }
 
@@ -184,6 +191,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
             case "PREPARE" or "SLICING" or "RUNNING" or "PAUSE":
                 tracked ??= new TrackedJob(taskId ?? $"local-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..29], key, taskId, name, 0, null, [], [], [], null, 0, DateTime.UtcNow);
                 tracked = Advance(tracked, progress, taskId, ams);
+                if (print.GetDoubleOrNull("mc_remaining_time") is { } minutes)
+                    tracked = tracked with { RemainingSeconds = (int)(minutes * 60), SeenAt = DateTime.UtcNow };
                 if (tracked.Filaments is null && tracked.FileAttempts < FileAttempts)
                     tracked = await LoadFileAsync(printer, accessCode, print, tracked, cancellationToken);
                 printer.AdapterStateJson = JsonSerializer.Serialize(tracked);
@@ -201,7 +210,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
 
             // FINISH und FAILED bleiben stehen, bis der nächste Druck beginnt; ohne gemerkten Druck ist er schon gebucht
             default:
-                if (tracked is not null) finished.Add(Finish(printer, tracked, Ended(tracked)));
+                if (tracked is not null) finished.Add(Finish(printer, tracked, Ended(tracked, DateTime.UtcNow)));
                 break;
         }
         printer.AdapterStateJson = null;
@@ -381,8 +390,17 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLive
 
     private static bool SameType(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Ein Druck, der ohne Abschlussmeldung verschwindet: fertig, wenn er fast durch war.</summary>
-    private static string Ended(TrackedJob job) => job.Progress >= 99 ? "completed" : "cancelled";
+    /// <summary>
+    /// Ein Druck, der ohne Abschlussmeldung verschwindet (Drucker nach dem Druck ausgeschaltet oder neu gestartet, dann
+    /// meldet er IDLE): fertig, wenn er fast durch war oder seine Restzeit beim letzten Abgleich inzwischen abgelaufen ist.
+    /// </summary>
+    internal static string Ended(TrackedJob job, DateTime now)
+    {
+        if (job.Progress >= 99) return "completed";
+        if (job is not { RemainingSeconds: { } remaining, SeenAt: { } seen }) return "cancelled";
+        var nearlyDone = job.Progress >= 90 || remaining <= TimeSpan.FromMinutes(15).TotalSeconds;
+        return nearlyDone && now >= seen.AddSeconds(remaining) - TimeSpan.FromMinutes(1) ? "completed" : "cancelled";
+    }
 
     /// <summary>Fächer aus <c>ams.ams[].tray[]</c> und <c>vt_tray</c>; Schlüssel wie <c>tray_now</c>.</summary>
     public static AmsState ReadAms(JsonElement print)
