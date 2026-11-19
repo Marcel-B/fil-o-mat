@@ -73,8 +73,8 @@ public class FakeBambu : IBambuLan
          "ams_exist_bits":"1","tray_exist_bits":"7","tray_now":"{{trayNow}}","tray_pre":"0","tray_tar":"0","version":4}
         """;
 
-    public static string Report(string state, double percent, int trayNow = 255, string name = "benchy", string taskId = "0", string? ams = null) => $$"""
-        {"gcode_state":"{{state}}","mc_percent":{{percent}},"mc_remaining_time":12,"subtask_name":"{{name}}",
+    public static string Report(string state, double percent, int trayNow = 255, string name = "benchy", string taskId = "0", string? ams = null, int remaining = 12) => $$"""
+        {"gcode_state":"{{state}}","mc_percent":{{percent}},"mc_remaining_time":{{remaining}},"subtask_name":"{{name}}",
          "gcode_file":"{{name}}.gcode.3mf","task_id":"{{taskId}}","subtask_id":"0","layer_num":3,"total_layer_num":50,
          "ams":{{ams ?? Ams(trayNow)}},
          "vt_tray":{"id":"254","tray_type":"PETG","tray_color":"00FF00FF","remain":0,"tray_weight":"0"},
@@ -265,6 +265,55 @@ public class BambuTests : IDisposable
 
         Assert.Equal("completed", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
         Assert.Equal(1000 - 30, await RemainingAsync(black.Id), 2);
+    }
+
+    /// <summary>Barret: fertiger Druck als abgebrochen, weil die FINISH-Meldung eine andere Datei nannte als der laufende Druck.</summary>
+    [Fact]
+    public async Task BooksAFinishedPrintAsCompletedWhenTheFinishReportNamesAnotherFile()
+    {
+        _printer.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 30, 10)));
+        var printer = await CreatePrinterAsync();
+        var black = await PlaceSpoolAsync("B", printer.Id, 1);
+
+        _printer.Print = FakeBambu.Report("RUNNING", 94, trayNow: 1, name: "barett");
+        await SyncAsync(printer.Id);
+        _printer.Print = FakeBambu.Report("FINISH", 100, name: "barett_plate_1");
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+        Assert.Equal(0, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal("completed", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
+        Assert.Equal(1000 - 30, await RemainingAsync(black.Id), 2);
+    }
+
+    /// <summary>Nach dem Druck ausgeschaltet: ohne FINISH zählt, ob die Restzeit vom letzten Abgleich abgelaufen ist.</summary>
+    [Fact]
+    public async Task BooksAPrintAsCompletedWhenThePrinterRestartedAfterItsRemainingTime()
+    {
+        _printer.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 30, 10)));
+        var printer = await CreatePrinterAsync();
+        await PlaceSpoolAsync("B", printer.Id, 1);
+
+        _printer.Print = FakeBambu.Report("RUNNING", 97, trayNow: 1, remaining: 0);
+        await SyncAsync(printer.Id);
+        _printer.Print = FakeBambu.Report("IDLE", 0, name: "");
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal("completed", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
+    }
+
+    [Fact]
+    public async Task BooksAPrintAsCancelledWhenItVanishesLongBeforeItsEnd()
+    {
+        _printer.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 30, 10)));
+        var printer = await CreatePrinterAsync();
+        await PlaceSpoolAsync("B", printer.Id, 1);
+
+        _printer.Print = FakeBambu.Report("RUNNING", 60, trayNow: 1, remaining: 40);
+        await SyncAsync(printer.Id);
+        _printer.Print = FakeBambu.Report("IDLE", 0, name: "");
+        Assert.Equal(1, (await SyncAsync(printer.Id)).Recorded);
+
+        Assert.Equal("cancelled", Assert.Single(await ConsumptionAsync(printer.Id)).Status);
     }
 
     [Fact]
