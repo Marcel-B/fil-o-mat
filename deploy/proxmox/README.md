@@ -17,7 +17,7 @@ Einstellungen über Umgebungsvariablen:
 | `TEMPLATE_STORAGE` | `local` | Speicher für die Debian-Vorlage |
 | `BRIDGE` | `vmbr0` | Netzwerk-Bridge |
 | `IP` / `GATEWAY` | `dhcp` | z. B. `IP=192.168.1.50/24 GATEWAY=192.168.1.1` |
-| `DISK_GB` / `MEMORY_MB` / `CORES` | `8` / `1024` / `2` | Ressourcen |
+| `DISK_GB` / `MEMORY_MB` / `CORES` | `16` / `1024` / `2` | Ressourcen |
 | `BRANCH` | `main` | Branch, der gebaut wird |
 | `GITHUB_TOKEN` | – | nur bei privatem Repository (Token mit Lesezugriff) |
 | `FILOMAT_API_KEY` | – | optionaler API-Schlüssel für die Apps |
@@ -44,7 +44,9 @@ Die Drucker im LAN erreicht das Backend weiter direkt über `eth0`: Tailscale wi
 
 ## Aktualisieren
 
-Im LXC prüft ein systemd-Timer alle 15 Minuten, ob es auf dem gebauten Branch neue Commits gibt. Die iOS-App zeigt sie unter **Backend** an; nach der Bestätigung holt der Updater die Commits, baut das Image neu und startet das Backend neu. Lässt sich das neue Image nicht bauen, läuft die bisherige Version weiter.
+Im LXC prüft ein systemd-Timer alle 15 Minuten, ob es auf dem gebauten Branch neue Commits gibt. Die iOS-App zeigt sie unter **Backend** an; nach der Bestätigung holt der Updater die Commits und das fertige Image aus GitHub Actions (`ghcr.io/marcel-b/fil-o-mat-backend:sha-<Commit>`, amd64 und arm64) und startet das Backend neu. Läuft der Workflow noch, wartet er bis zu 10 Minuten; gibt es danach kein Image, baut der LXC es selbst wie früher. Lässt sich das neue Image weder holen noch bauen, läuft die bisherige Version weiter. Nach jedem Update räumt der Updater alte Images und Build-Cache weg, der älter als eine Woche ist; sind vor dem Bauen weniger als 3 GB frei, leert er den Build-Cache ganz.
+
+Damit der LXC das Image ohne Anmeldung holen kann, muss das Paket einmal öffentlich sein: GitHub → Profil → Packages → `fil-o-mat-backend` → Package settings → Change visibility → Public. Von Hand geht das mit `docker builder prune -af`, mehr Platz bekommt ein bestehender LXC mit `pct resize <CTID> rootfs +8G`.
 
 Ein LXC, der vor dem Updater angelegt wurde, bekommt ihn so:
 
