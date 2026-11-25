@@ -2,7 +2,7 @@
 
 Der Workflow [`.gitea/workflows/ios-testflight.yml`](../.gitea/workflows/ios-testflight.yml) läuft in Gitea auf unseren eigenen Mac-Runnern (Label `macos`: Mac mini und oi-o-mat, ein Xcode, kein sudo) und baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
 
-Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht nur ad hoc signiert (damit die NFC-Entitlements drinstecken), beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
+Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht nur ad hoc signiert (damit die NFC-Entitlements drinstecken; fürs iPhone seit Xcode 27 unsigniert gebaut und danach ad hoc mit `Filomat.entitlements` signiert), beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
 
 Build-Nummer: 2000 + Laufnummer des Workflows in Gitea (unter GitHub Actions waren es 1000 + Laufnummer bis 1018; von Hand in Xcode archivierte Builds bleiben darunter). Die Version (`MARKETING_VERSION`, derzeit 1.0) steht im Xcode-Projekt.
 

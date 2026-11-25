@@ -90,15 +90,25 @@ jobs:
 
       # Ad hoc signiert, damit nicht jeder Runner ein eigenes Development-Zertifikat anlegt. Ganz unsigniert
       # (CODE_SIGNING_ALLOWED=NO) fehlen dem Archiv die Entitlements, und der Export lässt dann NFC weg.
+      # Xcode 27 verlangt fürs iOS-Archiv mit NFC-Berechtigung auch ad hoc ein Profil ("requires a provisioning
+      # profile"); dort entsteht das Archiv deshalb unsigniert und die App wird danach ad hoc mit Filomat.entitlements
+      # signiert. Für den Mac geht es wie bisher in einem Schritt.
       - name: Archiv bauen
         if: steps.secrets.outputs.ok == 'true'
         run: |
+          if [[ "${{ matrix.platform }}" == ios ]]; then
+            signing=(CODE_SIGNING_ALLOWED=NO)
+          else
+            signing=(CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER=)
+          fi
           xcodebuild archive -project Filomat.xcodeproj -scheme Filomat -configuration Release \
             -destination '${{ matrix.destination }}' -archivePath "$RUNNER_TEMP/Filomat.xcarchive" \
-            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=- \
-            AD_HOC_CODE_SIGNING_ALLOWED=YES PROVISIONING_PROFILE_SPECIFIER= \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" "${signing[@]}" \
             CURRENT_PROJECT_VERSION="$BUILD_NUMBER" \
             > "$RUNNER_TEMP/archive.log" 2>&1 || { grep -E "error:" "$RUNNER_TEMP/archive.log" | sort -u | head -50; tail -100 "$RUNNER_TEMP/archive.log"; exit 1; }
+          if [[ "${{ matrix.platform }}" == ios ]]; then
+            codesign -f -s - --entitlements Filomat/Filomat.entitlements "$RUNNER_TEMP"/Filomat.xcarchive/Products/Applications/*.app
+          fi
           grep -E "ARCHIVE SUCCEEDED" "$RUNNER_TEMP/archive.log"
           codesign -d --entitlements - --xml "$RUNNER_TEMP"/Filomat.xcarchive/Products/Applications/*.app | plutil -p - || true
 
