@@ -46,11 +46,24 @@ jobs:
 
       - name: Unit-Tests im Simulator
         run: |
-          DEVICE=$(xcrun simctl list devices available -j | python3 -c "import json,sys; d=json.load(sys.stdin)['devices']; print(next(x['name'] for k,v in d.items() if 'iOS' in k for x in v if x['name'].startswith('iPhone')))")
+          # Ein iPhone der neuesten iOS-Laufzeit, über seine ID: auf dem Mac-Runner gibt es mehrere Laufzeiten mit
+          # gleichnamigen Geräten, und der Name allein meint die neueste
+          DEVICE=$(xcrun simctl list devices available -j | python3 -c "
+          import json, re, sys
+          d = json.load(sys.stdin)['devices']
+          # Nur die normalen Laufzeiten (iOS-27-2), nicht die eigener Geräte (iOS-27-2-iPhone19-4)
+          ver = lambda k: [int(n) for n in k.split('iOS-')[-1].split('-')]
+          for k in sorted((k for k in d if re.search(r'\.iOS-\d+(-\d+)*$', k)), key=ver, reverse=True):
+              phones = [x for x in d[k] if x['name'].startswith('iPhone')]
+              if phones:
+                  print(phones[0]['udid'], phones[0]['name'], k.split('.')[-1], file=sys.stderr)
+                  print(phones[0]['udid'])
+                  break
+          ")
           echo "Simulator: $DEVICE"
           xcodebuild test \
             -project Filomat.xcodeproj \
             -scheme Filomat \
-            -destination "platform=iOS Simulator,name=$DEVICE" \
+            -destination "platform=iOS Simulator,id=$DEVICE" \
             -testLanguage de -testRegion DE \
             CODE_SIGNING_ALLOWED=NO

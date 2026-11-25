@@ -23,6 +23,11 @@ jobs:
         working-directory: backend
     steps:
       - uses: actions/checkout@v4
+      # Das Runner-Image hat anders als das von GitHub kein ICU; ohne bricht dotnet sofort ab
+      - name: ICU installieren
+        run: |
+          command -v sudo >/dev/null && SUDO=sudo || SUDO=
+          $SUDO apt-get update -qq && $SUDO apt-get install -y -qq libicu-dev >/dev/null
       - uses: actions/setup-dotnet@v4
         with:
           dotnet-version: "10.0.x"

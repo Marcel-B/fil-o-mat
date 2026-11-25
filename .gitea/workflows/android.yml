@@ -24,7 +24,11 @@ jobs:
           distribution: temurin
           java-version: "17"
       # Das Runner-Image hat anders als das von GitHub kein Android-SDK
+      # Nur platform-tools: das Paket "tools" (Standard der Action) gibt es mit cmdline-tools 16 nicht mehr,
+      # Plattform und Build-Tools lädt Gradle selbst
       - uses: android-actions/setup-android@v3
+        with:
+          packages: platform-tools
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"
