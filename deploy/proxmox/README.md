@@ -46,7 +46,14 @@ Die Drucker im LAN erreicht das Backend weiter direkt über `eth0`: Tailscale wi
 
 Im LXC prüft ein systemd-Timer alle 15 Minuten, ob es auf dem gebauten Branch neue Commits gibt. Die iOS-App zeigt sie unter **Backend** an; nach der Bestätigung holt der Updater die Commits und das fertige Image aus GitHub Actions (`ghcr.io/marcel-b/fil-o-mat-backend:sha-<Commit>`, amd64 und arm64) und startet das Backend neu. Läuft der Workflow noch, wartet er bis zu 10 Minuten; gibt es danach kein Image, baut der LXC es selbst wie früher. Lässt sich das neue Image weder holen noch bauen, läuft die bisherige Version weiter. Nach jedem Update räumt der Updater alte Images und Build-Cache weg, der älter als eine Woche ist; sind vor dem Bauen weniger als 3 GB frei, leert er den Build-Cache ganz.
 
-Damit der LXC das Image ohne Anmeldung holen kann, muss das Paket einmal öffentlich sein: GitHub → Profil → Packages → `fil-o-mat-backend` → Package settings → Change visibility → Public. Von Hand geht das mit `docker builder prune -af`, mehr Platz bekommt ein bestehender LXC mit `pct resize <CTID> rootfs +8G`.
+Damit der LXC das Image ohne Anmeldung holen kann, muss das Paket einmal öffentlich sein: GitHub → Profil → Packages → `fil-o-mat-backend` → Package settings → Change visibility → Public.
+
+**Docker Hub statt ghcr.io:** Im Repository unter Settings → Secrets and variables → Actions die Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` (Access Token mit Read & Write) anlegen; der Workflow pusht das Image dann zusätzlich nach `docker.io/<Nutzer>/fil-o-mat-backend`. Im LXC die Registry wählen und, falls das Repository privat ist, einmal anmelden (Token mit Read-only reicht):
+
+```bash
+pct exec <CTID> -- bash -c 'echo "FILOMAT_IMAGE=docker.io/<Nutzer>/fil-o-mat-backend" >> /opt/fil-o-mat/backend/.env'
+pct exec <CTID> -- docker login -u <Nutzer>   # nur bei privatem Repository, fragt nach dem Token
+``` Von Hand geht das mit `docker builder prune -af`, mehr Platz bekommt ein bestehender LXC mit `pct resize <CTID> rootfs +8G`.
 
 Ein LXC, der vor dem Updater angelegt wurde, bekommt ihn so:
 

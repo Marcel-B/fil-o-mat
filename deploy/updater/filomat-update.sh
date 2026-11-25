@@ -97,7 +97,7 @@ set_tag() {
 }
 
 # Holt das fertige Image aus GitHub Actions. Ist es nach 10 Minuten noch nicht da (Workflow läuft noch,
-# Paket nicht öffentlich, kein Netz), baut der LXC es selbst wie früher.
+# Paket nicht öffentlich bzw. LXC nicht bei Docker Hub angemeldet, kein Netz), baut der LXC es selbst wie früher.
 # Gebaut wird nur bei Änderungen an diesen Pfaden (wie "paths" in .github/workflows/backend.yml), also zählt der
 # letzte Commit, der sie berührt.
 pull_image() {
