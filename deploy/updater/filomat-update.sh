@@ -68,12 +68,12 @@ check() {
   state="$(previous state)"
   [[ "$state" == running || -z "$state" ]] && state=idle
   if ! fetch; then
-    write_status "$state" "GitHub nicht erreichbar, letzte Prüfung $(date '+%d.%m. %H:%M') ging nicht."
+    write_status "$state" "Gitea nicht erreichbar, letzte Prüfung $(date '+%d.%m. %H:%M') ging nicht."
     return 1
   fi
   message="$(previous message)"
-  # "GitHub nicht erreichbar" gilt nur bis zur nächsten erfolgreichen Prüfung
-  [[ "$message" == "GitHub nicht erreichbar"* ]] && message=""
+  # "… nicht erreichbar" gilt nur bis zur nächsten erfolgreichen Prüfung (GitHub: Meldung von vor dem Umzug nach Gitea)
+  [[ "$message" == "Gitea nicht erreichbar"* || "$message" == "GitHub nicht erreichbar"* ]] && message=""
   write_status "$state" "$message"
 }
 
@@ -96,17 +96,17 @@ set_tag() {
   [[ -z "$1" ]] || echo "FILOMAT_IMAGE_TAG=$1" >> "$env"
 }
 
-# Holt das fertige Image aus GitHub Actions. Ist es nach 10 Minuten noch nicht da (Workflow läuft noch,
-# Paket nicht öffentlich bzw. LXC nicht bei Docker Hub angemeldet, kein Netz), baut der LXC es selbst wie früher.
-# Gebaut wird nur bei Änderungen an diesen Pfaden (wie "paths" in .github/workflows/backend.yml), also zählt der
+# Holt das fertige Image aus Gitea Actions (Docker Hub). Ist es nach 10 Minuten noch nicht da (Workflow läuft noch,
+# Secrets fehlen, LXC nicht bei Docker Hub angemeldet, kein Netz), baut der LXC es selbst wie früher.
+# Gebaut wird nur bei Änderungen an diesen Pfaden (wie "paths" in .gitea/workflows/backend.yml), also zählt der
 # letzte Commit, der sie berührt.
 pull_image() {
-  set_tag "sha-$(git -C "$REPO" log -1 --format=%H -- backend web .dockerignore .github/workflows/backend.yml)"
+  set_tag "sha-$(git -C "$REPO" log -1 --format=%H -- backend web .dockerignore .gitea/workflows/backend.yml)"
   for i in $(seq 1 20); do
     if (cd "$REPO/backend" && docker compose pull --quiet filomat); then
       return 0
     fi
-    if (( i == 1 )); then write_status running "Warte auf das fertige Image aus GitHub Actions."; fi
+    if (( i == 1 )); then write_status running "Warte auf das fertige Image aus Gitea Actions."; fi
     sleep 30
   done
   log "Kein fertiges Image gefunden, baue selbst"
@@ -116,7 +116,7 @@ pull_image() {
 }
 
 apply() {
-  fetch || { write_status failed "GitHub nicht erreichbar."; return 1; }
+  fetch || { write_status failed "Gitea nicht erreichbar."; return 1; }
   local old old_tag
   old="$(git -C "$REPO" rev-parse HEAD)"
   old_tag="$(sed -n 's/^FILOMAT_IMAGE_TAG=//p' "$REPO/backend/.env" 2>/dev/null || true)"

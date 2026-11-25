@@ -27,7 +27,7 @@ Am Mac in Xcode als Ziel *My Mac (Mac Catalyst)* wählen. Die Mac-Version hat ei
 
 ## Über TestFlight
 
-Ohne Xcode und Kabel: GitHub Actions baut die App signiert und lädt sie zu TestFlight hoch. Einrichtung in [TESTFLIGHT.md](TESTFLIGHT.md).
+Ohne Xcode und Kabel: Gitea Actions baut auf unseren Mac-Runnern die App signiert und lädt sie zu TestFlight hoch. Einrichtung in [TESTFLIGHT.md](TESTFLIGHT.md).
 
 ## Abgleich mit dem Backend
 

@@ -17,9 +17,9 @@ GATEWAY="${GATEWAY:-}"                     # nur bei fester IP nötig
 DISK_GB="${DISK_GB:-16}"
 MEMORY_MB="${MEMORY_MB:-1024}"
 CORES="${CORES:-2}"
-REPO_URL="${REPO_URL:-https://github.com/Marcel-B/fil-o-mat.git}"
+REPO_URL="${REPO_URL:-https://gitea.idsrv.info/Marcel/fil-o-mat.git}"
 BRANCH="${BRANCH:-main}"
-GITHUB_TOKEN="${GITHUB_TOKEN:-}"           # nur bei privatem Repository
+GITEA_TOKEN="${GITEA_TOKEN:-${GITHUB_TOKEN:-}}"  # nur bei privatem Repository: Gitea-Token mit read:repository
 FILOMAT_API_KEY="${FILOMAT_API_KEY:-}"     # optional, dann müssen die Apps ihn mitschicken
 PORT="${PORT:-8080}"
 # optional: nächtliche Sicherung in die Nextcloud (siehe backend/README.md)
@@ -82,13 +82,13 @@ done
 pct exec "$CTID" -- getent hosts deb.debian.org &>/dev/null || fail "Container $CTID hat kein Netzwerk."
 
 CLONE_URL="$REPO_URL"
-if [[ -n "$GITHUB_TOKEN" ]]; then
-  CLONE_URL="${REPO_URL/https:\/\//https://x-access-token:${GITHUB_TOKEN}@}"
+if [[ -n "$GITEA_TOKEN" ]]; then
+  CLONE_URL="${REPO_URL/https:\/\//https://oauth2:${GITEA_TOKEN}@}"
 fi
 
 info "Docker installieren und Backend starten (dauert ein paar Minuten)"
 pct exec "$CTID" -- env \
-  CLONE_URL="$CLONE_URL" REPO_URL="$REPO_URL" BRANCH="$BRANCH" \
+  CLONE_URL="$CLONE_URL" REPO_URL="$REPO_URL" BRANCH="$BRANCH" GITEA_TOKEN="$GITEA_TOKEN" \
   FILOMAT_API_KEY="$FILOMAT_API_KEY" PORT="$PORT" \
   NEXTCLOUD_WEBDAV_URL="$NEXTCLOUD_WEBDAV_URL" NEXTCLOUD_USERNAME="$NEXTCLOUD_USERNAME" \
   NEXTCLOUD_APP_PASSWORD="$NEXTCLOUD_APP_PASSWORD" \
@@ -99,8 +99,12 @@ pct exec "$CTID" -- env \
     curl -fsSL https://get.docker.com | sh >/dev/null
 
     git clone --branch "$BRANCH" "$CLONE_URL" /opt/fil-o-mat
-    # Token nicht in der Git-Konfiguration liegen lassen
+    # Token nicht in der Git-Konfiguration liegen lassen; der Updater holt mit ihm aus /root/.git-credentials (nur root)
     git -C /opt/fil-o-mat remote set-url origin "$REPO_URL"
+    if [[ -n "$GITEA_TOKEN" ]]; then
+      (umask 077; echo "$CLONE_URL" | sed -E "s#^(https://[^/]+).*#\1#" > /root/.git-credentials)
+      git config --global credential.helper store
+    fi
 
     cat > /opt/fil-o-mat/backend/.env <<ENV
 FILOMAT_API_KEY=$FILOMAT_API_KEY

@@ -5,11 +5,11 @@ on:
     branches: [main]
     paths:
       - "reader/**"
-      - ".github/workflows/reader.yml"
+      - ".gitea/workflows/reader.yml"
   pull_request:
     paths:
       - "reader/**"
-      - ".github/workflows/reader.yml"
+      - ".gitea/workflows/reader.yml"
 
 jobs:
   esphome:

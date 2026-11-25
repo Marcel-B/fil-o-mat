@@ -144,8 +144,11 @@ public static class English
         // Updater (deploy/updater/filomat-update.sh)
         ["GitHub nicht erreichbar, letzte Prüfung {0} ging nicht."] = "GitHub not reachable, the last check at {0} failed.",
         ["GitHub nicht erreichbar."] = "GitHub not reachable.",
+        ["Gitea nicht erreichbar, letzte Prüfung {0} ging nicht."] = "Gitea not reachable, the last check at {0} failed.",
+        ["Gitea nicht erreichbar."] = "Gitea not reachable.",
         ["Aktualisierung läuft."] = "Update running.",
         ["Warte auf das fertige Image aus GitHub Actions."] = "Waiting for the finished image from GitHub Actions.",
+        ["Warte auf das fertige Image aus Gitea Actions."] = "Waiting for the finished image from Gitea Actions.",
         ["Kein fertiges Image, das Backend wird im LXC gebaut."] = "No finished image, the backend is being built in the LXC.",
         ["git merge ging nicht (lokale Änderungen im Checkout?)."] = "git merge failed (local changes in the checkout?).",
         ["Neues Image ließ sich nicht bauen, die bisherige Version läuft weiter."] = "The new image couldn’t be built, the previous version keeps running.",

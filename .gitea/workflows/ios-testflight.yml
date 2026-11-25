@@ -1,8 +1,9 @@
 name: iOS TestFlight
 
-# Baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch, wie testflight.yml in Marcel-B/tonwerk-ai: Archiv ad hoc signiert,
-# signiert wird beim Export mit dem Cloud-Zertifikat über den App-Store-Connect-API-Schlüssel (Rolle Admin).
-# Secrets (dieselben Werte wie in tonwerk-ai): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (oder ASC_PRIVATE_KEY),
+# Baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch, wie testflight.yml in
+# den Tonwerk-Repos: Archiv ad hoc signiert, signiert wird beim Export mit dem Cloud-Zertifikat über den
+# App-Store-Connect-API-Schlüssel (Rolle Admin). Läuft auf unseren eigenen Mac-Runnern (Label macos: Mac mini, oi-o-mat).
+# Secrets im Gitea-Repo (dieselben Werte wie bei Tonwerk): ASC_KEY_ID, ASC_ISSUER_ID, ASC_KEY_P8 (oder ASC_PRIVATE_KEY),
 # optional APPLE_TEAM_ID.
 # Einrichtung: ios-app/TESTFLIGHT.md
 
@@ -12,7 +13,7 @@ on:
     branches: [main]
     paths:
       - "ios-app/**"
-      - ".github/workflows/ios-testflight.yml"
+      - ".gitea/workflows/ios-testflight.yml"
 
 concurrency:
   group: ios-testflight
@@ -21,7 +22,7 @@ concurrency:
 jobs:
   testflight:
     name: TestFlight (${{ matrix.name }})
-    runs-on: macos-26
+    runs-on: macos
     strategy:
       fail-fast: false
       matrix:
@@ -58,33 +59,34 @@ jobs:
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # App Store Connect will ab April 2027 Builds mit dem iOS-27-SDK (ITMS-90725); bis der Runner Xcode 27 hat, nur Warnung.
-      - name: Neuestes Xcode
+      # Unsere Runner haben ein Xcode und kein sudo, um ein anderes zu wählen; das eingestellte wird nur geprüft.
+      # App Store Connect nimmt nur Builds mit dem iOS-26-SDK oder neuer (ITMS-90725), ab April 2027 mit dem iOS-27-SDK.
+      - name: Xcode prüfen
         if: steps.secrets.outputs.ok == 'true'
         run: |
-          # Neuestes stabiles Xcode, nach der Version im Bundle (auch /Applications/Xcode.app)
-          xcode=$(for app in /Applications/Xcode*.app; do
-            v=$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null) || continue
-            echo "$v $app"
-          done | grep -iv beta | sort -V | tail -1 | cut -d' ' -f2-)
-          sudo xcode-select -s "$xcode"
           xcodebuild -version
           major=$(xcodebuild -version | awk 'NR==1 {split($2, v, "."); print v[1]}')
+          (( major >= 26 )) || { echo "::error::Xcode $major auf dem Runner, nötig ist 26 oder neuer"; exit 1; }
           (( major >= 27 )) || echo "::warning::Runner hat noch kein Xcode 27. Ab April 2027 nimmt App Store Connect nur Builds mit dem iOS-27-SDK an (ITMS-90725)."
 
-      # Von Hand in Xcode archivierte Builds haben kleine Nummern, die des Workflows liegen weit darüber.
+      # Von Hand in Xcode archivierte Builds haben kleine Nummern. GitHub Actions lud 1000 + Laufnummer hoch (zuletzt 1018);
+      # Gitea zählt wieder ab 1, deshalb 2000 + Laufnummer.
       - name: Build-Nummer
         if: steps.secrets.outputs.ok == 'true'
-        run: echo "BUILD_NUMBER=$((1000 + ${{ github.run_number }}))" >> "$GITHUB_ENV"
+        run: echo "BUILD_NUMBER=$((2000 + ${{ github.run_number }}))" >> "$GITHUB_ENV"
 
+      # Der Runner läuft direkt auf dem Mac und teilt sich das Home mit anderen Jobs, deshalb liegt der Schlüssel im
+      # Temp-Ordner des Laufs; altool findet ihn dort über API_PRIVATE_KEYS_DIR.
       - name: API-Schlüssel ablegen
         if: steps.secrets.outputs.ok == 'true'
         run: |
-          mkdir -p "$HOME/.appstoreconnect/private_keys"
-          key="$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          dir="$RUNNER_TEMP/private_keys"
+          mkdir -p "$dir"
+          key="$dir/AuthKey_$ASC_KEY_ID.p8"
           printf '%s\n' "$ASC_KEY_P8" > "$key"
           chmod 600 "$key"
           echo "ASC_KEY_PATH=$key" >> "$GITHUB_ENV"
+          echo "API_PRIVATE_KEYS_DIR=$dir" >> "$GITHUB_ENV"
 
       # Ad hoc signiert, damit nicht jeder Runner ein eigenes Development-Zertifikat anlegt. Ganz unsigniert
       # (CODE_SIGNING_ALLOWED=NO) fehlen dem Archiv die Entitlements, und der Export lässt dann NFC weg.
@@ -148,8 +150,8 @@ jobs:
         run: |
           xcrun altool --upload-app --type ${{ matrix.platform }} --file "$UPLOAD_PATH" \
             --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
-          echo "${{ matrix.name }}: Build $BUILD_NUMBER hochgeladen. Nach der Verarbeitung (meist 5–15 Minuten) erscheint er in TestFlight." >> "$GITHUB_STEP_SUMMARY"
+          echo "${{ matrix.name }}: Build $BUILD_NUMBER hochgeladen. Nach der Verarbeitung (meist 5–15 Minuten) erscheint er in TestFlight."
 
       - name: Schlüssel entfernen
         if: always()
-        run: rm -f "$HOME/.appstoreconnect/private_keys/AuthKey_$ASC_KEY_ID.p8"
+        run: rm -rf "$RUNNER_TEMP/private_keys" "$RUNNER_TEMP/ipa" "$RUNNER_TEMP/export"

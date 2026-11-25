@@ -1,9 +1,9 @@
 services:
   filomat:
-    # Fertiges Image aus GitHub Actions (siehe .github/workflows/backend.yml); der Updater setzt FILOMAT_IMAGE_TAG
-    # in .env auf den Commit. FILOMAT_IMAGE in .env wählt die Registry, z. B. docker.io/<Nutzer>/fil-o-mat-backend.
+    # Fertiges Image aus Gitea Actions bei Docker Hub (siehe .gitea/workflows/backend.yml); der Updater setzt
+    # FILOMAT_IMAGE_TAG in .env auf den Commit. FILOMAT_IMAGE in .env wählt eine andere Registry.
     # "docker compose up -d --build" baut stattdessen selbst.
-    image: ${FILOMAT_IMAGE:-ghcr.io/marcel-b/fil-o-mat-backend}:${FILOMAT_IMAGE_TAG:-latest}
+    image: ${FILOMAT_IMAGE:-docker.io/marcelbenders/fil-o-mat-backend}:${FILOMAT_IMAGE_TAG:-latest}
     # Kontext ist der Wurzelordner, damit die Web-Oberfläche (web/) mit ins Image kommt
     build:
       context: ..

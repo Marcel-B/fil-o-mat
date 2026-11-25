@@ -5,11 +5,11 @@ on:
     branches: [main]
     paths:
       - "android-app/**"
-      - ".github/workflows/android.yml"
+      - ".gitea/workflows/android.yml"
   pull_request:
     paths:
       - "android-app/**"
-      - ".github/workflows/android.yml"
+      - ".gitea/workflows/android.yml"
 
 jobs:
   build:
@@ -23,6 +23,8 @@ jobs:
         with:
           distribution: temurin
           java-version: "17"
+      # Das Runner-Image hat anders als das von GitHub kein Android-SDK
+      - uses: android-actions/setup-android@v3
       - uses: gradle/actions/setup-gradle@v4
         with:
           gradle-version: "8.13"

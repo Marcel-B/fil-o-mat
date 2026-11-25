@@ -1,22 +1,16 @@
 # iOS-App über TestFlight
 
-Der Workflow [`.github/workflows/ios-testflight.yml`](../.github/workflows/ios-testflight.yml) baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
+Der Workflow [`.gitea/workflows/ios-testflight.yml`](../.gitea/workflows/ios-testflight.yml) läuft in Gitea auf unseren eigenen Mac-Runnern (Label `macos`: Mac mini und oi-o-mat, ein Xcode, kein sudo) und baut die App für iPhone/iPad und für den Mac (Mac Catalyst) und lädt beide zu TestFlight hoch. Er läuft bei jedem Push auf `main`, der `ios-app/` ändert, und lässt sich unter *Actions → iOS TestFlight → Run workflow* von Hand starten. Solange die Secrets fehlen, überspringt er den Upload mit einer Warnung.
 
 Signiert wird wie bei Tonwerk-AI per Cloud-Signierung: Das Archiv entsteht nur ad hoc signiert (damit die NFC-Entitlements drinstecken), beim Export erzeugt Xcode über den App-Store-Connect-API-Schlüssel das verwaltete Distribution-Zertifikat und das Profil selbst. Zertifikate oder Profile muss man nicht verwalten. Vor dem Upload prüft der Workflow, ob die signierte App die NFC-Berechtigung hat.
 
-Build-Nummer: 1000 + Laufnummer des Workflows (von Hand in Xcode archivierte Builds bleiben darunter). Die Version (`MARKETING_VERSION`, derzeit 1.0) steht im Xcode-Projekt.
+Build-Nummer: 2000 + Laufnummer des Workflows in Gitea (unter GitHub Actions waren es 1000 + Laufnummer bis 1018; von Hand in Xcode archivierte Builds bleiben darunter). Die Version (`MARKETING_VERSION`, derzeit 1.0) steht im Xcode-Projekt.
 
 ## Einrichtung
 
 1. Die App existiert in App Store Connect (Bundle-ID `com.filomat.app`, Team `6GGU8ET2C4`).
 2. Ein App-Store-Connect-API-Schlüssel mit Rolle **Admin** (nur damit darf Xcode verwaltete Zertifikate anlegen). Es kann derselbe wie für Tonwerk-AI sein.
-3. Secrets im Repo, z. B. per `gh` aus dem Repo-Ordner:
-
-   ```bash
-   gh secret set ASC_KEY_ID --body "ABC123XYZ"
-   gh secret set ASC_ISSUER_ID --body "xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx"
-   gh secret set ASC_KEY_P8 < AuthKey_ABC123XYZ.p8
-   ```
+3. Secrets im Gitea-Repo unter Einstellungen → Actions → Secrets: `ASC_KEY_ID` (die zehn Zeichen aus `AuthKey_<id>.p8`), `ASC_ISSUER_ID` und `ASC_KEY_P8` (Inhalt der .p8-Datei), dieselben Werte wie bei Tonwerk.
 
    Statt `ASC_KEY_P8` geht auch `ASC_PRIVATE_KEY`. `APPLE_TEAM_ID` ist optional; ohne das Secret nimmt der Workflow `6GGU8ET2C4`.
 4. In App Store Connect unter *TestFlight → Interne Tests* eine Gruppe anlegen und sich selbst hinzufügen. Auf dem iPhone die App „TestFlight“ installieren, dort erscheint Fil-o-mat nach dem ersten Upload (Verarbeitung meist 5–15 Minuten). Interne Tester brauchen keine Prüfung durch Apple.

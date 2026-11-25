@@ -19,7 +19,7 @@ Einstellungen über Umgebungsvariablen:
 | `IP` / `GATEWAY` | `dhcp` | z. B. `IP=192.168.1.50/24 GATEWAY=192.168.1.1` |
 | `DISK_GB` / `MEMORY_MB` / `CORES` | `16` / `1024` / `2` | Ressourcen |
 | `BRANCH` | `main` | Branch, der gebaut wird |
-| `GITHUB_TOKEN` | – | nur bei privatem Repository (Token mit Lesezugriff) |
+| `GITEA_TOKEN` | – | nur bei privatem Repository: Gitea-Token mit `read:repository`, liegt danach für den Updater in `/root/.git-credentials` |
 | `FILOMAT_API_KEY` | – | optionaler API-Schlüssel für die Apps |
 | `PORT` | `8080` | Port des Backends |
 | `NEXTCLOUD_WEBDAV_URL`, `NEXTCLOUD_USERNAME`, `NEXTCLOUD_APP_PASSWORD` | – | optionale nächtliche Sicherung in die Nextcloud |
@@ -44,15 +44,17 @@ Die Drucker im LAN erreicht das Backend weiter direkt über `eth0`: Tailscale wi
 
 ## Aktualisieren
 
-Im LXC prüft ein systemd-Timer alle 15 Minuten, ob es auf dem gebauten Branch neue Commits gibt. Die iOS-App zeigt sie unter **Backend** an; nach der Bestätigung holt der Updater die Commits und das fertige Image aus GitHub Actions (`ghcr.io/marcel-b/fil-o-mat-backend:sha-<Commit>`, amd64 und arm64) und startet das Backend neu. Läuft der Workflow noch, wartet er bis zu 10 Minuten; gibt es danach kein Image, baut der LXC es selbst wie früher. Lässt sich das neue Image weder holen noch bauen, läuft die bisherige Version weiter. Nach jedem Update räumt der Updater alte Images und Build-Cache weg, der älter als eine Woche ist; sind vor dem Bauen weniger als 3 GB frei, leert er den Build-Cache ganz.
+Im LXC prüft ein systemd-Timer alle 15 Minuten, ob es auf dem gebauten Branch in Gitea (`https://gitea.idsrv.info/Marcel/fil-o-mat`) neue Commits gibt. Die iOS-App zeigt sie unter **Backend** an; nach der Bestätigung holt der Updater die Commits und das fertige Image aus Gitea Actions (`docker.io/marcelbenders/fil-o-mat-backend:sha-<Commit>`, gebaut auf dem Docker-Runner, Standard amd64) und startet das Backend neu. Läuft der Workflow noch, wartet er bis zu 10 Minuten; gibt es danach kein Image, baut der LXC es selbst wie früher. Lässt sich das neue Image weder holen noch bauen, läuft die bisherige Version weiter. Nach jedem Update räumt der Updater alte Images und Build-Cache weg, der älter als eine Woche ist; sind vor dem Bauen weniger als 3 GB frei, leert er den Build-Cache ganz.
 
-Damit der LXC das Image ohne Anmeldung holen kann, muss das Paket einmal öffentlich sein: GitHub → Profil → Packages → `fil-o-mat-backend` → Package settings → Change visibility → Public.
+Damit der Workflow das Image hochlädt, im Gitea-Repo unter Einstellungen → Actions → Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` (Docker-Hub-Access-Token mit Read & Write) anlegen. Ohne sie baut er das Image nur zur Probe. Ist das Docker-Hub-Repository privat, im LXC einmal anmelden (Token mit Read-only reicht): `pct exec <CTID> -- docker login -u marcelbenders`. Eine andere Registry wählt `FILOMAT_IMAGE` in `/opt/fil-o-mat/backend/.env`.
 
-**Docker Hub statt ghcr.io:** Im Repository unter Settings → Secrets and variables → Actions die Secrets `DOCKERHUB_USERNAME` und `DOCKERHUB_TOKEN` (Access Token mit Read & Write) anlegen; der Workflow pusht das Image dann zusätzlich nach `docker.io/<Nutzer>/fil-o-mat-backend`. Im LXC die Registry wählen und, falls das Repository privat ist, einmal anmelden (Token mit Read-only reicht):
+**Umzug eines bestehenden LXC von GitHub nach Gitea** (einmalig, Gitea ist nur im LAN/Tailnet erreichbar, der LXC liegt im LAN):
 
 ```bash
-pct exec <CTID> -- bash -c 'echo "FILOMAT_IMAGE=docker.io/<Nutzer>/fil-o-mat-backend" >> /opt/fil-o-mat/backend/.env'
-pct exec <CTID> -- docker login -u <Nutzer>   # nur bei privatem Repository, fragt nach dem Token
+pct exec <CTID> -- git -C /opt/fil-o-mat remote set-url origin https://gitea.idsrv.info/Marcel/fil-o-mat.git
+# nur bei privatem Repository: Token mit read:repository für den Updater hinterlegen
+pct exec <CTID> -- bash -c 'umask 077; echo "https://oauth2:<TOKEN>@gitea.idsrv.info" > /root/.git-credentials; git config --global credential.helper store'
+pct exec <CTID> -- /opt/fil-o-mat/deploy/updater/filomat-update.sh check
 ``` Von Hand geht das mit `docker builder prune -af`, mehr Platz bekommt ein bestehender LXC mit `pct resize <CTID> rootfs +8G`.
 
 Ein LXC, der vor dem Updater angelegt wurde, bekommt ihn so:
