@@ -8,6 +8,7 @@ import kotlinx.serialization.json.JsonNull
 import kotlinx.serialization.json.JsonObject
 import kotlinx.serialization.json.JsonPrimitive
 import kotlinx.serialization.json.contentOrNull
+import com.filomat.app.i18n.tr
 
 /** Ein NDEF-Record des Tags, für die Anzeige aufbereitet. */
 data class TagRecord(
@@ -56,26 +57,26 @@ data class TagContents(
 
     companion object {
         /** Bekannte OpenSpool-Felder in Anzeigereihenfolge. `subtype` schreibt z. B. der Snapmaker U1 statt `variant`. */
-        val labels: List<Pair<String, String>> = listOf(
-            "brand" to "Marke",
-            "type" to "Typ",
-            "variant" to "Variante",
-            "subtype" to "Untertyp",
-            "color" to "Farbe",
-            "color_hex" to "Farbe (Hex)",
-            "min_temp" to "Min. Temperatur (°C)",
-            "max_temp" to "Max. Temperatur (°C)",
-            "bed_min_temp" to "Min. Bett-Temperatur (°C)",
-            "bed_max_temp" to "Max. Bett-Temperatur (°C)",
-            "diameter" to "Durchmesser (mm)",
-            "weight" to "Gewicht (g)",
-            "density" to "Dichte (g/cm³)",
-            "protocol" to "Protokoll",
-            "version" to "Version",
+        val labels: List<Pair<String, String>> get() = listOf(
+            "brand" to tr("Marke"),
+            "type" to tr("Typ"),
+            "variant" to tr("Variante"),
+            "subtype" to tr("Untertyp"),
+            "color" to tr("Farbe"),
+            "color_hex" to tr("Farbe (Hex)"),
+            "min_temp" to tr("Min. Temperatur (°C)"),
+            "max_temp" to tr("Max. Temperatur (°C)"),
+            "bed_min_temp" to tr("Min. Bett-Temperatur (°C)"),
+            "bed_max_temp" to tr("Max. Bett-Temperatur (°C)"),
+            "diameter" to tr("Durchmesser (mm)"),
+            "weight" to tr("Gewicht (g)"),
+            "density" to tr("Dichte (g/cm³)"),
+            "protocol" to tr("Protokoll"),
+            "version" to tr("Version"),
             // Container-Tags
-            "name" to "Name",
-            "description" to "Beschreibung",
-            "capacity" to "Menge"
+            "name" to tr("Name"),
+            "description" to tr("Beschreibung"),
+            "capacity" to tr("Menge")
         )
 
         private val json = Json { ignoreUnknownKeys = true; isLenient = true }
@@ -84,10 +85,10 @@ data class TagContents(
             val element = try {
                 json.parseToJsonElement(text)
             } catch (e: Exception) {
-                return TagContents(emptyList(), null, text, "Kein gültiges JSON: ${e.message}")
+                return TagContents(emptyList(), null, text, tr("Kein gültiges JSON: %s", e.message))
             }
             val obj = element as? JsonObject
-                ?: return TagContents(emptyList(), null, text, "Das JSON ist kein Objekt.")
+                ?: return TagContents(emptyList(), null, text, tr("Das JSON ist kein Objekt."))
             val known = labels.toMap()
             val fields = labels.mapNotNull { (key, label) -> obj[key]?.let { display(it) }?.let { TagField(key, label, it) } } +
                 obj.filterKeys { it !in known }.mapNotNull { (key, value) -> display(value)?.let { TagField(key, key, it) } }

@@ -3,6 +3,7 @@ package com.filomat.app.data
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.data.sync.SpoolPlace
 import com.filomat.app.data.sync.StoreState
+import com.filomat.app.i18n.tr
 
 /** Wohin ein Filament gebracht wird. */
 enum class PlaceTarget {
@@ -44,16 +45,19 @@ data class PlaceFlow(
     val containerId: String? = null,
     val printerPlace: SpoolPlace? = null,
     val error: String? = null,
+    /** Gescanntes Plättchen, das die App noch nicht kennt; wartet auf „neu anlegen“ oder „zu vorhandenem hinzufügen“. */
+    val unknownTag: String? = null,
+    val unknownData: ItemJsonData? = null,
     /** Ergebnis des letzten Vorgangs; bleibt stehen, bis das nächste Filament gescannt wird. */
     val done: String? = null
 ) {
-    val title: String get() = if (target == PlaceTarget.CONTAINER) "Einlagern" else "In Drucker einlegen"
+    val title: String get() = if (target == PlaceTarget.CONTAINER) tr("Einlagern") else tr("In Drucker einlegen")
 
     val actionTitle: String
         get() = when {
-            target == PlaceTarget.CONTAINER -> "Einlagern"
-            choice == SpoolChoice.NewSpool -> "Anbrechen und einlegen"
-            else -> "Einlegen"
+            target == PlaceTarget.CONTAINER -> if (choice == SpoolChoice.NewSpool) tr("Anbrechen und einlagern") else tr("Einlagern")
+            choice == SpoolChoice.NewSpool -> tr("Anbrechen und einlegen")
+            else -> tr("Einlegen")
         }
 
     /** Was von der gescannten Sorte bewegt werden kann. */
@@ -61,7 +65,8 @@ data class PlaceFlow(
         val item = item ?: return emptyList()
         val opened = state.spoolsOf(item.id).map { SpoolChoice.Opened(it.id) }
         return when (target) {
-            PlaceTarget.CONTAINER -> listOf(SpoolChoice.Stock) + opened
+            // Anbrechen geht nur über das Backend, das die Spulen pflegt
+            PlaceTarget.CONTAINER -> listOf(SpoolChoice.Stock) + opened + if (connected) listOf(SpoolChoice.NewSpool) else emptyList()
             // Spulen pflegt nur das Backend
             PlaceTarget.PRINTER -> if (connected) opened + SpoolChoice.NewSpool else emptyList()
         }
@@ -70,21 +75,32 @@ data class PlaceFlow(
     // Schritte
 
     /**
-     * Filament-Tag gescannt. Ist die Sorte noch unbekannt, wird sie angelegt; die zweite Hälfte des Ergebnisses
-     * ist dann das neue Filament, das der Aufrufer speichern muss.
+     * Filament-Tag gescannt. Ist das Plättchen noch unbekannt, wird nichts angelegt: der Ablauf wartet auf
+     * [withNewItem] oder [withItem] (nachdem der Aufrufer das Tag dem gewählten Filament hinzugefügt hat).
      */
-    fun withFilament(tag: String, itemData: ItemJsonData?, state: StoreState, connected: Boolean): Pair<PlaceFlow, Item?> {
+    fun withFilament(tag: String, itemData: ItemJsonData?, state: StoreState, connected: Boolean): PlaceFlow {
         val tagId = tag.trim()
-        if (tagId.isEmpty()) return copy(error = "Ungültiger Tag.") to null
+        if (tagId.isEmpty()) return copy(error = tr("Ungültiger Tag."))
         state.findContainerByTag(tagId)?.let {
-            return copy(error = "Das ist der Container „${it.name}“. Scanne zuerst das Filament.") to null
+            return copy(error = tr("Das ist der Container „%s“. Scanne zuerst das Filament.", it.name))
         }
         val existing = state.findItemByTag(tagId)
-        val item = existing ?: Item(rfidTag = tagId, name = defaultName(itemData), itemData = itemData)
+            ?: return PlaceFlow(target, unknownTag = tagId, unknownData = itemData)
+        return withItem(existing, state, connected)
+    }
+
+    /** Das unbekannte Plättchen wird ein neues Filament; die zweite Hälfte muss der Aufrufer speichern. */
+    fun withNewItem(state: StoreState, connected: Boolean): Pair<PlaceFlow, Item?> {
+        val tagId = unknownTag ?: return this to null
+        val item = Item(rfidTag = tagId, name = defaultName(unknownData), itemData = unknownData)
+        return withItem(item, state, connected) to item
+    }
+
+    /** Ablauf mit dieser Sorte fortsetzen. */
+    fun withItem(item: Item, state: StoreState, connected: Boolean): PlaceFlow {
         val started = PlaceFlow(target, item = item)
         val options = started.choices(state, connected)
-        val next = if (options.size == 1) started.choose(options[0], state) else started.copy(step = PlaceStep.CHOOSE_SPOOL)
-        return next to if (existing == null) item else null
+        return if (options.size == 1) started.choose(options[0], state) else started.copy(step = PlaceStep.CHOOSE_SPOOL)
     }
 
     fun choose(choice: SpoolChoice, state: StoreState): PlaceFlow {
@@ -101,19 +117,19 @@ data class PlaceFlow(
     fun withTargetTag(tag: String, state: StoreState): PlaceFlow {
         val tagId = tag.trim()
         val found = state.findContainerByTag(tagId) ?: return copy(
-            error = if (state.findItemByTag(tagId) != null) "Das ist ein Filament-Tag. Scanne jetzt den Container."
-            else "Container nicht gefunden. Lege ihn zuerst unter „Container“ an."
+            error = if (state.findItemByTag(tagId) != null) tr("Das ist ein Filament-Tag. Scanne jetzt den Container.")
+            else tr("Container nicht gefunden. Lege ihn zuerst unter „Container“ an.")
         )
         return when (target) {
             PlaceTarget.CONTAINER -> selectContainer(found, state)
             PlaceTarget.PRINTER -> state.printerOwning(found.id)?.let { selectPlace(SpoolPlace.printer(it.id, 0)) }
-                ?: copy(error = "„${found.name}“ ist kein Drucker. Wähle Drucker und Kopf aus der Liste.")
+                ?: copy(error = tr("„%s“ ist kein Drucker. Wähle Drucker und Kopf aus der Liste.", found.name))
         }
     }
 
     fun selectContainer(container: Container, state: StoreState): PlaceFlow {
         state.printerOwning(container.id)?.let {
-            return copy(error = "Das ist der Container von „${it.name}“. Nimm dafür „In Drucker einlegen“.")
+            return copy(error = tr("Das ist der Container von „%s“. Nimm dafür „In Drucker einlegen“.", it.name))
         }
         return copy(containerId = container.id, error = null)
     }
@@ -132,7 +148,7 @@ data class PlaceFlow(
 
     /** Wo das Gewählte gerade ist, z. B. "U1 Kopf 2" oder "Regal oben". */
     fun currentPlaceText(state: StoreState): String? = when (val choice = choice) {
-        SpoolChoice.Stock -> currentItem(state)?.containerId?.let { state.container(it)?.name } ?: "kein Container"
+        SpoolChoice.Stock -> currentItem(state)?.containerId?.let { state.container(it)?.name } ?: tr("kein Container")
         is SpoolChoice.Opened -> state.spool(choice.spoolId)?.locationText(state.printers, state.containers)
         else -> null
     }
@@ -180,6 +196,7 @@ data class PlaceFlow(
                 when (choice) {
                     SpoolChoice.Stock -> PlaceAction.MoveItem(item, container)
                     is SpoolChoice.Opened -> state.spool(choice.spoolId)?.let { PlaceAction.MoveSpool(item, it, SpoolPlace.container(container.id)) }
+                    SpoolChoice.NewSpool -> PlaceAction.OpenSpool(item, SpoolPlace.container(container.id))
                     else -> null
                 }
             }
@@ -197,6 +214,6 @@ data class PlaceFlow(
     companion object {
         /** Name eines neuen Filaments: "<Marke> <Typ>", sonst "Filament". */
         fun defaultName(data: ItemJsonData?): String =
-            listOfNotNull(data?.brand?.trim(), data?.type?.trim()).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { "Filament" }
+            listOfNotNull(data?.brand?.trim(), data?.type?.trim()).filter { it.isNotEmpty() }.joinToString(" ").ifEmpty { tr("Filament") }
     }
 }

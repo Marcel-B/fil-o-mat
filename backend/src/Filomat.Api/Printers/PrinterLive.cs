@@ -72,12 +72,14 @@ public class PrinterStatusCache
     }
 }
 
-/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über ntfy.</summary>
+/// <summary>Fragt den Zustand der Drucker ab, verknüpft ihn mit den Spulen und meldet Auffälliges über Onkel Bummel.</summary>
 public class PrinterLive(
     FilomatDbContext db,
     PrinterStatusCache cache,
     IEnumerable<IPrinterAdapter> adapters,
     Notifier notifier,
+    PrinterReachability reachability,
+    PrinterEvents events,
     ILogger<PrinterLive> logger)
 {
     public IPrinterAdapter AdapterFor(Printer printer) => adapters.FirstOrDefault(a => a.Type == printer.Type)
@@ -94,21 +96,28 @@ public class PrinterLive(
         {
             status = await (adapter ?? AdapterFor(printer)).GetStatusAsync(printer, cancellationToken)
                      ?? new PrinterStatus(PrintState.Idle);
+            reachability.Succeeded(printer);
         }
         catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException
                                    && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogDebug(ex, "Zustand von {Printer} nicht abrufbar", printer.Name);
+            reachability.Failed(printer, ex);
             status = new PrinterStatus(PrintState.Offline, Message: ex.Message);
         }
         var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
+        events.StatusChanged();
         await NotifyAsync(printer, status, previous?.Status, cancellationToken);
         return status;
     }
 
-    /// <summary>Speichert "nicht erreichbar", wenn schon der Abgleich scheiterte.</summary>
-    public void SetOffline(Printer printer, string message) =>
-        cache.Set(printer.Id, new PrinterStatus(PrintState.Offline, Message: message), DateTime.UtcNow);
+    /// <summary>Speichert "nicht erreichbar", wenn schon der Abgleich scheiterte, und meldet, wenn dabei ein Druck lief.</summary>
+    public async Task SetOfflineAsync(Printer printer, string message, CancellationToken cancellationToken = default)
+    {
+        var status = new PrinterStatus(PrintState.Offline, Message: message);
+        var previous = cache.Set(printer.Id, status, DateTime.UtcNow);
+        events.StatusChanged();
+        await NotifyAsync(printer, status, previous?.Status, cancellationToken);
+    }
 
     /// <summary>Zustand aller Drucker; was älter als <paramref name="maxAge"/> ist, wird beim Drucker neu abgefragt.</summary>
     public async Task<List<PrinterLiveResponse>> GetAllAsync(TimeSpan maxAge, CancellationToken cancellationToken = default)
@@ -121,10 +130,15 @@ public class PrinterLive(
         return result;
     }
 
-    public async Task<PrinterLiveResponse> GetAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default)
+    public async Task<PrinterLiveResponse> GetAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default) =>
+        await BuildAsync(printer, await EnsureFreshAsync(printer, maxAge, cancellationToken), cancellationToken);
+
+    /// <summary>Fragt beim Drucker nach, wenn der gespeicherte Zustand älter als <paramref name="maxAge"/> ist.</summary>
+    public async Task<PrinterStatusCache.Entry?> EnsureFreshAsync(Printer printer, TimeSpan maxAge, CancellationToken cancellationToken = default)
     {
         var entry = cache.Get(printer.Id);
-        if (printer.Enabled && (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge))
+        // Ein ausgeschalteter Drucker im Backoff wird nicht bei jeder Anfrage der Apps neu angefragt (bis zu 15 s Wartezeit)
+        if (printer.Enabled && (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge && !reachability.ShouldWait(printer.Id)))
         {
             var gate = cache.LockFor(printer.Id);
             await gate.WaitAsync(cancellationToken);
@@ -132,7 +146,7 @@ public class PrinterLive(
             {
                 // Ein paralleler Aufruf hat vielleicht gerade abgefragt
                 entry = cache.Get(printer.Id);
-                if (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge)
+                if (entry is null || DateTime.UtcNow - entry.UpdatedAt > maxAge && !reachability.ShouldWait(printer.Id))
                 {
                     await RefreshAsync(printer, cancellationToken: cancellationToken);
                     entry = cache.Get(printer.Id);
@@ -143,15 +157,17 @@ public class PrinterLive(
                 gate.Release();
             }
         }
-        return await BuildAsync(printer, entry, cancellationToken);
+        return entry;
     }
 
     private async Task<PrinterLiveResponse> BuildAsync(Printer printer, PrinterStatusCache.Entry? entry, CancellationToken cancellationToken)
     {
         var status = entry?.Status ?? new PrinterStatus(printer.Enabled ? PrintState.Offline : PrintState.Idle,
             Message: printer.Enabled ? "Noch nicht abgefragt." : "Pausiert.");
+        status = Translated(WithReaderTags(printer, status));
         var placed = await PlacedAsync(printer, cancellationToken);
-        var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed);
+        var detected = await DetectedAsync(status, placed, cancellationToken);
+        var (tools, hints) = PrinterInsights.Build(printer.Type, ToolCount(printer), status, placed, detected);
         return new PrinterLiveResponse(printer.Id, printer.Name, printer.Type, entry?.UpdatedAt, status, tools, hints);
     }
 
@@ -162,6 +178,50 @@ public class PrinterLive(
         var itemIds = spools.Select(s => s.ItemId).Distinct().ToList();
         var items = await db.Items.Where(i => itemIds.Contains(i.Id)).ToDictionaryAsync(i => i.Id, cancellationToken);
         return spools.Where(s => items.ContainsKey(s.ItemId)).Select(s => new PlacedSpool(s, items[s.ItemId])).ToList();
+    }
+
+    /// <summary>
+    /// Köpfe, an denen der Drucker das Plättchen einer bekannten Sorte erkennt, die dort laut App nicht steckt: ohne Spule
+    /// in der App oder mit einer Spule einer anderen Sorte.
+    /// </summary>
+    private async Task<Dictionary<int, DetectedItem>> DetectedAsync(PrinterStatus status, List<PlacedSpool> placed,
+        CancellationToken cancellationToken)
+    {
+        var result = new Dictionary<int, DetectedItem>();
+        foreach (var slot in status.Slots ?? [])
+        {
+            if (slot.TagUid is not { } tag || slot.Loaded == false) continue;
+            if (placed.FirstOrDefault(p => (p.Spool.Tool ?? 0) == slot.Tool) is { } inApp
+                && inApp.Item.AllTags.Contains(tag, StringComparer.OrdinalIgnoreCase)) continue;
+            if (await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken) is not { } item) continue;
+            var loose = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null && s.PrinterId == null)
+                .OrderBy(s => s.Number).Select(s => s.Number).ToListAsync(cancellationToken);
+            result[slot.Tool] = new DetectedItem(item, loose);
+        }
+        return result;
+    }
+
+    /// <summary>Meldung und Heizungsnamen kommen deutsch von den Adaptern und werden erst für die Antwort übersetzt.</summary>
+    private static PrinterStatus Translated(PrinterStatus status) => status with
+    {
+        Message = status.Message is { } message ? L.T(message) : null,
+        Heaters = status.Heaters?.Select(h => h with { Name = L.T(h.Name) }).ToList(),
+    };
+
+    /// <summary>Plättchen, die der NFC-Leser am Drucker meldet, als Tag des Slots (ohne Leser bleibt der Zustand, wie er ist).</summary>
+    public static PrinterStatus WithReaderTags(Printer printer, PrinterStatus status)
+    {
+        if (PrinterReader.Slots(printer, DateTime.UtcNow) is not { } tags) return status;
+        var slots = status.Slots?.ToList() ?? [];
+        var count = Math.Max(ToolCount(printer), slots.Count);
+        for (var tool = 0; tool < Math.Min(tags.Count, count); tool++)
+        {
+            if (tags[tool] is not { } tag) continue;
+            var index = slots.FindIndex(s => s.Tool == tool);
+            if (index < 0) slots.Add(new SlotReport(tool, null, null, null, TagUid: tag));
+            else if (slots[index].TagUid is null) slots[index] = slots[index] with { TagUid = tag };
+        }
+        return status with { Slots = slots.OrderBy(s => s.Tool).ToList() };
     }
 
     public static int ToolCount(Printer printer) => printer.ToolCount ?? (printer.Type == PrinterType.SnapmakerU1 ? 4 : 1);
@@ -175,13 +235,49 @@ public class PrinterLive(
         return image;
     }
 
+    /// <summary>
+    /// Bild für eine Meldung: was die Kamera gerade sieht, sonst das Vorschaubild aus dem Slicer. Fehler bleiben im
+    /// Log, die Meldung geht dann ohne Bild raus.
+    /// </summary>
+    public async Task<Thumbnail?> GetPhotoAsync(Printer printer, CancellationToken cancellationToken = default)
+    {
+        var adapter = AdapterFor(printer);
+        foreach (var source in new Func<CancellationToken, Task<Thumbnail?>>[]
+                 {
+                     token => adapter.GetSnapshotAsync(printer, token),
+                     token => GetThumbnailAsync(printer, token),
+                 })
+        {
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            try
+            {
+                if (await source(timeout.Token) is { Data.Length: > 0 } image) return image;
+            }
+            catch (Exception ex) when (!cancellationToken.IsCancellationRequested)
+            {
+                logger.LogDebug(ex, "Kein Bild von {Printer}", printer.Name);
+            }
+        }
+        return null;
+    }
+
     /// <summary>Fehler und Spulen, die nicht reichen, je einmal pro Druck.</summary>
     private async Task NotifyAsync(Printer printer, PrinterStatus status, PrinterStatus? previous, CancellationToken cancellationToken)
     {
-        if (status.State == PrintState.Error && previous is { State: not PrintState.Error })
-            await notifier.SendAsync($"{printer.Name}: Fehler",
-                status.Message ?? (status.JobName is { } job ? $"Der Druck {job} braucht Aufmerksamkeit." : "Der Drucker braucht Aufmerksamkeit."),
-                "warning", 4, cancellationToken: cancellationToken);
+        if (status.State == PrintState.Offline)
+        {
+            await NotifyVanishedAsync(printer, previous, cancellationToken);
+            return;
+        }
+        var error = status.State == PrintState.Error && previous is { State: not PrintState.Error };
+        if (!error && (!status.IsActive || status.JobGramsPerTool is null)) return;
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
+        if (error)
+            await notifier.SendAsync(L.F("{0}: Fehler", printer.Name),
+                status.Message is { } message ? L.T(message)
+                : status.JobName is { } job ? L.F("Der Druck {0} braucht Aufmerksamkeit.", job) : L.T("Der Drucker braucht Aufmerksamkeit."),
+                "warning", 4, cancellationToken: cancellationToken, image: token => GetPhotoAsync(printer, token));
 
         if (!status.IsActive || status.JobGramsPerTool is null) return;
         var placed = await PlacedAsync(printer, cancellationToken);
@@ -189,8 +285,30 @@ public class PrinterLive(
         foreach (var hint in hints.Where(h => h.Kind == HintKind.SpoolShort))
         {
             if (!cache.FirstTime($"short|{printer.Id}|{status.JobKey ?? status.JobName}|{hint.Tool}")) continue;
-            await notifier.SendAsync($"{printer.Name}: Spule reicht nicht", $"{status.JobName}: {hint.Text}", "warning", 4,
+            await notifier.SendAsync(L.F("{0}: Spule reicht nicht", printer.Name), $"{status.JobName}: {hint.Text}", "warning", 4,
                 cancellationToken: cancellationToken);
         }
+    }
+
+    /// <summary>Ab hier gilt ein Druck als so gut wie fertig: Wer dann ausschaltet, hat nur das Ende verpasst.</summary>
+    private const double AlmostDonePercent = 95;
+
+    /// <summary>
+    /// Ein Drucker, der aus ist, ist kein Fehler; einer, der mitten im Druck verschwindet (Strom, Netzwerk, Absturz), schon.
+    /// Gemeldet wird einmal pro Druck, als Warning und als Meldung (Onkel Bummel).
+    /// </summary>
+    private async Task NotifyVanishedAsync(Printer printer, PrinterStatus? previous, CancellationToken cancellationToken)
+    {
+        if (previous is not { IsActive: true } || previous.Progress >= AlmostDonePercent) return;
+        if (!cache.FirstTime($"vanished|{printer.Id}|{previous.JobKey ?? previous.JobName}")) return;
+
+        logger.LogWarning("Drucker {Printer} mitten im Druck {Job} nicht mehr erreichbar ({Progress} %)",
+            printer.Name, previous.JobName, previous.Progress);
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
+        await notifier.SendAsync(L.F("{0}: nicht mehr erreichbar", printer.Name),
+            previous.JobName is { } job
+                ? L.F("Der Drucker antwortet mitten im Druck {0} nicht mehr. Strom oder Netzwerk weg?", job)
+                : L.T("Der Drucker antwortet mitten im Druck nicht mehr. Strom oder Netzwerk weg?"),
+            "warning", 4, cancellationToken: cancellationToken);
     }
 }

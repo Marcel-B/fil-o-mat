@@ -59,4 +59,16 @@ final class ModelTests: XCTestCase {
         XCTAssertFalse(db.brands.isEmpty)
         XCTAssertFalse(db.variants.isEmpty)
     }
+
+    func testApiCompatibility() throws {
+        let current = try BackendClient.decoder.decode(BackendVersion.self, from: Data(#"{"apiLevel":1,"minAppLevel":1,"commit":"abc"}"#.utf8))
+        XCTAssertEqual(ApiCompatibility(current, appLevel: 1, minBackendLevel: 1), .compatible)
+        // Backend ohne /api/version
+        XCTAssertEqual(ApiCompatibility(nil, appLevel: 1, minBackendLevel: 1), .backendOutdated)
+        XCTAssertEqual(ApiCompatibility(current, appLevel: 2, minBackendLevel: 2), .backendOutdated)
+        // Neueres Backend reicht der App, solange es sie noch unterstützt
+        XCTAssertEqual(ApiCompatibility(BackendVersion(apiLevel: 3, minAppLevel: 1), appLevel: 1, minBackendLevel: 1), .compatible)
+        XCTAssertEqual(ApiCompatibility(BackendVersion(apiLevel: 3, minAppLevel: 2), appLevel: 1, minBackendLevel: 1), .appOutdated)
+        XCTAssertNil(ApiCompatibility.compatible.message)
+    }
 }

@@ -22,7 +22,7 @@ struct StockView: View {
     var body: some View {
         let visible = entries
         let low = visible.filter { $0.isLow() }
-        let groups = Dictionary(grouping: visible) { $0.item.itemData?.type ?? "Ohne Typ" }
+        let groups = Dictionary(grouping: visible) { $0.item.itemData?.type ?? String(localized: "Ohne Typ") }
             .map { TypeGroup(type: $0.key, entries: $0.value) }
             .sorted { $0.type < $1.type }
 
@@ -96,13 +96,13 @@ struct StockView: View {
     private func detail(of entry: StockEntry) -> String {
         var parts: [String] = []
         if entry.item.spoolsInStock != nil {
-            parts.append(entry.fullSpools == 1 ? "1 volle Spule" : "\(entry.fullSpools) volle Spulen")
+            parts.append(entry.fullSpools == 1 ? String(localized: "1 volle Spule") : String(localized: "\(entry.fullSpools) volle Spulen"))
         }
         for spool in entry.openedSpools {
             let rest = spool.remainingWeight.map { " \(Int($0.rounded())) g" } ?? ""
             parts.append("#\(spool.number)\(rest) (\(spool.locationText(printers: store.printers, containers: store.containers)))")
         }
         if let td = entry.item.transmissionText { parts.append("TD \(td)") }
-        return parts.isEmpty ? "Kein Vorrat erfasst" : parts.joined(separator: " · ")
+        return parts.isEmpty ? String(localized: "Kein Vorrat erfasst") : parts.joined(separator: " · ")
     }
 }

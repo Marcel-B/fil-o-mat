@@ -23,6 +23,15 @@ public class ApiTests : IDisposable
     }
 
     [Fact]
+    public async Task UnknownApiPathIsNotFound()
+    {
+        // Die Web-Oberfläche fängt alle übrigen Pfade ab, /api darf davon nichts abbekommen
+        var response = await _client.GetAsync("/api/gibt-es-nicht");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        Assert.NotEqual("text/html", response.Content.Headers.ContentType?.MediaType);
+    }
+
+    [Fact]
     public async Task CreatesContainerAndFindsItByTag()
     {
         var response = await _client.PostAsJsonAsync("/api/containers",

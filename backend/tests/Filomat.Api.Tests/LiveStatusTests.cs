@@ -1,34 +1,92 @@
 using System.Net;
 using System.Net.Http.Json;
 using System.Text;
+using System.Text.Json;
+using Microsoft.AspNetCore.WebUtilities;
+using Microsoft.Net.Http.Headers;
 using Filomat.Api.Domain;
 using Filomat.Api.Endpoints;
 using Filomat.Api.Printers;
 
 namespace Filomat.Api.Tests;
 
-/// <summary>Nimmt Meldungen an ntfy entgegen.</summary>
-public class FakeNtfy : HttpMessageHandler
+/// <summary>Nimmt Meldungen an wie <c>POST /api/v1/messages</c> von Onkel Bummel (multipart/form-data).</summary>
+public class FakeOnkelBummel : HttpMessageHandler
 {
-    public record Message(string Url, string Title, string Body, string? Tags, string? Authorization);
+    /// <param name="Actions">Feld <c>actions</c> als JSON, wie es ankam.</param>
+    /// <param name="Attachment">Bild aus dem Feld <c>file</c>.</param>
+    public record Message(string Url, string Topic, string Title, string Body, string? Tags, string? Authorization, string? Actions = null,
+        byte[]? Attachment = null, string? Filename = null, int Priority = 3, string? Click = null, string? IdempotencyKey = null)
+    {
+        public List<JsonElement> ActionList => Actions is null ? [] : JsonSerializer.Deserialize<List<JsonElement>>(Actions)!;
+    }
 
     public List<Message> Messages { get; } = [];
 
+    /// <summary>Alle Anfragen, auch abgelehnte, mit ihrem Idempotency-Key.</summary>
+    public List<string?> Attempts { get; } = [];
+
+    /// <summary>Lehnt Bilder ab wie ein zu großes oder unlesbares Bild (413).</summary>
+    public bool RejectAttachments { get; set; }
+
+    /// <summary>So viele Anfragen schlagen zuerst mit 503 fehl.</summary>
+    public int FailFirst { get; set; }
+
+    /// <summary>Antwort für alle Anfragen, z. B. 403 mit Problem-JSON.</summary>
+    public (HttpStatusCode Status, string Detail)? Reject { get; set; }
+
     protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
     {
-        var title = request.Headers.TryGetValues("Title", out var values) ? Decode(values.Single()) : "";
-        var tags = request.Headers.TryGetValues("Tags", out var tagValues) ? tagValues.Single() : null;
-        var body = await request.Content!.ReadAsStringAsync(cancellationToken);
+        Assert.Equal(HttpMethod.Post, request.Method);
+        Assert.EndsWith("/api/v1/messages", request.RequestUri!.AbsolutePath);
+        var key = request.Headers.TryGetValues("Idempotency-Key", out var keys) ? keys.Single() : null;
+        lock (Messages) Attempts.Add(key);
+
+        var contentType = MediaTypeHeaderValue.Parse(request.Content!.Headers.ContentType!.ToString());
+        Assert.Equal("multipart/form-data", contentType.MediaType.Value);
+        var reader = new MultipartReader(HeaderUtilities.RemoveQuotes(contentType.Boundary).Value!, await request.Content.ReadAsStreamAsync(cancellationToken));
+        var fields = new Dictionary<string, string>();
+        byte[]? attachment = null;
+        string? filename = null;
+        while (await reader.ReadNextSectionAsync(cancellationToken) is { } section)
+        {
+            var disposition = ContentDispositionHeaderValue.Parse(section.ContentDisposition);
+            var name = HeaderUtilities.RemoveQuotes(disposition.Name).Value!;
+            if (disposition.IsFileDisposition())
+            {
+                Assert.Equal("file", name);
+                using var buffer = new MemoryStream();
+                await section.Body.CopyToAsync(buffer, cancellationToken);
+                attachment = buffer.ToArray();
+                filename = HeaderUtilities.RemoveQuotes(disposition.FileName.HasValue ? disposition.FileName : disposition.FileNameStar).Value;
+            }
+            else
+                fields[name] = await new StreamReader(section.Body, Encoding.UTF8).ReadToEndAsync(cancellationToken);
+        }
+
+        if (Reject is { } reject) return Problem(reject.Status, reject.Detail);
+        if (FailFirst > 0)
+        {
+            FailFirst--;
+            return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
+        }
+        if (attachment is not null && RejectAttachments) return Problem(HttpStatusCode.RequestEntityTooLarge, "Datei zu groß.");
         lock (Messages)
-            Messages.Add(new Message(request.RequestUri!.ToString(), title, body, tags, request.Headers.Authorization?.ToString()));
-        return new HttpResponseMessage(HttpStatusCode.OK);
+        {
+            // Wie der Server: derselbe Schlüssel legt keine zweite Nachricht an
+            if (key is null || Messages.All(m => m.IdempotencyKey != key))
+                Messages.Add(new Message(request.RequestUri.ToString(), fields["topic"], fields.GetValueOrDefault("title") ?? "", fields["message"],
+                    fields.GetValueOrDefault("tags"), request.Headers.Authorization?.ToString(), fields.GetValueOrDefault("actions"),
+                    attachment, filename, int.Parse(fields.GetValueOrDefault("priority") ?? "3"), fields.GetValueOrDefault("click"), key));
+        }
+        return new HttpResponseMessage(HttpStatusCode.Created);
     }
 
-    /// <summary>RFC 2047, wie der Notifier den Titel schickt.</summary>
-    private static string Decode(string header) =>
-        header.StartsWith("=?UTF-8?B?", StringComparison.Ordinal)
-            ? Encoding.UTF8.GetString(Convert.FromBase64String(header[10..^2]))
-            : header;
+    private static HttpResponseMessage Problem(HttpStatusCode status, string detail) => new(status)
+    {
+        Content = new StringContent(JsonSerializer.Serialize(new { title = status.ToString(), status = (int)status, detail }),
+            Encoding.UTF8, "application/problem+json"),
+    };
 }
 
 /// <summary>Zustand der Drucker, Hinweise, Meldungen und Statistik.</summary>
@@ -37,13 +95,13 @@ public class LiveStatusTests : IDisposable
     private readonly FakeMoonraker _moonraker = new();
     private readonly FakeAnycubic _anycubic = new();
     private readonly FakeBambu _bambu = new();
-    private readonly FakeNtfy _ntfy = new();
+    private readonly FakeOnkelBummel _bummel = new();
     private readonly ApiFactory _factory;
     private readonly HttpClient _client;
 
     public LiveStatusTests()
     {
-        _factory = new ApiFactory { PrinterHandler = _moonraker, AnycubicLan = _anycubic, BambuLan = _bambu, NtfyHandler = _ntfy };
+        _factory = new ApiFactory { PrinterHandler = _moonraker, AnycubicLan = _anycubic, BambuLan = _bambu, NotificationHandler = _bummel };
         _client = _factory.CreateClient();
     }
 
@@ -118,8 +176,9 @@ public class LiveStatusTests : IDisposable
 
         // Die Meldung kommt nur einmal pro Druck
         await SyncAsync(printer.Id);
-        var message = Assert.Single(_ntfy.Messages);
+        var message = Assert.Single(_bummel.Messages);
         Assert.Equal("Voron: Spule reicht nicht", message.Title);
+        Assert.Equal(("warning", 4), (message.Tags, message.Priority));
         Assert.StartsWith("benchy: ", message.Body);
 
         var thumbnail = await _client.GetAsync($"/api/printers/{printer.Id}/thumbnail");
@@ -143,6 +202,27 @@ public class LiveStatusTests : IDisposable
     }
 
     [Fact]
+    public async Task IgnoresTheProbingTemperatureAtTheStartOfAPrusaPrint()
+    {
+        _moonraker.Routes["/api/v1/info"] = """{"mmu":false}""";
+        _moonraker.Routes["/api/v1/status"] = """
+            {"job":{"id":18,"progress":0,"time_remaining":3000,"time_printing":30},
+             "printer":{"state":"PRINTING","temp_nozzle":150.2,"target_nozzle":170,"temp_bed":58.1,"target_bed":60}}
+            """;
+        _moonraker.Routes["/api/v1/job"] = """
+            {"id":18,"state":"PRINTING","progress":0,"time_printing":30,
+             "file":{"name":"BOX~1.BGC","display_name":"box.bgcode","path":"/usb","m_timestamp":1760000000,
+                     "meta":{"filament used [g]":50,"filament_type":"PLA"}}}
+            """;
+        var printer = await CreatePrinterAsync("MK4S", PrinterType.PrusaLink, "http://prusa.local", "abc123");
+        await PlaceSpoolAsync("P1", printer.Id, 0, remaining: 500, minTemp: "190", maxTemp: "230");
+        await SyncAsync(printer.Id);
+
+        Assert.Empty((await StatusAsync(printer.Id)).Hints);
+        Assert.Empty(_bummel.Messages);
+    }
+
+    [Fact]
     public async Task NotifiesFinishedPrintsWithTheRemainingWeight()
     {
         var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
@@ -154,14 +234,102 @@ public class LiveStatusTests : IDisposable
             """;
         await SyncAsync(printer.Id);
 
-        var message = Assert.Single(_ntfy.Messages);
+        var message = Assert.Single(_bummel.Messages);
         Assert.Equal("Voron: benchy.gcode fertig", message.Title);
         Assert.Equal($"{item.Name} #1 −15 g, noch 985 g\nDruckzeit 1:23 h", message.Body);
         Assert.Equal("white_check_mark", message.Tags);
+        Assert.Equal(("filomat", "Bearer ob_test", 3), (message.Topic, message.Authorization, message.Priority));
+        Assert.Null(message.Actions);
+        Assert.Null(message.Attachment);
 
         var entry = Assert.Single((await _client.GetFromJsonAsync<List<Consumption>>($"/api/consumption?printerId={printer.Id}"))!);
         Assert.Equal(4980, entry.DurationSeconds);
     }
+
+    private static readonly byte[] Jpeg = [0xFF, 0xD8, 0xFF, 0xE0, 1, 2, 3, 0xFF, 0xD9];
+
+    private const string VoronFinished = """
+        {"result":{"count":1,"jobs":[{"job_id":"000001","filename":"benchy.gcode","status":"completed",
+          "end_time":4102444800,"filament_used":5000,"print_duration":4980,
+          "metadata":{"filament_total":10000,"filament_weight_total":30,"filament_type":"PLA"}}]}}
+        """;
+
+    [Fact]
+    public async Task AttachesTheWebcamPictureToTheFinishedMessage()
+    {
+        var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
+        var (item, _) = await PlaceSpoolAsync("V1", printer.Id, 0);
+        _moonraker.Body = VoronFinished;
+        _moonraker.Routes["/server/webcams/list"] = """
+            {"result":{"webcams":[{"name":"aus","enabled":false,"snapshot_url":"/aus/?action=snapshot"},
+                                  {"name":"cam","enabled":true,"snapshot_url":"/webcam/?action=snapshot"}]}}
+            """;
+        _moonraker.Images["http://voron.local/webcam/"] = Jpeg;
+        await SyncAsync(printer.Id);
+
+        var message = Assert.Single(_bummel.Messages);
+        Assert.Equal("Voron: benchy.gcode fertig", message.Title);
+        Assert.Equal($"{item.Name} #1 −15 g, noch 985 g\nDruckzeit 1:23 h", message.Body);
+        Assert.Equal(Jpeg, message.Attachment);
+        Assert.Equal("bild.jpg", message.Filename);
+    }
+
+    [Fact]
+    public async Task AttachesTheSlicerPreviewWithoutCamera()
+    {
+        var printer = await CreatePrinterAsync("Voron", PrinterType.Moonraker, "http://voron.local:7125");
+        await PlaceSpoolAsync("V1", printer.Id, 0);
+        _moonraker.Body = VoronFinished;
+        _moonraker.Routes["/server/webcams/list"] = """{"result":{"webcams":[]}}""";
+        _moonraker.Routes["/printer/objects/query"] = """{"result":{"status":{"print_stats":{"state":"complete","filename":"teile/benchy.gcode"}}}}""";
+        _moonraker.Routes["/server/files/metadata"] = VoronMetadata;
+        _moonraker.Images["http://voron.local:7125/server/files/gcodes/teile/.thumbs/benchy-300x300.png"] = Jpeg;
+        await SyncAsync(printer.Id);
+
+        Assert.Equal(Jpeg, Assert.Single(_bummel.Messages).Attachment);
+    }
+
+    [Fact]
+    public async Task SendsWithoutPictureWhenTheServerRejectsIt()
+    {
+        _bummel.RejectAttachments = true;
+        _bambu.Snapshot = Jpeg;
+        _bambu.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 12.5, 4.2)));
+        var printer = await CreatePrinterAsync("Barret", PrinterType.Bambu, "http://192.168.2.170", "12345678");
+        _bambu.Print = FakeBambu.Report("RUNNING", 60, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _bambu.Print = FakeBambu.Report("FINISH", 100);
+        await SyncAsync(printer.Id);
+
+        var message = Assert.Single(_bummel.Messages);
+        Assert.Equal("Barret: benchy fertig", message.Title);
+        Assert.Null(message.Attachment);
+        // Der zweite Versuch ohne Bild trägt denselben Schlüssel
+        Assert.Equal(2, _bummel.Attempts.Count);
+        Assert.Single(_bummel.Attempts.Distinct());
+    }
+
+    [Fact]
+    public async Task AttachesTheBambuCameraPicture()
+    {
+        _bambu.Snapshot = Jpeg;
+        _bambu.File = FakeBambu.ThreeMf(FakeBambu.Plate(1, (1, "PLA", "000000", 12.5, 4.2)));
+        var printer = await CreatePrinterAsync("Barret", PrinterType.Bambu, "http://192.168.2.170", "12345678");
+        _bambu.Print = FakeBambu.Report("RUNNING", 60, trayNow: 1);
+        await SyncAsync(printer.Id);
+        _bambu.Print = FakeBambu.Report("FINISH", 100);
+        await SyncAsync(printer.Id);
+
+        Assert.Equal(Jpeg, Assert.Single(_bummel.Messages).Attachment);
+    }
+
+    [Theory]
+    [InlineData("http://voron.local:7125", "/webcam/?action=snapshot", "http://voron.local/webcam/?action=snapshot")]
+    [InlineData("192.168.2.155", "webcam/snapshot.jpg", "http://192.168.2.155/webcam/snapshot.jpg")]
+    [InlineData("http://u1.local", "http://localhost:8080/snapshot", "http://u1.local:8080/snapshot")]
+    [InlineData("http://u1.local", "http://192.168.2.50/cam.jpg", "http://192.168.2.50/cam.jpg")]
+    public void ResolvesTheSnapshotAddress(string baseUrl, string snapshot, string expected) =>
+        Assert.Equal(expected, MoonrakerAdapter.SnapshotUri(baseUrl, snapshot)!.ToString());
 
     [Fact]
     public async Task U1ReportsTheTagInEachHead()
@@ -325,27 +493,62 @@ public class LiveStatusTests : IDisposable
     public async Task NotificationSettingsCanBeChangedFromTheApp()
     {
         var initial = (await _client.GetFromJsonAsync<NotificationSettingsResponse>("/api/settings/notifications"))!;
-        Assert.Equal("https://ntfy.test/filomat", initial.Url);
-        Assert.False(initial.FromApp);
+        Assert.Equal(("https://bummel.test", "filomat", true, false, true), (initial.Server, initial.Topic, initial.HasToken, initial.FromApp, initial.Configured));
 
-        var invalid = await _client.PutAsJsonAsync("/api/settings/notifications", new NotificationSettingsRequest("ntfy.sh/x", null));
+        // Ungültig: Adresse ohne Schema, Topic mit Großbuchstaben, Token ohne ob_ (und keiner gespeichert)
+        var invalid = await _client.PutAsJsonAsync("/api/settings/notifications",
+            new NotificationSettingsRequest("bummel.example.de", "Filomat", null));
         Assert.Equal(HttpStatusCode.BadRequest, invalid.StatusCode);
+        var errors = (await invalid.Content.ReadFromJsonAsync<Microsoft.AspNetCore.Http.HttpValidationProblemDetails>())!.Errors;
+        Assert.Equal(["server", "token", "topic"], errors.Keys.Order());
+        var wrongToken = await _client.PutAsJsonAsync("/api/settings/notifications",
+            new NotificationSettingsRequest("https://bummel.example.de", "drucker", "tk_geheim"));
+        Assert.Equal(HttpStatusCode.BadRequest, wrongToken.StatusCode);
 
         var saved = await (await _client.PutAsJsonAsync("/api/settings/notifications",
-            new NotificationSettingsRequest("https://ntfy.example.de/drucker", "tk_geheim"))).Content.ReadFromJsonAsync<NotificationSettingsResponse>();
-        Assert.True(saved!.FromApp);
-        Assert.True(saved.HasToken);
+            new NotificationSettingsRequest("https://bummel.example.de/", "drucker", "ob_geheim"))).Content.ReadFromJsonAsync<NotificationSettingsResponse>();
+        Assert.Equal(("https://bummel.example.de", "drucker", true, true, true), (saved!.Server, saved.Topic, saved.HasToken, saved.FromApp, saved.Configured));
 
         Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsync("/api/settings/notifications/test", null)).StatusCode);
-        var message = Assert.Single(_ntfy.Messages);
-        Assert.Equal("https://ntfy.example.de/drucker", message.Url);
-        Assert.Equal("Bearer tk_geheim", message.Authorization);
+        var message = Assert.Single(_bummel.Messages);
+        Assert.Equal("https://bummel.example.de/api/v1/messages", message.Url);
+        Assert.Equal("drucker", message.Topic);
+        Assert.Equal("Bearer ob_geheim", message.Authorization);
         Assert.Equal("fil-O-mat", message.Title);
+        Assert.Equal("tada", message.Tags);
+        Assert.StartsWith("filomat-", message.IdempotencyKey);
+
+        // Ohne neuen Token bleibt der gespeicherte
+        var kept = await (await _client.PutAsJsonAsync("/api/settings/notifications",
+            new NotificationSettingsRequest("https://bummel.example.de", "drucker-2", null))).Content.ReadFromJsonAsync<NotificationSettingsResponse>();
+        Assert.Equal(("drucker-2", true), (kept!.Topic, kept.HasToken));
 
         // Leer: zurück zur Server-Konfiguration
         var reset = await (await _client.PutAsJsonAsync("/api/settings/notifications",
-            new NotificationSettingsRequest("", null))).Content.ReadFromJsonAsync<NotificationSettingsResponse>();
-        Assert.False(reset!.FromApp);
-        Assert.False(reset.HasToken);
+            new NotificationSettingsRequest("", null, null))).Content.ReadFromJsonAsync<NotificationSettingsResponse>();
+        Assert.Equal(("https://bummel.test", "filomat", false), (reset!.Server, reset.Topic, reset.FromApp));
+    }
+
+    [Fact]
+    public async Task RetriesWithTheSameIdempotencyKey()
+    {
+        _bummel.FailFirst = 2;
+        Assert.Equal(HttpStatusCode.NoContent, (await _client.PostAsync("/api/settings/notifications/test", null)).StatusCode);
+
+        Assert.Equal(3, _bummel.Attempts.Count);
+        Assert.Single(_bummel.Attempts.Distinct());
+        Assert.Equal(_bummel.Attempts[0], Assert.Single(_bummel.Messages).IdempotencyKey);
+    }
+
+    [Fact]
+    public async Task ReportsTheProblemFromTheServer()
+    {
+        _bummel.Reject = (HttpStatusCode.Forbidden, "Das Token darf nicht an „filomat“ senden.");
+        var response = await _client.PostAsync("/api/settings/notifications/test", null);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Contains("403 Das Token darf nicht an „filomat“ senden.", await response.Content.ReadAsStringAsync());
+        // Kein zweiter Versuch bei 4xx
+        Assert.Single(_bummel.Attempts);
     }
 }

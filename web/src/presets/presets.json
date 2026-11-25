@@ -1,0 +1,202 @@
+[
+  {
+    "type": "PLA",
+    "brand": null,
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "Prusament",
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "Polymaker",
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "eSUN",
+    "min_temp": "210",
+    "max_temp": "230",
+    "bed_min_temp": "45",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "HATCHBOX",
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "TPU",
+    "brand": "GEEETECH",
+    "min_temp": "200",
+    "max_temp": "230",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "Overture",
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PLA",
+    "brand": "Sunlu",
+    "min_temp": "190",
+    "max_temp": "220",
+    "bed_min_temp": "50",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "PETG",
+    "brand": null,
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "70",
+    "bed_max_temp": "80"
+  },
+  {
+    "type": "PETG",
+    "brand": "Prusament",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "70",
+    "bed_max_temp": "80"
+  },
+  {
+    "type": "PETG",
+    "brand": "Polymaker",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "70",
+    "bed_max_temp": "80"
+  },
+  {
+    "type": "PETG",
+    "brand": "eSUN",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "70",
+    "bed_max_temp": "80"
+  },
+  {
+    "type": "PETG",
+    "brand": "Overture",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "70",
+    "bed_max_temp": "80"
+  },
+  {
+    "type": "TPU",
+    "brand": null,
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "40",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "TPU",
+    "brand": "Polymaker",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "40",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "TPU",
+    "brand": "eSUN",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "40",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "TPU",
+    "brand": "Overture",
+    "min_temp": "220",
+    "max_temp": "250",
+    "bed_min_temp": "40",
+    "bed_max_temp": "60"
+  },
+  {
+    "type": "ABS",
+    "brand": null,
+    "min_temp": "230",
+    "max_temp": "260",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ABS",
+    "brand": "Polymaker",
+    "min_temp": "230",
+    "max_temp": "260",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ABS",
+    "brand": "eSUN",
+    "min_temp": "230",
+    "max_temp": "260",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ABS",
+    "brand": "HATCHBOX",
+    "min_temp": "230",
+    "max_temp": "260",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ASA",
+    "brand": null,
+    "min_temp": "240",
+    "max_temp": "270",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ASA",
+    "brand": "Polymaker",
+    "min_temp": "240",
+    "max_temp": "270",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "ASA",
+    "brand": "eSUN",
+    "min_temp": "240",
+    "max_temp": "270",
+    "bed_min_temp": "80",
+    "bed_max_temp": "100"
+  },
+  {
+    "type": "PLA",
+    "brand": "Extrudr",
+    "min_temp": "200",
+    "max_temp": "230",
+    "bed_min_temp": "20",
+    "bed_max_temp": "60"
+  }
+]

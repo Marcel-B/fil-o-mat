@@ -1,0 +1,14 @@
+# Für das Backend-Image (Kontext ist der Wurzelordner, siehe backend/docker-compose.yml)
+**/node_modules
+**/bin
+**/obj
+**/*.db
+**/*.db-shm
+**/*.db-wal
+web/dist
+android-app
+ios-app
+reader
+branding
+.git
+backend/.env

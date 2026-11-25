@@ -1,6 +1,7 @@
 using System.IO.Compression;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using Filomat.Api.Monitoring;
 using Microsoft.Extensions.Options;
 
 namespace Filomat.Api.Backup;
@@ -74,6 +75,7 @@ public sealed class CloudBackup(
         if (!options.Value.Configured)
             logger.LogInformation("Nextcloud-Sicherung aus: {Url}, {User} und {Password} fehlen",
                 BackupOptions.UrlVariable, BackupOptions.UserVariable, BackupOptions.PasswordVariable);
+        lock (_gate) PublishLastSuccess(LoadState());
         using var timer = new PeriodicTimer(CheckInterval, time);
         try
         {
@@ -166,9 +168,12 @@ public sealed class CloudBackup(
             var state = LoadState();
             state.Last = new BackupRun(started.ToUnixTimeMilliseconds(), time.GetUtcNow().ToUnixTimeMilliseconds(), error is null, archives, bytes, error, scheduled);
             if (scheduled && error is null) state.LastDaily = DateOnly.FromDateTime(local.DateTime);
+            if (error is null) state.LastSucceededAt = state.Last.FinishedAt;
             _failedAt = error is null ? null : time.GetUtcNow();
             SaveState(state);
+            PublishLastSuccess(state);
         }
+        FilomatMetrics.BackupRuns.WithLabels(error is null ? "ok" : "failed").Inc();
         if (error is null)
             logger.LogInformation("Nextcloud-Sicherung fertig: {Archives}, {Bytes} Bytes", string.Join(", ", archives), bytes);
         else
@@ -188,6 +193,13 @@ public sealed class CloudBackup(
         }
         using var archive = ZipFile.Open(zip, ZipArchiveMode.Create);
         archive.CreateEntryFromFile(copy, "filomat.db", CompressionLevel.Optimal);
+    }
+
+    /// <summary>Für den Alarm „Sicherung zu alt“; nach einem Neustart aus backup.json, bevor die nächste läuft.</summary>
+    private static void PublishLastSuccess(State state)
+    {
+        var at = state.LastSucceededAt ?? (state.Last is { Success: true } last ? last.FinishedAt : null);
+        if (at is { } ms) FilomatMetrics.BackupLastSuccess.Set(ms / 1000.0);
     }
 
     private State LoadState()
@@ -225,5 +237,8 @@ public sealed class CloudBackup(
 
         /// <summary>Der lokale Tag der letzten erfolgreichen nächtlichen Sicherung.</summary>
         public DateOnly? LastDaily { get; set; }
+
+        /// <summary>Ende der letzten erfolgreichen Sicherung (Unix-Millisekunden), auch wenn danach eine scheiterte.</summary>
+        public long? LastSucceededAt { get; set; }
     }
 }

@@ -8,12 +8,14 @@ import androidx.datastore.preferences.core.longPreferencesKey
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.filomat.app.data.sync.BackendClient
+import com.filomat.app.data.sync.ApiCompatibility
 import com.filomat.app.data.sync.BackendUpdateStatus
 import com.filomat.app.data.sync.ConsumptionEntry
 import com.filomat.app.data.sync.ContainerData
 import com.filomat.app.data.sync.ImportResult
 import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
+import com.filomat.app.data.sync.RenumberedSpool
 import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.Snapshot
 import com.filomat.app.data.sync.Spool
@@ -37,6 +39,7 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.serialization.decodeFromString
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.filomat.app.i18n.tr
 
 private val Context.dataStore by preferencesDataStore(name = "container_store")
 
@@ -47,7 +50,9 @@ data class SyncState(
     val error: String? = null,
     val lastSyncedAt: Long? = null,
     /** Stand der Backend-Version; `null`, solange unbekannt oder ohne Updater auf dem Server. */
-    val updateStatus: BackendUpdateStatus? = null
+    val updateStatus: BackendUpdateStatus? = null,
+    /** Passen App und Backend zusammen? `null`, solange unbekannt (z. B. Backend nicht erreichbar). */
+    val compatibility: ApiCompatibility? = null
 )
 
 /**
@@ -146,7 +151,7 @@ class ContainerStore private constructor(context: Context) {
     suspend fun addItem(item: Item) {
         var added = false
         edit { s ->
-            if (item.rfidTag.isNotBlank() && s.items.any { it.rfidTag == item.rfidTag }) return@edit s
+            if (item.rfidTag.isNotBlank() && s.findItemByTag(item.rfidTag) != null) return@edit s
             added = true
             s.copy(items = s.items + item)
         }
@@ -164,7 +169,68 @@ class ContainerStore private constructor(context: Context) {
         remote { it.deleteItem(itemId) }
     }
 
-    suspend fun findItemByTag(rfidTag: String): Item? = current().items.firstOrNull { it.rfidTag == rfidTag }
+    suspend fun findItemByTag(rfidTag: String): Item? = current().findItemByTag(rfidTag)
+
+    /**
+     * Fügt einem Filament ein weiteres Tag hinzu, z. B. ein Musterplättchen an einer Box oder einem Drucker.
+     * Gehört das Tag bisher einem anderen Filament, wird es dort entfernt; war es dessen einziges Tag,
+     * wird der Eintrag gelöscht (nur ohne angebrochene Spulen).
+     */
+    suspend fun addTag(tag: String, itemId: String) {
+        val state = current()
+        val previous = state.findItemByTag(tag)
+        if (previous != null && previous.id != itemId) {
+            if (previous.allTags.size > 1) {
+                removeTag(tag, previous.id)
+            } else {
+                check(state.spoolsOf(previous.id).isEmpty()) {
+                    tr("Das Tag gehört zu „%s“, das angebrochene Spulen hat.", previous.getDisplayTitle())
+                }
+                backend?.deleteItem(previous.id)
+                edit { s -> s.copy(items = s.items.filter { it.id != previous.id }) }
+            }
+        }
+        val item = current().item(itemId) ?: return
+        if (item.hasTag(tag)) return
+        saveTags(
+            if (item.rfidTag.isBlank()) item.copy(rfidTag = tag)
+            else item.copy(extraTags = item.extraTags.orEmpty() + tag)
+        )
+    }
+
+    /** Entfernt ein Tag von einem Filament. Ist es das Haupt-Tag, rückt das erste weitere Tag nach; das letzte Tag bleibt. */
+    suspend fun removeTag(tag: String, itemId: String) {
+        val item = current().item(itemId) ?: return
+        val extra = item.extraTags.orEmpty()
+        saveTags(
+            if (item.rfidTag == tag) {
+                check(extra.isNotEmpty()) { tr("Das letzte Tag eines Filaments bleibt.") }
+                item.copy(rfidTag = extra.first(), extraTags = extra.drop(1))
+            } else {
+                item.copy(extraTags = extra - tag)
+            }
+        )
+    }
+
+    private suspend fun saveTags(item: Item) {
+        edit { s -> s.copy(items = s.items.map { if (it.id == item.id) item else it }) }
+        val client = backend ?: return
+        val result = client.importData(Snapshot(emptyList(), listOf(item.toSnapshot(sendWeights = false))))
+        result.skipped.firstOrNull()?.let { throw IllegalStateException(it) }
+        refresh()
+    }
+
+    /**
+     * Führt ein doppeltes Filament in dieses zusammen (Spulen, Verbrauch, Vorrat, Tags); das andere wird gelöscht.
+     * Liefert die Spulen, die eine neue Nummer bekommen haben.
+     */
+    suspend fun mergeItem(fromId: String, itemId: String): List<RenumberedSpool> {
+        val client = checkNotNull(backend) { tr("Zum Zusammenführen muss das Backend verbunden sein.") }
+        val renumbered = client.mergeItem(itemId, fromId)
+        edit { s -> s.copy(items = s.items.filter { it.id != fromId }) }
+        refresh()
+        return renumbered
+    }
 
     suspend fun addItemToContainer(itemId: String, containerId: String) = moveItem(itemId, containerId)
 
@@ -201,7 +267,7 @@ class ContainerStore private constructor(context: Context) {
      */
     suspend fun connect(serverUrl: String, apiKey: String): ImportResult? {
         val client = BackendClient.create(serverUrl, apiKey) ?: run {
-            _sync.update { it.copy(error = "Ungültige Server-Adresse.") }
+            _sync.update { it.copy(error = tr("Ungültige Server-Adresse.")) }
             return null
         }
         prefs.edit().putString("server_url", serverUrl.trim()).putString("api_key", apiKey.trim()).apply()
@@ -237,6 +303,57 @@ class ContainerStore private constructor(context: Context) {
         _printerLive.value = live.associateBy { it.printerId }
     }
 
+    private val _printerLiveConnected = MutableStateFlow(false)
+    /** Der Zustand kommt gerade live vom Backend; Nachfragen alle 15 s ist dann überflüssig. */
+    val printerLiveConnected: StateFlow<Boolean> = _printerLiveConnected.asStateFlow()
+
+    private val _backendChanges = MutableStateFlow(0)
+    /** Zählt hoch, wenn das Backend geänderte Daten meldet (Abgleich, Änderung in einer anderen App). */
+    val backendChanges: StateFlow<Int> = _backendChanges.asStateFlow()
+
+    private val liveFollowers = java.util.concurrent.atomic.AtomicInteger()
+
+    /**
+     * Hält die Live-Verbindung (`/api/printers/events`), solange der Aufrufer läuft (LaunchedEffect); verbindet nach
+     * Abbrüchen neu. Ein älteres Backend ohne den Endpunkt bleibt beim Nachfragen.
+     */
+    suspend fun followPrinterLive() {
+        liveFollowers.incrementAndGet()
+        var delayMs = 2_000L
+        try {
+            while (true) {
+                val client = backend
+                if (client != null) {
+                    try {
+                        client.printerEvents { name, data ->
+                            _printerLiveConnected.value = true
+                            delayMs = 2_000L
+                            when (name) {
+                                "status" -> runCatching { BackendClient.json.decodeFromString<List<PrinterLive>>(data) }
+                                    .getOrNull()?.let { live -> _printerLive.value = live.associateBy { it.printerId } }
+                                "changed" -> _backendChanges.update { it + 1 }
+                            }
+                        }
+                    } catch (e: kotlinx.coroutines.CancellationException) {
+                        throw e
+                    } catch (e: com.filomat.app.data.sync.BackendException) {
+                        if (e.status == 404) {
+                            _printerLiveConnected.value = false
+                            kotlinx.coroutines.awaitCancellation()
+                        }
+                    } catch (e: Exception) {
+                        // Netz weg, Backend neu gestartet: gleich neu verbinden
+                    }
+                }
+                _printerLiveConnected.value = false
+                kotlinx.coroutines.delay(delayMs)
+                delayMs = minOf(delayMs * 2, 60_000L)
+            }
+        } finally {
+            if (liveFollowers.decrementAndGet() == 0) _printerLiveConnected.value = false
+        }
+    }
+
     /** Übernimmt den Stand des Backends (z. B. Container, die auf einem anderen Gerät angelegt wurden). */
     suspend fun refresh() {
         val client = backend ?: return
@@ -258,6 +375,12 @@ class ContainerStore private constructor(context: Context) {
     /** Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein Backend ohne Updater) zählen nicht als Sync-Fehler. */
     suspend fun refreshUpdateStatus() {
         val client = backend ?: return
+        try {
+            val compatibility = ApiCompatibility.of(client.version())
+            _sync.update { it.copy(compatibility = compatibility) }
+        } catch (e: Exception) {
+            // Nicht erreichbar (z. B. während des Neustarts): den letzten Stand behalten
+        }
         val status = try {
             client.updateStatus()
         } catch (e: Exception) {
@@ -415,7 +538,7 @@ class ContainerStore private constructor(context: Context) {
         private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true; coerceInputValues = true }
 
         private val standardContainers = listOf(
-            Container(id = PRINTER_ID, rfidTag = "STANDARD_DRUCKER", name = "Drucker",
+            Container(id = PRINTER_ID, rfidTag = "STANDARD_DRUCKER", name = tr("Drucker"),
                 description = "Standard-Container für Drucker", isStandard = true),
             Container(id = LOOSE_ID, rfidTag = "STANDARD_LOSE", name = "Lose",
                 description = "Standard-Container für lose Items", isStandard = true)
@@ -432,9 +555,9 @@ class ContainerStore private constructor(context: Context) {
             val message = e.message ?: e.javaClass.simpleName
             return when {
                 message.contains("EPERM") ->
-                    "Kein Netzwerkzugriff. In den App-Einstellungen von Fil-o-mat die Berechtigung „Netzwerk“ erlauben."
-                e is java.net.UnknownHostException -> "Server nicht gefunden: $message"
-                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> "Server nicht erreichbar: $message"
+                    tr("Kein Netzwerkzugriff. In den App-Einstellungen von Fil-o-mat die Berechtigung „Netzwerk“ erlauben.")
+                e is java.net.UnknownHostException -> tr("Server nicht gefunden: %s", message)
+                e is java.net.ConnectException || e is java.net.SocketTimeoutException -> tr("Server nicht erreichbar: %s", message)
                 else -> message
             }
         }

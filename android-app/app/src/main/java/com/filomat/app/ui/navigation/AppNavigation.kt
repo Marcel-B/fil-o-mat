@@ -9,6 +9,7 @@ import com.filomat.app.data.PlaceTarget
 import com.filomat.app.ui.screens.BackendScreen
 import com.filomat.app.ui.screens.ContainerScanScreen
 import com.filomat.app.ui.screens.PlaceFlowScreen
+import com.filomat.app.ui.screens.SpoolsScreen
 import com.filomat.app.ui.screens.StockScreen
 import com.filomat.app.ui.screens.TransmissionScreen
 import com.filomat.app.ui.screens.ContainerDetailScreen
@@ -19,6 +20,7 @@ import com.filomat.app.ui.screens.PrinterDetailScreen
 import com.filomat.app.ui.screens.PrintersScreen
 import com.filomat.app.ui.screens.StatsScreen
 import com.filomat.app.ui.screens.ScanScreen
+import com.filomat.app.ui.screens.SettingsScreen
 import com.filomat.app.ui.screens.TagReadScreen
 
 @Composable
@@ -59,6 +61,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         composable("items") {
             ItemsOverviewScreen(navController = navController)
         }
+        composable("spools") {
+            SpoolsScreen(navController = navController)
+        }
         composable("item/{itemId}") { backStackEntry ->
             ItemDetailScreen(
                 itemId = backStackEntry.arguments?.getString("itemId") ?: "",
@@ -79,6 +84,9 @@ fun AppNavigation(navController: NavHostController = rememberNavController()) {
         }
         composable("backend") {
             BackendScreen(navController = navController)
+        }
+        composable("settings") {
+            SettingsScreen(navController = navController)
         }
     }
 }

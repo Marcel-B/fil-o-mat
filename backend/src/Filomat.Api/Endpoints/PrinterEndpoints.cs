@@ -12,6 +12,7 @@ public record PrinterRequest(string Name, PrinterType Type, string BaseUrl, stri
 public record PrinterUpdateRequest(string Name, string BaseUrl, string? ApiKey, bool Enabled);
 
 /// <summary>Drucker ohne gespeicherten Schlüssel.</summary>
+/// <param name="LastSyncError">Fehler beim letzten Abgleich. Ist <paramref name="OfflineSince"/> gesetzt, ist er nur aus (kein Fehler).</param>
 public record PrinterResponse(
     string Id,
     string Name,
@@ -24,12 +25,14 @@ public record PrinterResponse(
     DateTime CreatedAt,
     DateTime? LastJobEndedAt,
     DateTime? LastSyncAt,
-    string? LastSyncError)
+    string? LastSyncError,
+    DateTime? ReaderSeenAt = null,
+    DateTime? OfflineSince = null)
 {
     public static PrinterResponse From(Printer p) => new(
         p.Id, p.Name, p.Type, p.BaseUrl, !string.IsNullOrEmpty(p.ApiKey), p.Enabled, p.ContainerId,
         p.ToolCount ?? (p.Type == PrinterType.SnapmakerU1 ? 4 : 1),
-        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError);
+        p.CreatedAt, p.LastJobEndedAt, p.LastSyncAt, p.LastSyncError, p.ReaderSeenAt, p.OfflineSince);
 }
 
 public record SyncResponse(int Recorded, string? Error);
@@ -51,6 +54,9 @@ public static class PrinterEndpoints
 
         printers.MapGet("/status", (PrinterLive live, CancellationToken cancellationToken) => live.GetAllAsync(maxAge, cancellationToken))
             .WithSummary("Zustand aller Drucker mit Spulen pro Kopf und Hinweisen");
+
+        printers.MapGet("/events", StreamEventsAsync)
+            .WithSummary("Server-Sent Events: status (Zustand aller Drucker wie /status) bei jeder Änderung, changed, wenn sich Daten geändert haben");
 
         printers.MapGet("/{id}/status", async Task<Results<Ok<PrinterLiveResponse>, NotFound>> (
             string id, FilomatDbContext db, PrinterLive live, CancellationToken cancellationToken) =>
@@ -88,9 +94,29 @@ public static class PrinterEndpoints
             string id, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken) =>
         {
             if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
-            var recorded = await sync.SyncAsync(printer, cancellationToken);
+            var recorded = await sync.SyncAsync(printer, cancellationToken, force: true);
             return TypedResults.Ok(new SyncResponse(recorded, printer.LastSyncError));
         });
+
+        printers.MapPut("/{id}/reader", async Task<Results<Ok<ReaderResponse>, NotFound, ValidationProblem>> (
+            string id, ReaderReport report, FilomatDbContext db, PrinterReader reader, CancellationToken cancellationToken) =>
+        {
+            if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
+            if (report.Slots is null)
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["slots"] = [L.T("Slots fehlen.")] });
+            return TypedResults.Ok(await reader.ReportAsync(printer, report.Slots, cancellationToken));
+        }).WithSummary("NFC-Leser am Drucker meldet, welches Musterplättchen in welchem Slot steckt (ganzer Stand, ab Slot 0)");
+
+        printers.MapPost("/{id}/reader/tap", async Task<Results<Ok<ReaderSlot>, NotFound, ValidationProblem>> (
+            string id, ReaderTap tap, FilomatDbContext db, PrinterReader reader, CancellationToken cancellationToken) =>
+        {
+            if (await db.Printers.FindAsync([id], cancellationToken) is not { } printer) return TypedResults.NotFound();
+            var errors = new Dictionary<string, string[]>();
+            if (PrinterReader.NormalizeUid(tap.Tag) is null) errors["tag"] = [L.T("Tag fehlt.")];
+            if (tap.Slot < 0 || tap.Slot >= PrinterReader.MaxSlots) errors["slot"] = [L.T("Slot ungültig.")];
+            if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
+            return TypedResults.Ok(await reader.TapAsync(printer, tap.Slot, tap.Tag, cancellationToken));
+        }).WithSummary("Tipp-Modus: Plättchen am Leser angetippt und Slot gewählt, die Spule kommt in diesen Slot");
 
         var consumption = api.MapGroup("/consumption").WithTags("Verbrauch");
 
@@ -107,9 +133,9 @@ public static class PrinterEndpoints
             string id, AssignConsumptionRequest request, FilomatDbContext db, SpoolStock spools) =>
         {
             if (await db.Consumptions.FindAsync(id) is not { } entry) return TypedResults.NotFound();
-            if (entry.ItemId is not null) return TypedResults.Conflict("Dieser Verbrauch ist bereits einer Spule zugeordnet.");
+            if (entry.ItemId is not null) return TypedResults.Conflict(L.T("Dieser Verbrauch ist bereits einer Spule zugeordnet."));
             if (await db.Items.FindAsync(request.ItemId) is not { } item)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["itemId"] = ["Filament nicht gefunden."] });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["itemId"] = [L.T("Filament nicht gefunden.")] });
 
             var open = await db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null).ToListAsync();
             var spool = request.SpoolId is not null
@@ -117,7 +143,7 @@ public static class PrinterEndpoints
                 : open.FirstOrDefault(s => s.PrinterId == entry.PrinterId && s.Tool == entry.Tool)
                     ?? (open.Count == 1 ? open[0] : null);
             if (request.SpoolId is not null && spool is null)
-                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["spoolId"] = ["Spule nicht gefunden."] });
+                return TypedResults.ValidationProblem(new Dictionary<string, string[]> { ["spoolId"] = [L.T("Spule nicht gefunden.")] });
             spool ??= await spools.OpenAsync(item);
 
             entry.ItemId = item.Id;
@@ -136,17 +162,17 @@ public static class PrinterEndpoints
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            errors["baseUrl"] = ["Adresse muss mit http:// oder https:// beginnen."];
+            errors["baseUrl"] = [L.T("Adresse muss mit http:// oder https:// beginnen.")];
         if (request.Type == PrinterType.Bambu && string.IsNullOrWhiteSpace(request.ApiKey))
-            errors["apiKey"] = ["Zugangscode fehlt (am Drucker unter Einstellungen > WLAN)."];
+            errors["apiKey"] = [L.T("Zugangscode fehlt (am Drucker unter Einstellungen > WLAN).")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
 
         var id = Guid.NewGuid().ToString();
         var tag = string.IsNullOrWhiteSpace(request.RfidTag) ? $"PRINTER_{id}" : request.RfidTag.Trim();
-        if (await db.Containers.AnyAsync(c => c.RfidTag == tag) || await db.Items.AnyAsync(i => i.RfidTag == tag))
-            return TypedResults.Conflict("Dieses Tag ist bereits vergeben.");
+        if (await db.Containers.AnyAsync(c => c.RfidTag == tag) || await db.Items.WithTag(tag).AnyAsync())
+            return TypedResults.Conflict(L.T("Dieses Tag ist bereits vergeben."));
 
         var now = DateTime.UtcNow;
         var container = new Container
@@ -171,19 +197,20 @@ public static class PrinterEndpoints
         db.Printers.Add(printer);
         await db.SaveChangesAsync();
         // Gleich abgleichen, damit eingelegte Spulen sofort im Container stehen; Fehler stehen danach am Drucker
-        await sync.SyncAsync(printer, cancellationToken);
+        await sync.SyncAsync(printer, cancellationToken, force: true);
         return TypedResults.Created($"/api/printers/{printer.Id}", PrinterResponse.From(printer));
     }
 
     private static async Task<Results<Ok<PrinterResponse>, NotFound, ValidationProblem>> UpdateAsync(
-        string id, PrinterUpdateRequest request, FilomatDbContext db, ConsumptionSync sync, CancellationToken cancellationToken)
+        string id, PrinterUpdateRequest request, FilomatDbContext db, ConsumptionSync sync, PrinterReachability reachability,
+        CancellationToken cancellationToken)
     {
         var name = request.Name?.Trim() ?? "";
         var baseUrl = request.BaseUrl?.Trim() ?? "";
         var errors = new Dictionary<string, string[]>();
-        if (name.Length == 0) errors["name"] = ["Name fehlt."];
+        if (name.Length == 0) errors["name"] = [L.T("Name fehlt.")];
         if (!Uri.TryCreate(baseUrl, UriKind.Absolute, out var uri) || (uri.Scheme != "http" && uri.Scheme != "https"))
-            errors["baseUrl"] = ["Adresse muss mit http:// oder https:// beginnen."];
+            errors["baseUrl"] = [L.T("Adresse muss mit http:// oder https:// beginnen.")];
         if (errors.Count > 0) return TypedResults.ValidationProblem(errors);
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
 
@@ -197,15 +224,18 @@ public static class PrinterEndpoints
         await db.SaveChangesAsync();
         // Neue Adresse oder neuer Schlüssel (z. B. nach einer neuen IP per DHCP) gleich ausprobieren,
         // damit der alte Fehler nicht stehen bleibt
-        if (connectionChanged && printer.Enabled) await sync.SyncAsync(printer, cancellationToken);
+        if (connectionChanged) reachability.Forget(printer.Id);
+        if (connectionChanged && printer.Enabled) await sync.SyncAsync(printer, cancellationToken, force: true);
         return TypedResults.Ok(PrinterResponse.From(printer));
     }
 
     /// <summary>Entfernt den Drucker samt Container; eingelegte Spulen wandern nach "Lose", der Verbrauchsverlauf der Spulen bleibt.</summary>
-    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db, PrinterStatusCache cache)
+    private static async Task<Results<NoContent, NotFound>> DeleteAsync(string id, FilomatDbContext db, PrinterStatusCache cache,
+        PrinterReachability reachability)
     {
         if (await db.Printers.FindAsync(id) is not { } printer) return TypedResults.NotFound();
         cache.Remove(printer.Id);
+        reachability.Forget(printer.Id);
 
         var target = await db.Containers.AnyAsync(c => c.Id == Container.LooseId) ? Container.LooseId : null;
         await db.Items.Where(i => i.ContainerId == printer.ContainerId)
@@ -216,5 +246,56 @@ public static class PrinterEndpoints
         if (await db.Containers.FindAsync(printer.ContainerId) is { } container) db.Containers.Remove(container);
         await db.SaveChangesAsync();
         return TypedResults.NoContent();
+    }
+
+    /// <summary>Ohne Änderung kommt nach so langer Zeit ein Kommentar, damit Proxys die Verbindung nicht schließen.</summary>
+    private static readonly TimeSpan KeepAlive = TimeSpan.FromSeconds(20);
+
+    /// <summary>
+    /// Schickt sofort den Zustand aller Drucker (<c>event: status</c>, Daten wie <c>/status</c>), danach bei jeder Änderung
+    /// erneut, und <c>event: changed</c>, wenn Drucker, Spulen usw. neu geladen werden sollten (Abgleich, Änderung über
+    /// die API). Der Zustand kommt aus dem Speicher; frisch hält ihn <see cref="PrinterLiveService"/>, solange jemand zuhört.
+    /// </summary>
+    private static async Task StreamEventsAsync(HttpContext context, PrinterEvents events, IServiceScopeFactory scopes,
+        Microsoft.Extensions.Options.IOptions<Microsoft.AspNetCore.Http.Json.JsonOptions> json, CancellationToken cancellationToken)
+    {
+        var response = context.Response;
+        response.ContentType = "text/event-stream";
+        response.Headers.CacheControl = "no-cache";
+        // nginx und ähnliche Proxys sollen nicht puffern
+        response.Headers["X-Accel-Buffering"] = "no";
+        context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpResponseBodyFeature>()?.DisableBuffering();
+
+        using var listener = events.Subscribe();
+        string? last = null;
+        var sendStatus = true;
+        try
+        {
+            await response.WriteAsync("retry: 5000\n\n", cancellationToken);
+            while (!cancellationToken.IsCancellationRequested)
+            {
+                if (sendStatus)
+                {
+                    // Eigener Scope pro Runde: ein DbContext über Stunden sähe nur seinen alten Stand
+                    await using var scope = scopes.CreateAsyncScope();
+                    var printers = await scope.ServiceProvider.GetRequiredService<PrinterLive>().GetAllAsync(TimeSpan.MaxValue, cancellationToken);
+                    var data = System.Text.Json.JsonSerializer.Serialize(printers, json.Value.SerializerOptions);
+                    if (data != last)
+                    {
+                        await response.WriteAsync($"event: status\ndata: {data}\n\n", cancellationToken);
+                        last = data;
+                    }
+                }
+                await response.Body.FlushAsync(cancellationToken);
+                var (status, changed) = await listener.WaitAsync(KeepAlive, cancellationToken);
+                if (changed) await response.WriteAsync("event: changed\ndata: {}\n\n", cancellationToken);
+                else if (!status) await response.WriteAsync(": ping\n\n", cancellationToken);
+                sendStatus = status;
+            }
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            // Client hat die Verbindung geschlossen
+        }
     }
 }

@@ -11,7 +11,7 @@ namespace Filomat.Api.Printers;
 /// nach Fortschritt. Ohne Datei bleibt die Restmenge, die das AMS für Bambu-Spulen meldet.
 /// Slots: AMS-Einheit · 4 + Fach, danach die externe Spule; ohne AMS ein Slot.
 /// </summary>
-public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinterAdapter
+public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger, BambuLiveReports? live = null) : IPrinterAdapter, IPrinterPush
 {
     public const int SlotsPerAms = 4;
 
@@ -34,6 +34,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
     /// <param name="ProgressPerTray">Fortschritt in Prozentpunkten pro <c>tray_now</c>.</param>
     /// <param name="RemainAtStart">AMS-Restmenge pro Fach beim ersten Blick auf den Druck.</param>
     /// <param name="Filaments">Slicer-Angaben aus der Druckdatei, falls gefunden.</param>
+    /// <param name="RemainingSeconds">Restzeit beim letzten Abgleich, an dem der Druck lief.</param>
+    /// <param name="SeenAt">Zeit dieses Abgleichs.</param>
     public record TrackedJob(
         string JobId,
         string Key,
@@ -46,7 +48,9 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         Dictionary<int, double> RemainAtStart,
         IReadOnlyList<SlicedFilament>? Filaments,
         int FileAttempts,
-        DateTime? StartedAt = null);
+        DateTime? StartedAt = null,
+        int? RemainingSeconds = null,
+        DateTime? SeenAt = null);
 
     /// <summary>AMS-Einheiten, Fächer (Schlüssel wie <c>tray_now</c>) und das fördernde Fach.</summary>
     public record AmsState(int Units, Dictionary<int, Tray> Trays, int? Now);
@@ -56,11 +60,7 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
     {
-        if (!_reports.TryRemove(printer.Id, out var report))
-        {
-            var (serial, accessCode) = Credentials(printer.ApiKey);
-            report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
-        }
+        if (!_reports.TryRemove(printer.Id, out var report)) report = await QueryAsync(printer, cancellationToken);
         var print = report.Print;
         var ams = ReadAms(print);
         var slotCount = SlotCount(ams.Units);
@@ -138,18 +138,24 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     public async Task<Thumbnail?> GetThumbnailAsync(Printer printer, CancellationToken cancellationToken)
     {
-        var (serial, accessCode) = Credentials(printer.ApiKey);
-        var print = (await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken)).Print;
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        var print = (await QueryAsync(printer, cancellationToken)).Print;
         var gcodeFile = print.GetStringOrNull("gcode_file");
         // Die 3MF ist mehrere MB groß; PrinterLive merkt sich das Bild pro Druck
         var file = await lan.DownloadAsync(printer.BaseUrl, accessCode, BambuLan.FileCandidates(gcodeFile, print.GetStringOrNull("subtask_name")), cancellationToken);
         return file is not null && BambuLan.ReadPlateImage(file, BambuLan.PlateOf(gcodeFile)) is { } png ? new Thumbnail(png, "image/png") : null;
     }
 
+    public async Task<Thumbnail?> GetSnapshotAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        return await lan.SnapshotAsync(printer.BaseUrl, accessCode, cancellationToken) is { } jpeg ? new Thumbnail(jpeg, "image/jpeg") : null;
+    }
+
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
-        var (serial, accessCode) = Credentials(printer.ApiKey);
-        var report = await lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+        var (_, accessCode) = Credentials(printer.ApiKey);
+        var report = await QueryAsync(printer, cancellationToken);
         _reports[printer.Id] = report;
         var print = report.Print;
         var ams = ReadAms(print);
@@ -160,15 +166,23 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
         var state = print.GetStringOrNull("gcode_state");
         var name = print.GetStringOrNull("subtask_name") ?? Path.GetFileNameWithoutExtension(print.GetStringOrNull("gcode_file") ?? "");
         var key = $"{print.GetStringOrNull("gcode_file")}|{name}";
+        // Fehlen Datei und Name in der Meldung, ist das kein Hinweis auf einen anderen Druck
+        var named = print.TryGetProperty("gcode_file", out _) || print.TryGetProperty("subtask_name", out _);
         var taskId = print.GetStringOrNull("task_id") is { Length: > 0 } id && id != "0" ? id : null;
-        var progress = print.GetDoubleOrNull("mc_percent") ?? 0;
+        var reported = print.GetDoubleOrNull("mc_percent");
+        var progress = reported ?? tracked?.Progress ?? 0;
+        var running = state is "PREPARE" or "SLICING" or "RUNNING" or "PAUSE";
 
-        // Ein anderer Druck: der gemerkte ist vorbei, ohne dass ein Abgleich sein Ende sah
-        if (tracked is not null && (tracked.Key != key
+        // Ein anderer Druck: der gemerkte ist vorbei, ohne dass ein Abgleich sein Ende sah. Ein fallender Fortschritt
+        // zählt nur bei einem laufenden Druck; nach FINISH meldet der P1S den Fortschritt nicht immer mit.
+        // FINISH und FAILED gelten dem gemerkten Druck, auch wenn Datei oder Name jetzt anders lauten: ein neuer Druck
+        // braucht allein zum Vorbereiten länger als zwei Abgleiche und wäre als laufend aufgefallen.
+        var ended = state is "FINISH" or "FAILED";
+        if (tracked is not null && (named && tracked.Key != key && !ended
                                     || taskId is not null && tracked.TaskId is not null && taskId != tracked.TaskId
-                                    || progress + 10 < tracked.Progress))
+                                    || running && reported is { } percent && percent + 10 < tracked.Progress))
         {
-            finished.Add(Finish(printer, tracked, Ended(tracked)));
+            finished.Add(Finish(printer, tracked, Ended(tracked, DateTime.UtcNow)));
             tracked = null;
         }
 
@@ -177,6 +191,8 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
             case "PREPARE" or "SLICING" or "RUNNING" or "PAUSE":
                 tracked ??= new TrackedJob(taskId ?? $"local-{DateTime.UtcNow:yyyyMMddHHmmss}-{Guid.NewGuid():N}"[..29], key, taskId, name, 0, null, [], [], [], null, 0, DateTime.UtcNow);
                 tracked = Advance(tracked, progress, taskId, ams);
+                if (print.GetDoubleOrNull("mc_remaining_time") is { } minutes)
+                    tracked = tracked with { RemainingSeconds = (int)(minutes * 60), SeenAt = DateTime.UtcNow };
                 if (tracked.Filaments is null && tracked.FileAttempts < FileAttempts)
                     tracked = await LoadFileAsync(printer, accessCode, print, tracked, cancellationToken);
                 printer.AdapterStateJson = JsonSerializer.Serialize(tracked);
@@ -187,13 +203,49 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
                 finished.Add(Finish(printer, tracked, state == "FINISH" ? "completed" : "cancelled"));
                 break;
 
+            // Unvollständige Meldung ohne Zustand: nichts entscheiden, der nächste Abgleich sieht mehr
+            case null:
+                printer.AdapterStateJson = tracked is null ? null : JsonSerializer.Serialize(tracked);
+                return finished;
+
             // FINISH und FAILED bleiben stehen, bis der nächste Druck beginnt; ohne gemerkten Druck ist er schon gebucht
             default:
-                if (tracked is not null) finished.Add(Finish(printer, tracked, Ended(tracked)));
+                if (tracked is not null) finished.Add(Finish(printer, tracked, Ended(tracked, DateTime.UtcNow)));
                 break;
         }
         printer.AdapterStateJson = null;
         return finished;
+    }
+
+    /// <summary>Der Stand aus der offenen Verbindung von <see cref="WatchAsync"/>, sonst eine eigene Abfrage.</summary>
+    private Task<BambuReport> QueryAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        if (live?.Get(printer) is { } report) return Task.FromResult(report);
+        var (serial, accessCode) = Credentials(printer.ApiKey);
+        return lan.QueryAsync(printer.BaseUrl, accessCode, serial, cancellationToken);
+    }
+
+    /// <summary>
+    /// Bleibt per MQTT verbunden; solange die Verbindung steht, beantworten Zustand und Abgleich alles aus ihrem Stand,
+    /// ohne eigene Verbindung und ohne <c>pushall</c> (das die P1-Serie nicht zu oft bekommen soll).
+    /// </summary>
+    public async Task WatchAsync(Printer printer, Action changed, CancellationToken cancellationToken)
+    {
+        if (live is null) throw new InvalidOperationException("BambuLiveReports fehlt.");
+        var (serial, accessCode) = Credentials(printer.ApiKey);
+        var key = BambuLiveReports.Key(printer);
+        try
+        {
+            await lan.WatchAsync(printer.BaseUrl, accessCode, serial, report =>
+            {
+                live.Set(key, report);
+                changed();
+            }, cancellationToken);
+        }
+        finally
+        {
+            live.Remove(key);
+        }
     }
 
     /// <summary>Zugangscode, optional mit Seriennummer davor: <c>01P00A123456789:12345678</c>.</summary>
@@ -338,8 +390,17 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
 
     private static bool SameType(string? a, string? b) => string.Equals(a?.Trim(), b?.Trim(), StringComparison.OrdinalIgnoreCase);
 
-    /// <summary>Ein Druck, der ohne Abschlussmeldung verschwindet: fertig, wenn er fast durch war.</summary>
-    private static string Ended(TrackedJob job) => job.Progress >= 99 ? "completed" : "cancelled";
+    /// <summary>
+    /// Ein Druck, der ohne Abschlussmeldung verschwindet (Drucker nach dem Druck ausgeschaltet oder neu gestartet, dann
+    /// meldet er IDLE): fertig, wenn er fast durch war oder seine Restzeit beim letzten Abgleich inzwischen abgelaufen ist.
+    /// </summary>
+    internal static string Ended(TrackedJob job, DateTime now)
+    {
+        if (job.Progress >= 99) return "completed";
+        if (job is not { RemainingSeconds: { } remaining, SeenAt: { } seen }) return "cancelled";
+        var nearlyDone = job.Progress >= 90 || remaining <= TimeSpan.FromMinutes(15).TotalSeconds;
+        return nearlyDone && now >= seen.AddSeconds(remaining) - TimeSpan.FromMinutes(1) ? "completed" : "cancelled";
+    }
 
     /// <summary>Fächer aus <c>ams.ams[].tray[]</c> und <c>vt_tray</c>; Schlüssel wie <c>tray_now</c>.</summary>
     public static AmsState ReadAms(JsonElement print)
@@ -394,4 +455,18 @@ public class BambuAdapter(IBambuLan lan, ILogger<BambuAdapter> logger) : IPrinte
             return null;
         }
     }
+}
+
+/// <summary>Stand aus den offenen MQTT-Verbindungen pro Drucker (Adresse und Zugang, damit eine geänderte Adresse nicht alte Werte liefert).</summary>
+public class BambuLiveReports
+{
+    private readonly System.Collections.Concurrent.ConcurrentDictionary<string, BambuReport> _reports = new();
+
+    public static string Key(Printer printer) => $"{printer.Id}|{printer.BaseUrl}|{printer.ApiKey}";
+
+    public BambuReport? Get(Printer printer) => _reports.GetValueOrDefault(Key(printer));
+
+    public void Set(string key, BambuReport report) => _reports[key] = report;
+
+    public void Remove(string key) => _reports.TryRemove(key, out _);
 }

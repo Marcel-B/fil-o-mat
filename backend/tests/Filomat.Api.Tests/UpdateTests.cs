@@ -42,6 +42,17 @@ public class UpdateTests : IDisposable
     }
 
     [Fact]
+    public async Task ReportsApiLevelAndRunningCommit()
+    {
+        var bare = await _client.GetFromJsonAsync<VersionResponse>("/api/version");
+        Assert.Equal((ApiVersion.Level, ApiVersion.MinAppLevel, (string?)null), (bare!.ApiLevel, bare.MinAppLevel, bare.Commit));
+
+        WriteStatus();
+        var version = await _client.GetFromJsonAsync<VersionResponse>("/api/version");
+        Assert.Equal("aaa", version!.Commit);
+    }
+
+    [Fact]
     public async Task ReadsStatusWrittenByUpdater()
     {
         WriteStatus();

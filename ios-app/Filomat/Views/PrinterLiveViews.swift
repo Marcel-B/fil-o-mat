@@ -13,7 +13,7 @@ struct PrinterStatusLine: View {
                     .tint(live.status.state == "Paused" ? .orange : .accentColor)
             }
             if !live.warnings.isEmpty {
-                Label(live.warnings.count == 1 ? live.warnings[0].text : "\(live.warnings.count) Warnungen",
+                Label(live.warnings.count == 1 ? live.warnings[0].text : String(localized: "\(live.warnings.count) Warnungen"),
                       systemImage: "exclamationmark.triangle.fill")
                     .foregroundStyle(.orange)
                     .lineLimit(2)
@@ -41,6 +41,7 @@ struct PrinterDetailView: View {
 
     @State private var thumbnail: UIImage?
     @State private var showingEdit = false
+    @State private var isFixing = false
 
     private var live: PrinterLive? { store.printerLive[printer.id] }
 
@@ -53,12 +54,18 @@ struct PrinterDetailView: View {
                         ForEach(live.hints) { hint in
                             Label(hint.text, systemImage: hint.symbol)
                                 .foregroundStyle(hint.warning ? Color.orange : Color.secondary)
+                            if hint.kind == "TagMismatch", let tool = hint.tool, let slot = live.tools.first(where: { $0.tool == tool }) {
+                                detectedFix(for: slot)
+                            }
                         }
                     }
                 }
                 if !live.tools.isEmpty {
                     Section(live.tools.count > 1 ? (printer.type == .moonraker || printer.type == .snapmakerU1 ? "Köpfe" : "Slots") : "Spule") {
-                        ForEach(live.tools) { ToolLiveRow(tool: $0, isActive: live.status.isActive && live.status.activeTool == $0.tool && live.tools.count > 1) }
+                        ForEach(live.tools) { tool in
+                            ToolLiveRow(tool: tool, isActive: live.status.isActive && live.status.activeTool == tool.tool && live.tools.count > 1)
+                            spoolChoice(for: tool)
+                        }
                     }
                 }
                 if let heaters = live.status.heaters, !heaters.isEmpty {
@@ -84,13 +91,14 @@ struct PrinterDetailView: View {
             PrinterFormView(printer: printer) { await onChanged() }
         }
         .refreshable { await store.refreshPrinterLive() }
-        // Solange die Ansicht offen ist, alle 15 Sekunden nachfragen
+        // Solange die Ansicht offen ist, live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
         .task {
             while !Task.isCancelled {
-                await store.refreshPrinterLive()
+                if !store.printerLiveConnected { await store.refreshPrinterLive() }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+        .task { await store.followPrinterLive() }
         .task(id: live?.status.jobKey) { await loadThumbnail() }
     }
 
@@ -117,13 +125,13 @@ struct PrinterDetailView: View {
                 }
             }
             if let layer = status.layer, let total = status.totalLayers, total > 0, status.hasJob {
-                LabeledContent("Schicht", value: "\(layer) von \(total)")
+                LabeledContent("Schicht", value: String(localized: "\(layer) von \(total)"))
             }
             if let elapsed = status.elapsedSeconds, elapsed > 0, status.hasJob {
                 LabeledContent("Druckzeit", value: PrinterStatus.duration(elapsed))
             }
             if let message = status.message, !message.isEmpty {
-                Text(message).font(.caption).foregroundStyle(status.state == "Error" || status.state == "Offline" ? Color.red : Color.secondary)
+                Text(message).font(.caption).foregroundStyle(status.state == "Error" ? Color.red : Color.secondary)
             }
             if let thumbnail, status.hasJob {
                 HStack {
@@ -140,6 +148,85 @@ struct PrinterDetailView: View {
                 Text("Abgefragt \(date.formatted(.relative(presentation: .named)))")
             }
         }
+    }
+
+    /// Der Drucker erkennt das Plättchen einer Sorte, aber welche ihrer losen Spulen steckt dort?
+    @ViewBuilder
+    private func spoolChoice(for tool: ToolLive) -> some View {
+        if tool.spoolId == nil, let itemId = tool.itemId {
+            let loose = store.spools(of: itemId).filter { $0.printerId == nil }
+            if !loose.isEmpty {
+                Menu {
+                    ForEach(loose) { spool in
+                        Button(spool.remainingWeight.map { "#\(spool.number) · \($0.gramsText)" } ?? "#\(spool.number)") {
+                            Task { await place(spool, tool: tool.tool) }
+                        }
+                    }
+                } label: {
+                    Label("Welche Spule steckt hier?", systemImage: "questionmark.circle")
+                }
+            }
+        }
+    }
+
+    /// Der Drucker erkennt das Plättchen einer anderen Sorte als die Spule, die laut App dort steckt: ein Tipp legt eine
+    /// Spule der erkannten Sorte hinein, die bisherige wandert ins Lager. Bei mehreren Spulen der Sorte wird gewählt.
+    @ViewBuilder
+    private func detectedFix(for tool: ToolLive) -> some View {
+        if let tag = tool.reported?.tagUid, let item = store.items.first(where: { $0.allTags.contains { $0.caseInsensitiveCompare(tag) == .orderedSame } }),
+           item.id != tool.itemId {
+            let candidates = store.spools(of: item.id)
+                .filter { $0.printerId != printer.id || ($0.tool ?? 0) != tool.tool }
+                .sorted { ($0.printerId == nil ? 0 : 1, $0.number) < ($1.printerId == nil ? 0 : 1, $1.number) }
+            Group {
+                if candidates.count == 1, let spool = candidates.first {
+                    Button {
+                        Task { await place(spool, tool: tool.tool) }
+                    } label: {
+                        Label("\(item.name) #\(spool.number) übernehmen", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                } else if candidates.count > 1 {
+                    Menu {
+                        ForEach(candidates) { spool in
+                            Button(candidateTitle(spool)) {
+                                Task { await place(spool, tool: tool.tool) }
+                            }
+                        }
+                    } label: {
+                        Label("\(item.name) übernehmen", systemImage: "arrow.triangle.2.circlepath")
+                    }
+                } else if (item.spoolsInStock ?? 0) > 0 {
+                    Button {
+                        Task { await openSpool(of: item, tool: tool.tool) }
+                    } label: {
+                        Label("Neue Spule \(item.name) anbrechen", systemImage: "plus.circle")
+                    }
+                }
+            }
+            .disabled(isFixing)
+        }
+    }
+
+    /// "#2 · 384 g", bei Spulen in einem anderen Drucker mit dessen Namen.
+    private func candidateTitle(_ spool: Spool) -> String {
+        var parts = ["#\(spool.number)"]
+        if let grams = spool.remainingWeight { parts.append(grams.gramsText) }
+        if let printerId = spool.printerId, let other = store.printers.first(where: { $0.id == printerId }) { parts.append(other.name) }
+        return parts.joined(separator: " · ")
+    }
+
+    private func openSpool(of item: Item, tool: Int) async {
+        isFixing = true
+        defer { isFixing = false }
+        _ = try? await store.openSpool(itemId: item.id, place: .printer(printer.id, tool: tool))
+        await store.refreshPrinterLive()
+    }
+
+    private func place(_ spool: Spool, tool: Int) async {
+        isFixing = true
+        defer { isFixing = false }
+        try? await store.placeSpool(spool, at: .printer(printer.id, tool: tool))
+        await store.refreshPrinterLive()
     }
 
     private func loadThumbnail() async {

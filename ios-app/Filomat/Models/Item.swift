@@ -19,6 +19,17 @@ struct Item: Identifiable, Codable, Hashable {
     /// Lichtdurchlässigkeit als Transmission Distance (TD, HueForge) in mm, z. B. mit einem TD-1 gemessen.
     /// Steht nur in Fil-o-mat, nicht auf dem Tag.
     var transmissionDistance: Double?
+    /// Weitere Tags derselben Sorte, z. B. Musterplättchen an Boxen und Druckern; `nil` bei älteren Daten.
+    var extraTags: [String]?
+
+    /// Haupt-Tag und weitere Tags.
+    var allTags: [String] {
+        ([rfidTag] + (extraTags ?? [])).filter { !$0.isEmpty }
+    }
+
+    func hasTag(_ tag: String) -> Bool {
+        !tag.isEmpty && allTags.contains(tag)
+    }
 
     /// "3,5 mm", falls die Lichtdurchlässigkeit gemessen ist.
     var transmissionText: String? {
@@ -30,6 +41,18 @@ struct Item: Identifiable, Codable, Hashable {
         let parts = [itemData?.brand, itemData?.type, itemData?.variant]
             .compactMap { $0?.trimmingCharacters(in: .whitespaces) }
         return parts.isEmpty ? name : parts.joined(separator: " ")
+    }
+
+    /// Gleiche Marke, Typ, Variante und Farbe ergeben denselben Schlüssel; `nil` ohne Marke oder Typ.
+    var duplicateKey: String? {
+        func normalized(_ value: String?) -> String {
+            (value ?? "").trimmingCharacters(in: .whitespaces).lowercased()
+        }
+        let brand = normalized(itemData?.brand), type = normalized(itemData?.type)
+        guard !brand.isEmpty, !type.isEmpty else { return nil }
+        let color = normalized(itemData?.colorHex).replacingOccurrences(of: "#", with: "")
+        return [brand, type, normalized(itemData?.variant), color.isEmpty ? normalized(itemData?.color) : color]
+            .joined(separator: "|")
     }
 
     /// Name für neu gescannte Items, wie in der Android-App: "<brand> <type>".

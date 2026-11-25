@@ -8,6 +8,7 @@ struct FilomatApp: App {
         return store
     }()
     @Environment(\.scenePhase) private var scenePhase
+    @AppStorage(Appearance.storageKey) private var appearance = Appearance.system
 
     static let refreshInterval: Duration = .seconds(120)
 
@@ -15,6 +16,7 @@ struct FilomatApp: App {
         WindowGroup {
             ContentView()
                 .environment(store)
+                .preferredColorScheme(appearance.colorScheme)
                 // Beim Öffnen und danach alle 2 Minuten den Stand holen, solange die App im Vordergrund ist
                 // (das Backend fragt die Drucker im selben Takt ab)
                 .task(id: scenePhase) {
@@ -39,8 +41,12 @@ struct ContentView: View {
                 Tab(ScanView.title, systemImage: ScanView.systemImage) {
                     NavigationStack { ScanView() }
                 }
-                Tab("Filamente", systemImage: "magnifyingglass") {
+                // Sorten und Spulen getrennt, wie in der Web-Oberfläche
+                Tab("Filamente", systemImage: "paintpalette") {
                     NavigationStack { ItemsOverviewView() }
+                }
+                Tab("Spulen", systemImage: "circle.circle") {
+                    NavigationStack { SpoolsView() }
                 }
                 Tab("Drucker", systemImage: "printer") {
                     NavigationStack { PrintersView() }
@@ -58,8 +64,11 @@ struct ContentView: View {
                 .tabItem { Label("Container", systemImage: "archivebox") }
             NavigationStack { ScanView() }
                 .tabItem { Label(ScanView.title, systemImage: ScanView.systemImage) }
+            // Sorten und Spulen getrennt, wie in der Web-Oberfläche
             NavigationStack { ItemsOverviewView() }
-                .tabItem { Label("Filamente", systemImage: "magnifyingglass") }
+                .tabItem { Label("Filamente", systemImage: "paintpalette") }
+            NavigationStack { SpoolsView() }
+                .tabItem { Label("Spulen", systemImage: "circle.circle") }
             NavigationStack { PrintersView() }
                 .tabItem { Label("Drucker", systemImage: "printer") }
         }

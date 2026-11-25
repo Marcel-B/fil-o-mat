@@ -105,6 +105,9 @@ public class AnycubicAdapter(IAnycubicLan lan) : IPrinterAdapter
         return finished;
     }
 
+    /// <summary>Jede Abfrage ist eine eigene MQTT-Verbindung; nicht öfter als alle 10 s.</summary>
+    public TimeSpan MinLiveInterval => TimeSpan.FromSeconds(10);
+
     public async Task<PrinterStatus?> GetStatusAsync(Printer printer, CancellationToken cancellationToken)
     {
         if (!_reports.TryRemove(printer.Id, out var report)) report = await lan.QueryAsync(printer.BaseUrl, cancellationToken);

@@ -10,9 +10,11 @@ import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.CloudOff
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.filomat.app.data.sync.ApiCompatibility
 import com.filomat.app.data.sync.BackendUpdateStatus
 import com.filomat.app.data.sync.PrinterLive
 import com.filomat.app.data.sync.StoreState
@@ -31,6 +33,7 @@ import com.filomat.app.data.ContainerStore
 import com.filomat.app.ui.components.MainNavigationBar
 import com.filomat.app.ui.components.MainTab
 import com.filomat.app.ui.viewmodel.ContainerViewModel
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -56,7 +59,7 @@ fun ContainerListScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Container") },
+                title = { Text(tr("Container")) },
                 actions = {
                     if (sync.connected) {
                         if (sync.isSyncing) {
@@ -68,15 +71,18 @@ fun ContainerListScreen(
                                     containerStore.refreshUpdateStatus()
                                 }
                             }) {
-                                Icon(Icons.Default.Refresh, contentDescription = "Abgleichen")
+                                Icon(Icons.Default.Refresh, contentDescription = tr("Abgleichen"))
                             }
                         }
                     }
                     IconButton(onClick = { navController.navigate("backend") }) {
                         Icon(
                             if (sync.connected) Icons.Default.Cloud else Icons.Default.CloudOff,
-                            contentDescription = "Backend"
+                            contentDescription = tr("Backend")
                         )
+                    }
+                    IconButton(onClick = { navController.navigate("settings") }) {
+                        Icon(Icons.Default.Settings, contentDescription = tr("Einstellungen"))
                     }
                 }
             )
@@ -84,7 +90,7 @@ fun ContainerListScreen(
         bottomBar = { MainNavigationBar(navController, MainTab.CONTAINERS) },
         floatingActionButton = {
             FloatingActionButton(onClick = { showingAddContainer = true }) {
-                Icon(Icons.Default.Add, contentDescription = "Hinzufügen")
+                Icon(Icons.Default.Add, contentDescription = tr("Hinzufügen"))
             }
         }
     ) { padding ->
@@ -92,6 +98,7 @@ fun ContainerListScreen(
             SyncBanners(
                 error = sync.error,
                 update = sync.updateStatus,
+                compatibility = sync.compatibility,
                 onClick = { navController.navigate("backend") }
             )
             ContainerList(containers, storeState, navController, liveMap)
@@ -111,15 +118,16 @@ fun ContainerListScreen(
 
 /** Hinweise auf Abgleich-Fehler und neue Backend-Versionen, wie in der iOS-App. */
 @Composable
-private fun SyncBanners(error: String?, update: BackendUpdateStatus?, onClick: () -> Unit) {
+private fun SyncBanners(error: String?, update: BackendUpdateStatus?, compatibility: ApiCompatibility?, onClick: () -> Unit) {
     if (error != null) {
         Banner(Icons.Default.CloudOff, error, isError = true, onClick = onClick)
     }
+    compatibility?.message?.let { Banner(Icons.Default.Warning, it, isError = true, onClick = onClick) }
     if (update != null && (update.updateAvailable || update.failed)) {
         when {
-            update.failed -> Banner(Icons.Default.Warning, "Backend-Update fehlgeschlagen", isError = true, onClick = onClick)
-            update.isUpdating -> Banner(Icons.Default.Sync, "Backend wird aktualisiert …", onClick = onClick)
-            else -> Banner(Icons.Default.Download, "Neue Backend-Version verfügbar", onClick = onClick)
+            update.failed -> Banner(Icons.Default.Warning, tr("Backend-Update fehlgeschlagen"), isError = true, onClick = onClick)
+            update.isUpdating -> Banner(Icons.Default.Sync, tr("Backend wird aktualisiert …"), onClick = onClick)
+            else -> Banner(Icons.Default.Download, tr("Neue Backend-Version verfügbar"), onClick = onClick)
         }
     }
 }
@@ -156,16 +164,16 @@ private fun ContainerList(
                 .fillMaxSize(),
             contentAlignment = Alignment.Center
         ) {
-            Text("Keine Container vorhanden")
+            Text(tr("Keine Container vorhanden"))
         }
     } else {
         val regularContainers = containers.filter { !it.isStandard }
         val sections = listOf<Pair<String?, List<Container>>>(
-            "Drucker" to regularContainers.filter { storeState.printerOwning(it.id) != null },
-            "Container" to regularContainers.filter { storeState.printerOwning(it.id) == null },
+            tr("Drucker") to regularContainers.filter { storeState.printerOwning(it.id) != null },
+            tr("Container") to regularContainers.filter { storeState.printerOwning(it.id) == null },
             // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
             null to containers.filter {
-                it.isStandard && (it.id != StoreState.PRINTER_CONTAINER_ID || storeState.filamentCount(it.id) > 0)
+                it.isStandard && (it.id != StoreState.PRINTER_CONTAINER_ID || storeState.spoolCount(it.id) > 0)
             }
         ).filter { it.second.isNotEmpty() }
 
@@ -196,7 +204,7 @@ private fun ContainerList(
                 items(sectionContainers, key = { it.id }) { container ->
                     ContainerCard(
                         container = container,
-                        filamentCount = storeState.filamentCount(container.id),
+                        spoolCount = storeState.spoolCount(container.id),
                         live = storeState.printerOwning(container.id)?.takeIf { it.enabled }?.let { liveMap[it.id] },
                         onClick = {
                             navController.navigate("container/${container.id}")
@@ -212,7 +220,7 @@ private fun ContainerList(
 @Composable
 fun ContainerCard(
     container: Container,
-    filamentCount: Int,
+    spoolCount: Int,
     live: PrinterLive? = null,
     onClick: () -> Unit
 ) {
@@ -229,12 +237,12 @@ fun ContainerCard(
                 style = MaterialTheme.typography.headlineSmall
             )
             Text(
-                text = "RFID: ${container.rfidTag}",
+                text = tr("RFID: %s", container.rfidTag),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
             Text(
-                text = "$filamentCount Filamente",
+                text = if (spoolCount == 1) tr("1 Spule") else tr("%s Spulen", spoolCount),
                 style = MaterialTheme.typography.bodySmall,
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )

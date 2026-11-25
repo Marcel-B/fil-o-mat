@@ -51,6 +51,18 @@ public class Printer
     /// <summary>Zustand des Adapters zwischen zwei Abgleichen (JSON), z. B. der laufende Druck bei PrusaLink.</summary>
     public string? AdapterStateJson { get; set; }
 
+    /// <summary>
+    /// Was der NFC-Leser am Drucker (ESP32) zuletzt gemeldet hat: pro Slot die UID des Musterplättchens oder <c>null</c> (JSON).
+    /// </summary>
+    public string? ReaderSlotsJson { get; set; }
+
+    /// <summary>Letzte Meldung des NFC-Lesers.</summary>
+    public DateTime? ReaderSeenAt { get; set; }
+
     public DateTime? LastSyncAt { get; set; }
+    /// <summary>Fehler beim letzten Abgleich; auch "nicht erreichbar", dann ist zusätzlich <see cref="OfflineSince"/> gesetzt.</summary>
     public string? LastSyncError { get; set; }
+
+    /// <summary>Seit wann der Drucker nicht antwortet (ausgeschaltet, nicht im Netz); <c>null</c>, wenn er antwortet.</summary>
+    public DateTime? OfflineSince { get; set; }
 }

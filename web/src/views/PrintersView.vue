@@ -1,0 +1,189 @@
+<script setup lang="ts">
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue'
+import { useI18n } from 'vue-i18n'
+import { useToast } from 'primevue/usetoast'
+import { api } from '@/api'
+import { useDataStore } from '@/stores/data'
+import { useLiveStore } from '@/stores/live'
+import { displayTitle, formatDateTime, grams, printerPlace } from '@/format'
+import ColorDot from '@/components/ColorDot.vue'
+import InsertSpoolDialog from '@/components/InsertSpoolDialog.vue'
+import PrinterCard from '@/components/PrinterCard.vue'
+import PrinterDialog from '@/components/PrinterDialog.vue'
+import SpoolDialog from '@/components/SpoolDialog.vue'
+import type { Consumption, Printer, Spool, ToolLive } from '@/types'
+
+const store = useDataStore()
+const toast = useToast()
+const { t } = useI18n()
+
+const live = useLiveStore()
+const liveById = computed(() => live.byId)
+const loadingLive = computed(() => live.loading)
+
+// Live über den Server (stores/live.ts); ohne Verbindung wie die Apps alle 15 s nachfragen, solange die Seite sichtbar ist
+async function loadLive() {
+  if (document.visibilityState !== 'visible') return
+  await live.load()
+}
+
+const unassigned = ref<Consumption[]>([])
+async function loadUnassigned() {
+  try {
+    unassigned.value = await api.get<Consumption[]>('/consumption?unassigned=true')
+  } catch {
+    unassigned.value = []
+  }
+}
+
+let timer: number | undefined
+onMounted(() => {
+  loadLive()
+  loadUnassigned()
+  timer = window.setInterval(() => !live.connected && loadLive(), 15_000)
+})
+onUnmounted(() => window.clearInterval(timer))
+// Spule eingelegt oder umgesteckt: Köpfe und Hinweise gleich neu (live schickt der Server sie selbst)
+watch(() => store.spools, () => !live.connected && loadLive())
+// Nach einem Abgleich (neue Drucke) auch den Verbrauch ohne Spule
+watch(() => store.printers, loadUnassigned)
+
+async function reloadAll() {
+  await Promise.all([store.refresh(), loadLive(), loadUnassigned()])
+}
+
+// Drucker anlegen/bearbeiten
+const editedPrinter = ref<Printer | null>(null)
+const printerDialog = ref(false)
+function editPrinter(printer: Printer | null) {
+  editedPrinter.value = printer
+  printerDialog.value = true
+}
+
+// Klick auf einen Kopf: Spule bearbeiten oder eine einlegen
+const editedSpool = ref<Spool | null>(null)
+const spoolDialog = ref(false)
+const insertPrinter = ref<Printer | null>(null)
+const insertTool = ref(0)
+const insertDialog = ref(false)
+function onTool(printer: Printer, tool: ToolLive) {
+  const spool = tool.spoolId ? store.spools.find((s) => s.id === tool.spoolId) : undefined
+  if (spool) {
+    editedSpool.value = spool
+    spoolDialog.value = true
+  } else {
+    insertPrinter.value = printer
+    insertTool.value = tool.tool
+    insertDialog.value = true
+  }
+}
+
+// Offene Buchungen zuordnen
+const assigning = ref<Consumption | null>(null)
+const assignItem = ref<string | null>(null)
+const assignSpool = ref<string | null>(null)
+const assignDialog = ref(false)
+const assignSaving = ref(false)
+const itemOptions = computed(() =>
+  store.items
+    .map((i) => ({ id: i.id, label: `${displayTitle(i)}${i.itemData?.color ? ` · ${i.itemData.color}` : ''}`, color: i.itemData?.color_hex }))
+    .sort((a, b) => a.label.localeCompare(b.label, 'de')),
+)
+const spoolOptions = computed(() =>
+  assignItem.value
+    ? store.spoolsOf(assignItem.value).map((s) => ({ id: s.id, label: `#${s.number} · ${store.placeLabel(store.placeOf(s))}` }))
+    : [],
+)
+function startAssign(entry: Consumption) {
+  assigning.value = entry
+  assignItem.value = null
+  assignSpool.value = null
+  assignDialog.value = true
+}
+async function assign() {
+  if (!assigning.value || !assignItem.value) return
+  assignSaving.value = true
+  try {
+    await api.post(`/consumption/${assigning.value.id}/assign`, { itemId: assignItem.value, spoolId: assignSpool.value })
+    assignDialog.value = false
+    await Promise.all([store.refresh(), loadUnassigned()])
+  } catch (e) {
+    toast.add({ severity: 'error', summary: t('printers.assignFailed'), detail: (e as Error).message, life: 6000 })
+  } finally {
+    assignSaving.value = false
+  }
+}
+const toolLabel = (entry: Consumption) => {
+  const printer = store.printer(entry.printerId)
+  return printer ? printerPlace(printer, entry.tool) : t('printers.deleted')
+}
+</script>
+
+<template>
+  <div class="mx-auto flex max-w-7xl flex-col gap-4">
+    <div class="flex flex-wrap items-center gap-3">
+      <h1 class="text-2xl font-semibold">{{ t('printers.title') }}</h1>
+      <span class="flex-1" />
+      <Button icon="pi pi-refresh" text rounded :aria-label="t('common.reload')" :loading="loadingLive" @click="reloadAll" />
+      <Button :label="t('printers.new')" icon="pi pi-plus" @click="editPrinter(null)" />
+    </div>
+
+    <div v-if="store.loaded && !store.printers.length" class="rounded-xl border border-dashed border-surface-300 p-10 text-center text-muted-color dark:border-surface-700">
+      {{ t('printers.none') }}
+    </div>
+
+    <div class="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
+      <PrinterCard
+        v-for="printer in store.printers"
+        :key="printer.id"
+        :printer="printer"
+        :live="liveById.get(printer.id)"
+        @edit="editPrinter(printer)"
+        @tool="onTool(printer, $event)"
+        @synced="loadLive(); loadUnassigned()"
+      />
+    </div>
+
+    <Card v-if="unassigned.length">
+      <template #title>{{ t('printers.unassignedTitle', { n: unassigned.length }) }}</template>
+      <template #subtitle>{{ t('printers.unassignedHint') }}</template>
+      <template #content>
+        <DataTable :value="unassigned" size="small" data-key="id" paginator :rows="10">
+          <Column :header="t('printers.end')"><template #body="{ data }">{{ formatDateTime(data.endedAt) }}</template></Column>
+          <Column :header="t('printers.job')" field="jobName" />
+          <Column :header="t('common.place')"><template #body="{ data }">{{ toolLabel(data) }}</template></Column>
+          <Column :header="t('common.quantity')" class="text-right"><template #body="{ data }">{{ grams(data.grams) }}</template></Column>
+          <Column class="w-32 text-right">
+            <template #body="{ data }"><Button :label="t('printers.assign')" size="small" outlined @click="startAssign(data)" /></template>
+          </Column>
+        </DataTable>
+      </template>
+    </Card>
+
+    <PrinterDialog v-model:visible="printerDialog" :printer="editedPrinter" />
+    <SpoolDialog v-model:visible="spoolDialog" :spool="editedSpool" show-item />
+    <InsertSpoolDialog v-model:visible="insertDialog" :printer="insertPrinter" :tool="insertTool" />
+
+    <Dialog v-model:visible="assignDialog" modal :header="t('printers.assignTitle')" class="w-[30rem] max-w-[95vw]">
+      <div v-if="assigning" class="flex flex-col gap-4">
+        <p class="text-sm">{{ assigning.jobName }} · {{ toolLabel(assigning) }} · {{ grams(assigning.grams) }}</p>
+        <label class="flex flex-col gap-1 text-sm">
+          {{ t('printers.kind') }}
+          <Select v-model="assignItem" :options="itemOptions" option-label="label" option-value="id" filter fluid @change="assignSpool = null">
+            <template #option="{ option }">
+              <div class="flex items-center gap-2"><ColorDot :hex="option.color" :size="16" />{{ option.label }}</div>
+            </template>
+          </Select>
+        </label>
+        <label v-if="assignItem" class="flex flex-col gap-1 text-sm">
+          {{ t('common.spool') }}
+          <Select v-model="assignSpool" :options="spoolOptions" option-label="label" option-value="id" show-clear :placeholder="t('printers.autoSpool')" fluid />
+        </label>
+      </div>
+      <template #footer>
+        <Button :label="t('common.cancel')" severity="secondary" text @click="assignDialog = false" />
+        <Button :label="t('printers.book')" icon="pi pi-check" :loading="assignSaving" :disabled="!assignItem" @click="assign" />
+      </template>
+    </Dialog>
+  </div>
+</template>

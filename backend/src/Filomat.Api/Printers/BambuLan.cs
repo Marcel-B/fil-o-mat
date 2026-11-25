@@ -1,7 +1,10 @@
 using System.Globalization;
 using System.IO.Compression;
+using System.Net.Security;
+using System.Net.Sockets;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
@@ -28,8 +31,17 @@ public interface IBambuLan
     /// <param name="serial">Seriennummer; ohne Angabe die aus dem Zertifikat des Druckers.</param>
     Task<BambuReport> QueryAsync(string baseUrl, string accessCode, string? serial, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Bleibt verbunden und ruft <paramref name="report"/> mit dem vollständigen Stand, sobald der Drucker etwas meldet.
+    /// Kehrt zurück, wenn die Verbindung abreißt.
+    /// </summary>
+    Task WatchAsync(string baseUrl, string accessCode, string? serial, Action<BambuReport> report, CancellationToken cancellationToken);
+
     /// <summary>Lädt die erste vorhandene der Dateien von der SD-Karte; <c>null</c>, wenn keine da ist.</summary>
     Task<byte[]?> DownloadAsync(string baseUrl, string accessCode, IReadOnlyList<string> paths, CancellationToken cancellationToken);
+
+    /// <summary>Ein JPEG der eingebauten Kamera; <c>null</c>, wenn der Drucker keins schickt.</summary>
+    Task<byte[]?> SnapshotAsync(string baseUrl, string accessCode, CancellationToken cancellationToken);
 }
 
 /// <summary>
@@ -37,12 +49,14 @@ public interface IBambuLan
 /// Themen <c>device/{seriennummer}/report</c> und <c>…/request</c>. Die P1-Serie schickt nur Änderungen; den
 /// vollständigen Zustand gibt es auf <c>pushall</c>. Daher pro Abgleich: verbinden, fragen, trennen. Die
 /// Seriennummer steht im Zertifikat des Druckers. Die Druckdatei (3MF mit den Slicer-Gewichten) liegt auf der
-/// SD-Karte, erreichbar per FTPS (implizites TLS, Port 990).
+/// SD-Karte, erreichbar per FTPS (implizites TLS, Port 990). Die Kamera der P1- und A1-Serie schickt JPEGs über TLS
+/// auf Port 6000 (in den Druckereinstellungen muss die LAN-Liveansicht an sein).
 /// </summary>
 public class BambuLan : IBambuLan
 {
     public const int MqttPort = 8883;
     public const int FtpPort = 990;
+    public const int CameraPort = 6000;
     public const string User = "bblp";
     private static readonly TimeSpan ReportTimeout = TimeSpan.FromSeconds(10);
 
@@ -63,9 +77,11 @@ public class BambuLan : IBambuLan
                     return Task.CompletedTask;
                 lock (merged)
                 {
-                    // Änderungen ergänzen den Stand; der vollständige kommt auf pushall
+                    // Änderungen ergänzen den Stand; der vollständige kommt auf pushall. Erst auf ihn warten: eine
+                    // Änderung mit gcode_state und ams, aber ohne Fortschritt und Datei, ließ einen fertigen Druck
+                    // wie abgebrochen aussehen.
                     foreach (var (key, value) in print) merged[key] = value?.DeepClone();
-                    if (merged.ContainsKey("gcode_state") && merged.ContainsKey("ams")) complete.TrySetResult();
+                    if (IsFullReport(print)) complete.TrySetResult();
                 }
             }
             catch (JsonException)
@@ -74,20 +90,7 @@ public class BambuLan : IBambuLan
             return Task.CompletedTask;
         };
 
-        var options = new MqttClientOptionsBuilder()
-            .WithTcpServer(address.Host, address.IsDefaultPort ? MqttPort : address.Port)
-            .WithCredentials(User, accessCode)
-            .WithClientId($"filomat-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(6))}")
-            .WithProtocolVersion(MqttProtocolVersion.V311)
-            // Zertifikat der Bambu-CA, ausgestellt auf die Seriennummer; die Verbindung bleibt im LAN
-            .WithTlsOptions(tls => tls.UseTls().WithCertificateValidationHandler(context =>
-            {
-                if (context.Certificate is { } certificate)
-                    certificateName = X509CertificateLoader.LoadCertificate(certificate.GetRawCertData()).GetNameInfo(X509NameType.SimpleName, false);
-                return true;
-            }))
-            .WithTimeout(TimeSpan.FromSeconds(15))
-            .Build();
+        var options = Options(address, accessCode, name => certificateName = name);
 
         try
         {
@@ -96,11 +99,7 @@ public class BambuLan : IBambuLan
             if (string.IsNullOrEmpty(device))
                 throw new PrinterUnavailableException("Seriennummer unbekannt; bitte als Seriennummer:Zugangscode eintragen.");
 
-            await client.SubscribeAsync($"device/{device}/report", cancellationToken: cancellationToken);
-            await client.PublishAsync(new MqttApplicationMessageBuilder()
-                .WithTopic($"device/{device}/request")
-                .WithPayload("""{"pushing":{"sequence_id":"0","command":"pushall","version":1,"push_target":1}}""")
-                .Build(), cancellationToken);
+            await SubscribeAsync(client, device, cancellationToken);
 
             try
             {
@@ -131,6 +130,101 @@ public class BambuLan : IBambuLan
         }
     }
 
+    public async Task WatchAsync(string baseUrl, string accessCode, string? serial, Action<BambuReport> report,
+        CancellationToken cancellationToken)
+    {
+        var address = Address(baseUrl);
+        string? certificateName = null;
+        string? device = null;
+        var merged = new JsonObject();
+        var complete = false;
+        var disconnected = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        using var client = new MqttClientFactory().CreateMqttClient();
+        client.ApplicationMessageReceivedAsync += e =>
+        {
+            try
+            {
+                if (JsonNode.Parse(e.ApplicationMessage.ConvertPayloadToString()) is not JsonObject { } root
+                    || root["print"] is not JsonObject print)
+                    return Task.CompletedTask;
+                BambuReport? snapshot = null;
+                lock (merged)
+                {
+                    foreach (var (key, value) in print) merged[key] = value?.DeepClone();
+                    // Erst ab dem vollständigen Stand weitergeben (siehe QueryAsync)
+                    complete |= IsFullReport(print);
+                    if (complete) snapshot = new BambuReport(JsonSerializer.SerializeToElement(merged), device!);
+                }
+                if (snapshot is not null) report(snapshot);
+            }
+            catch (JsonException)
+            {
+            }
+            return Task.CompletedTask;
+        };
+        client.DisconnectedAsync += _ =>
+        {
+            disconnected.TrySetResult();
+            return Task.CompletedTask;
+        };
+
+        try
+        {
+            await client.ConnectAsync(Options(address, accessCode, name => certificateName = name), cancellationToken);
+            device = string.IsNullOrWhiteSpace(serial) ? certificateName : serial.Trim();
+            if (string.IsNullOrEmpty(device))
+                throw new PrinterUnavailableException("Seriennummer unbekannt; bitte als Seriennummer:Zugangscode eintragen.");
+            await SubscribeAsync(client, device, cancellationToken);
+            await disconnected.Task.WaitAsync(cancellationToken);
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (client.IsConnected) await client.DisconnectAsync(cancellationToken: CancellationToken.None);
+            throw;
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException and not PrinterUnavailableException)
+        {
+            throw new PrinterUnavailableException($"MQTT-Verbindung zum Drucker fehlgeschlagen: {Describe(ex)}", ex);
+        }
+    }
+
+    private static MqttClientOptions Options(Uri address, string accessCode, Action<string?> certificateName) =>
+        new MqttClientOptionsBuilder()
+            .WithTcpServer(address.Host, address.IsDefaultPort ? MqttPort : address.Port)
+            .WithCredentials(User, accessCode)
+            .WithClientId($"filomat-{Convert.ToHexStringLower(RandomNumberGenerator.GetBytes(6))}")
+            .WithProtocolVersion(MqttProtocolVersion.V311)
+            // Zertifikat der Bambu-CA, ausgestellt auf die Seriennummer; die Verbindung bleibt im LAN
+            .WithTlsOptions(tls => tls.UseTls().WithCertificateValidationHandler(context =>
+            {
+                if (context.Certificate is { } certificate)
+                    certificateName(X509CertificateLoader.LoadCertificate(certificate.GetRawCertData()).GetNameInfo(X509NameType.SimpleName, false));
+                return true;
+            }))
+            .WithTimeout(TimeSpan.FromSeconds(15))
+            // Ein ausgeschalteter Drucker trennt nicht; ohne Antwort auf den Ping gilt die Verbindung als abgerissen
+            .WithKeepAlivePeriod(TimeSpan.FromSeconds(20))
+            .Build();
+
+    /// <summary>Abonniert die Meldungen und bittet um den vollständigen Stand (<c>pushall</c>).</summary>
+    private static async Task SubscribeAsync(IMqttClient client, string device, CancellationToken cancellationToken)
+    {
+        await client.SubscribeAsync($"device/{device}/report", cancellationToken: cancellationToken);
+        await client.PublishAsync(new MqttApplicationMessageBuilder()
+            .WithTopic($"device/{device}/request")
+            .WithPayload("""{"pushing":{"sequence_id":"0","command":"pushall","version":1,"push_target":1}}""")
+            .Build(), cancellationToken);
+    }
+
+    /// <summary>
+    /// Vollständiger Zustand: die Antwort auf pushall (<c>msg</c> 0, Änderungen haben 1) oder eine Meldung mit Zustand,
+    /// Fortschritt und Datei.
+    /// </summary>
+    public static bool IsFullReport(JsonObject print) =>
+        print["msg"] is JsonValue msg && msg.ToString() == "0"
+        || print.ContainsKey("gcode_state") && print.ContainsKey("mc_percent") && (print.ContainsKey("gcode_file") || print.ContainsKey("subtask_name"));
+
     /// <summary>Meldung samt Ursachen; MQTTnet meldet außen nur "Error while connecting host".</summary>
     public static string Describe(Exception ex)
     {
@@ -156,6 +250,45 @@ public class BambuLan : IBambuLan
         }
         return null;
     }
+
+    /// <summary>
+    /// Nach der Anmeldung (80 Byte: 0x40, 0x3000, zwei Nullen, Benutzer und Zugangscode auf je 32 Byte) schickt die
+    /// Kamera Bilder mit 16 Byte Kopf, die ersten vier Byte sind die Länge (little endian). Das erste reicht.
+    /// Siehe github.com/Doridian/OpenBambuAPI (video.md).
+    /// </summary>
+    public async Task<byte[]?> SnapshotAsync(string baseUrl, string accessCode, CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(TimeSpan.FromSeconds(10));
+        using var tcp = new TcpClient();
+        await tcp.ConnectAsync(Address(baseUrl).Host, CameraPort, timeout.Token);
+        // Selbst signiert, auf die Seriennummer ausgestellt
+        await using var tls = new SslStream(tcp.GetStream(), false, (_, _, _, _) => true);
+        await tls.AuthenticateAsClientAsync(new SslClientAuthenticationOptions { TargetHost = Address(baseUrl).Host }, timeout.Token);
+        await tls.WriteAsync(CameraLogin(accessCode), timeout.Token);
+
+        var header = new byte[16];
+        await tls.ReadExactlyAsync(header, timeout.Token);
+        var length = BitConverter.ToInt32(header, 0);
+        if (length is <= 0 or > 10_000_000) return null;
+        var image = new byte[length];
+        await tls.ReadExactlyAsync(image, timeout.Token);
+        return IsJpeg(image) ? image : null;
+    }
+
+    public static byte[] CameraLogin(string accessCode)
+    {
+        var packet = new byte[80];
+        BitConverter.GetBytes(0x40).CopyTo(packet, 0);
+        BitConverter.GetBytes(0x3000).CopyTo(packet, 4);
+        Encoding.ASCII.GetBytes(User).CopyTo(packet, 16);
+        var code = Encoding.ASCII.GetBytes(accessCode);
+        code.AsSpan(0, Math.Min(code.Length, 32)).CopyTo(packet.AsSpan(48));
+        return packet;
+    }
+
+    public static bool IsJpeg(byte[] data) =>
+        data.Length > 4 && data[0] == 0xFF && data[1] == 0xD8 && data[^2] == 0xFF && data[^1] == 0xD9;
 
     /// <summary>Adresse des Druckers, mit oder ohne <c>http://</c>.</summary>
     public static Uri Address(string baseUrl) => new(baseUrl.Contains("://") ? baseUrl : $"http://{baseUrl}");

@@ -4,6 +4,7 @@ import kotlinx.serialization.Serializable
 import java.util.Calendar
 import java.util.Date
 import java.util.Locale
+import com.filomat.app.i18n.tr
 
 /** Zustand eines Druckers mit den Spulen der App und Hinweisen (`/api/printers/status`). */
 @Serializable
@@ -46,18 +47,18 @@ data class PrinterStatus(
 
     val title: String
         get() = when (state) {
-            "Printing" -> "Druckt"
-            "Paused" -> "Pausiert"
-            "Finished" -> "Fertig"
-            "Cancelled" -> "Abgebrochen"
-            "Error" -> "Fehler"
-            "Offline" -> "Nicht erreichbar"
-            else -> "Bereit"
+            "Printing" -> tr("Druckt")
+            "Paused" -> tr("Pausiert")
+            "Finished" -> tr("Fertig")
+            "Cancelled" -> tr("Abgebrochen")
+            "Error" -> tr("Fehler")
+            "Offline" -> tr("Nicht erreichbar")
+            else -> tr("Bereit")
         }
 
     /** "noch 1:23 h" bzw. "noch 12 min" */
     val remainingText: String?
-        get() = remainingSeconds?.takeIf { isActive && it > 0 }?.let { "noch " + duration(it) }
+        get() = remainingSeconds?.takeIf { isActive && it > 0 }?.let { tr("noch %s", duration(it)) }
 
     /** "Druckt benchy · 45 % · noch 32 min" */
     val summary: String
@@ -109,7 +110,7 @@ data class DryerReport(
 ) {
     val text: String
         get() = listOfNotNull(
-            humidityPercent?.let { "${Math.round(it)} % Feuchte" } ?: humidityLevel?.let { "Feuchtestufe $it/5" },
+            humidityPercent?.let { tr("%s %% Feuchte", Math.round(it)) } ?: humidityLevel?.let { tr("Feuchtestufe %s/5", it) },
             temperature?.let { "${Math.round(it)} °C" }
         ).joinToString(" · ")
 }
@@ -129,18 +130,18 @@ data class ToolLive(
     val neededGrams: Double? = null,
     val enough: Boolean? = null
 ) {
-    /** "PLA Schwarz #2", was der Drucker meldet, oder "leer". */
+    /** "PLA Schwarz #2", die erkannte Sorte mit offener Spule ("PLA Schwarz #?"), was der Drucker meldet, oder "leer". */
     val title: String
         get() = when {
-            itemName != null -> spoolNumber?.let { "$itemName #$it" } ?: itemName
+            itemName != null -> spoolNumber?.let { "$itemName #$it" } ?: "$itemName #?"
             reported?.type != null && reported.loaded != false -> reported.type
-            else -> "leer"
+            else -> tr("leer")
         }
 }
 
 @Serializable
 data class PrinterHint(
-    /** `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `Temperature`, `Humidity` */
+    /** `SpoolShort`, `TagMismatch`, `SlotMismatch`, `SlotEmpty`, `SlotUnknown`, `SpoolUnclear`, `Temperature`, `Humidity` */
     val kind: String,
     val warning: Boolean = false,
     val tool: Int? = null,
@@ -201,16 +202,17 @@ data class StatsResponse(
 
 @Serializable
 data class NotificationSettings(
-    val url: String? = null,
+    val server: String? = null,
+    val topic: String? = null,
     val hasToken: Boolean = false,
-    /** `false`, wenn die Adresse aus der Server-Konfiguration kommt */
+    /** `false`, wenn das Ziel aus der Server-Konfiguration kommt */
     val fromApp: Boolean = false,
     val configured: Boolean = false
 )
 
-/** [token] `null` lässt den gespeicherten Token, ein leerer Text löscht ihn. */
+/** Leerer [server] schaltet zurück auf die Server-Konfiguration; [token] `null` lässt den gespeicherten Token. */
 @Serializable
-data class NotificationSettingsRequest(val url: String?, val token: String? = null)
+data class NotificationSettingsRequest(val server: String?, val topic: String?, val token: String? = null)
 
 /** "1,2 kg" ab 1000 g, sonst "340 g" */
 fun gramsText(grams: Double): String =

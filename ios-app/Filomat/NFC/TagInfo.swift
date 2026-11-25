@@ -21,13 +21,13 @@ struct TagRecord: Equatable {
 
     var formatName: String {
         switch format {
-        case 0: return "Leer"
+        case 0: return String(localized: "Leer")
         case 1: return "Well-known"
         case 2: return "Media"
         case 3: return "URI"
-        case 4: return "Extern"
-        case 5: return "Unbekannt"
-        case 6: return "Unverändert"
+        case 4: return String(localized: "Extern")
+        case 5: return String(localized: "Unbekannt")
+        case 6: return String(localized: "Unverändert")
         default: return "TNF \(format)"
         }
     }
@@ -65,23 +65,23 @@ enum TagInfo {
     /// Bekannte OpenSpool-Felder in Anzeigereihenfolge. `subtype` schreibt der Snapmaker U1,
     /// wo die Apps `variant` schreiben.
     private static let knownFields: [(key: String, label: String)] = [
-        ("protocol", "Protokoll"),
+        ("protocol", String(localized: "Protokoll")),
         ("version", "Version"),
-        ("brand", "Marke"),
-        ("type", "Typ"),
-        ("variant", "Variante"),
-        ("subtype", "Untertyp"),
-        ("color", "Farbname"),
-        ("color_name", "Farbname"),
-        ("color_hex", "Farbe"),
-        ("additional_color_hexes", "Weitere Farben"),
-        ("alpha", "Transparenz"),
-        ("min_temp", "Düse min."),
-        ("max_temp", "Düse max."),
-        ("bed_min_temp", "Bett min."),
-        ("bed_max_temp", "Bett max."),
-        ("weight", "Gewicht"),
-        ("diameter", "Durchmesser"),
+        ("brand", String(localized: "Marke")),
+        ("type", String(localized: "Typ")),
+        ("variant", String(localized: "Variante")),
+        ("subtype", String(localized: "Untertyp")),
+        ("color", String(localized: "Farbname")),
+        ("color_name", String(localized: "Farbname")),
+        ("color_hex", String(localized: "Farbe")),
+        ("additional_color_hexes", String(localized: "Weitere Farben")),
+        ("alpha", String(localized: "Transparenz")),
+        ("min_temp", String(localized: "Düse min.")),
+        ("max_temp", String(localized: "Düse max.")),
+        ("bed_min_temp", String(localized: "Bett min.")),
+        ("bed_max_temp", String(localized: "Bett max.")),
+        ("weight", String(localized: "Gewicht")),
+        ("diameter", String(localized: "Durchmesser")),
     ]
 
     /// Alle Felder des JSON: bekannte in fester Reihenfolge, unbekannte danach alphabetisch,
@@ -113,7 +113,7 @@ enum TagInfo {
         case let string as String: return string
         case let number as NSNumber:
             // JSONSerialization liefert Bools als NSNumber; nur echte Bools als Ja/Nein zeigen.
-            if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? "ja" : "nein" }
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return number.boolValue ? String(localized: "ja") : String(localized: "nein") }
             return number.stringValue
         case let array as [Any]: return array.map(text).joined(separator: ", ")
         case is NSNull: return "–"

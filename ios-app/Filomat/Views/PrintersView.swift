@@ -81,14 +81,17 @@ struct PrintersView: View {
             }
         }
         .refreshable { await syncAll() }
-        // Solange die Liste offen ist, den Zustand alle 15 Sekunden holen
+        // Solange die Liste offen ist, kommt der Zustand live vom Backend; ohne Verbindung alle 15 Sekunden nachfragen
         .task {
             await load()
             while !Task.isCancelled {
-                await store.refreshPrinterLive()
+                if !store.printerLiveConnected { await store.refreshPrinterLive() }
                 try? await Task.sleep(for: .seconds(15))
             }
         }
+        .task { await store.followPrinterLive() }
+        // Abgleich gelaufen oder Drucker woanders geändert
+        .onChange(of: store.backendChanges) { Task { await load() } }
         .sheet(isPresented: $showingNotifications) {
             NotificationSettingsView()
         }
@@ -173,15 +176,20 @@ private struct PrinterRow: View {
                 Spacer()
                 if isSyncing { ProgressView() }
             }
-            Text((printer.enabled ? "" : "Pausiert · ") + (printer.toolCount > 1
-                 ? "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)"
+            Text((printer.enabled ? "" : String(localized: "Pausiert · ")) + (printer.toolCount > 1
+                 ? String(localized: "\(printer.type.title) · \(printer.toolCount) Köpfe · \(printer.baseUrl)")
                  : "\(printer.type.title) · \(printer.baseUrl)"))
                 .font(.caption)
                 .foregroundStyle(.secondary)
             if let live, printer.enabled, printer.lastSyncError == nil {
                 PrinterStatusLine(live: live)
             }
-            if let error = printer.lastSyncError {
+            if let since = printer.offlineDate {
+                // Ausgeschaltet ist kein Fehler
+                Label("Aus oder nicht erreichbar · \(since.formatted(.relative(presentation: .named)))", systemImage: "power")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            } else if let error = printer.lastSyncError {
                 Label(error, systemImage: "exclamationmark.triangle")
                     .font(.caption)
                     .foregroundStyle(.red)
@@ -245,7 +253,7 @@ struct PrinterFormView: View {
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
                     if printer?.hasApiKey == true {
-                        SecureField("Neuer \(type.requiresKey ? "Zugangscode" : "API-Schlüssel") (leer = unverändert)", text: $apiKey)
+                        SecureField(type.requiresKey ? "Neuer Zugangscode (leer = unverändert)" : "Neuer API-Schlüssel (leer = unverändert)", text: $apiKey)
                             .disabled(removeApiKey)
                         if !type.requiresKey {
                             Toggle("API-Schlüssel entfernen", isOn: $removeApiKey)

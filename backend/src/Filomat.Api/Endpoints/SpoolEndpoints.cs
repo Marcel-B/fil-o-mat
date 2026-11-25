@@ -44,6 +44,7 @@ public static class SpoolEndpoints
             if (await db.Spools.FindAsync(id) is not { } spool) return TypedResults.NotFound();
             if (await ValidateAsync(db, request.RemainingWeight, request.PrinterId, request.Tool, request.ContainerId) is { } errors)
                 return TypedResults.ValidationProblem(errors);
+            if (request.RemainingWeight != spool.RemainingWeight) spool.WeighedAt = DateTime.UtcNow;
             spool.RemainingWeight = request.RemainingWeight;
             await stock.PlaceAsync(spool, request.PrinterId, request.Tool, containerId: request.ContainerId);
             return TypedResults.Ok(spool);
@@ -59,18 +60,37 @@ public static class SpoolEndpoints
         return api;
     }
 
+    /// <summary>
+    /// Knöpfe in Meldungen („Welche Spule steckt in Kopf 4?“). Liegt außerhalb von <c>/api</c>, damit kein API-Schlüssel
+    /// in der Meldung stehen muss; das Einmal-Token aus der Meldung legt genau eine Spule in genau einen Kopf.
+    /// </summary>
+    public static IEndpointRouteBuilder MapSpoolChoiceEndpoints(this IEndpointRouteBuilder app)
+    {
+        app.MapPost("/choices/{token}", async Task<Results<Ok<string>, NotFound<string>>> (
+            string token, SpoolChoices choices, FilomatDbContext db, SpoolStock stock) =>
+        {
+            if (choices.Take(token) is not { } choice || await db.Spools.FindAsync(choice.SpoolId) is not { EmptiedAt: null } spool
+                || await db.Printers.FindAsync(choice.PrinterId) is not { } printer)
+                return TypedResults.NotFound(L.T("Die Auswahl ist abgelaufen. Bitte in der App im Drucker wählen."));
+            await stock.PlaceAsync(spool, printer.Id, choice.Tool);
+            var place = PrinterInsights.PlaceName(printer.Type, PrinterLive.ToolCount(printer), choice.Tool);
+            return TypedResults.Ok(L.F("#{0} steckt jetzt in {1}.", spool.Number, place.Length > 0 ? $"{printer.Name} {place}" : printer.Name));
+        }).WithTags("Spulen").WithSummary("Spule aus einer Meldung in einen Kopf legen").ExcludeFromDescription();
+        return app;
+    }
+
     private static async Task<Dictionary<string, string[]>?> ValidateAsync(
         FilomatDbContext db, double? remainingWeight, string? printerId, int? tool, string? containerId)
     {
         var errors = new Dictionary<string, string[]>();
-        if (remainingWeight is < 0) errors["remainingWeight"] = ["Gewicht darf nicht negativ sein."];
+        if (remainingWeight is < 0) errors["remainingWeight"] = [L.T("Gewicht darf nicht negativ sein.")];
         if (printerId is not null)
         {
-            if (await db.Printers.FindAsync(printerId) is not { } printer) errors["printerId"] = ["Drucker nicht gefunden."];
-            else if (tool is { } t && (t < 0 || t >= PrinterResponse.From(printer).Tools)) errors["tool"] = ["Diesen Kopf hat der Drucker nicht."];
+            if (await db.Printers.FindAsync(printerId) is not { } printer) errors["printerId"] = [L.T("Drucker nicht gefunden.")];
+            else if (tool is { } t && (t < 0 || t >= PrinterResponse.From(printer).Tools)) errors["tool"] = [L.T("Diesen Kopf hat der Drucker nicht.")];
         }
         if (containerId is not null && !await db.Containers.AnyAsync(c => c.Id == containerId))
-            errors["containerId"] = ["Container nicht gefunden."];
+            errors["containerId"] = [L.T("Container nicht gefunden.")];
         return errors.Count > 0 ? errors : null;
     }
 }

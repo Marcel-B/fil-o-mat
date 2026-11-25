@@ -4,6 +4,7 @@ struct ContainerListView: View {
     @Environment(ContainerStore.self) private var store
     @State private var showingAddContainer = false
     @State private var showingBackend = false
+    @State private var showingSettings = false
 
     var body: some View {
         let regular = store.containers.filter { !$0.isStandard }
@@ -11,7 +12,7 @@ struct ContainerListView: View {
         let otherContainers = regular.filter { store.printer(owningContainer: $0.id) == nil }
         // Der Standard-Container "Drucker" ist leer, seit jeder Drucker seinen eigenen Container hat
         let standard = store.containers.filter {
-            $0.isStandard && ($0.id != Container.printerId || store.filamentCount(in: $0.id) > 0)
+            $0.isStandard && ($0.id != Container.printerId || store.spoolCount(in: $0.id) > 0)
         }
 
         List {
@@ -20,6 +21,16 @@ struct ContainerListView: View {
                     Label(error, systemImage: "exclamationmark.icloud")
                         .foregroundStyle(.red)
                         .onTapGesture { showingBackend = true }
+                }
+            }
+            if let message = store.compatibility?.message {
+                Section {
+                    Button {
+                        showingBackend = true
+                    } label: {
+                        Label(message, systemImage: "exclamationmark.arrow.triangle.2.circlepath")
+                            .foregroundStyle(.orange)
+                    }
                 }
             }
             if let update = store.updateStatus, update.updateAvailable || update.state == "failed" {
@@ -72,6 +83,13 @@ struct ContainerListView: View {
                     Label("Backend", systemImage: store.backend == nil ? "icloud.slash" : "icloud")
                 }
             }
+            ToolbarItem(placement: .topBarLeading) {
+                Button {
+                    showingSettings = true
+                } label: {
+                    Label("Einstellungen", systemImage: "gearshape")
+                }
+            }
             ToolbarItem(placement: .primaryAction) {
                 Button {
                     showingAddContainer = true
@@ -85,6 +103,9 @@ struct ContainerListView: View {
         }
         .sheet(isPresented: $showingBackend) {
             BackendSettingsView()
+        }
+        .sheet(isPresented: $showingSettings) {
+            AppSettingsView()
         }
     }
 }
@@ -100,7 +121,7 @@ private struct ContainerRow: View {
                 Text("RFID: \(container.rfidTag)")
                     .font(.caption)
                     .foregroundStyle(.secondary)
-                Text("\(store.filamentCount(in: container.id)) Filamente")
+                Text(store.spoolCount(in: container.id) == 1 ? "1 Spule" : "\(store.spoolCount(in: container.id)) Spulen")
                     .font(.caption)
                     .foregroundStyle(.secondary)
                 if let printer = store.printer(owningContainer: container.id), printer.enabled,

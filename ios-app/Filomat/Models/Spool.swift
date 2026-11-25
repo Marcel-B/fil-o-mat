@@ -36,13 +36,13 @@ struct SpoolPlace: Hashable {
 
     func text(printers: [Printer], containers: [Container] = []) -> String {
         if let printerId {
-            guard let printer = printers.first(where: { $0.id == printerId }) else { return "Drucker" }
+            guard let printer = printers.first(where: { $0.id == printerId }) else { return String(localized: "label.printer", defaultValue: "Drucker") }
             return printer.placeName(tool: tool)
         }
         if let containerId, let container = containers.first(where: { $0.id == containerId }) {
             return container.name
         }
-        return "Lager"
+        return String(localized: "Lager")
     }
 }
 

@@ -8,7 +8,7 @@ namespace Filomat.Api.Printers;
 /// <summary>
 /// Prusa MK4, Core One, Mini, XL über PrusaLink (<c>/api/v1</c>). PrusaLink kennt keine Druckhistorie, daher merkt
 /// sich der Adapter bei jedem Abgleich den laufenden Druck (<see cref="Printer.AdapterStateJson"/>) und meldet ihn,
-/// sobald er beendet ist oder verschwindet. Gramm kommen aus den Slicer-Angaben der Datei, bei abgebrochenen Drucken
+/// sobald er beendet ist oder verschwindet. Gramm kommen aus den Slicer-Angaben der Druckdatei, bei abgebrochenen Drucken
 /// anteilig nach Fortschritt. Mit MMU3 gibt es Werte pro Slot.
 /// </summary>
 public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
@@ -18,7 +18,12 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
 
     public PrinterType Type => PrinterType.PrusaLink;
 
-    /// <summary>Laufender Druck, wie beim letzten Abgleich gesehen.</summary>
+    /// <summary>
+    /// Laufender Druck, wie beim letzten Abgleich gesehen. <see cref="Key"/> ist das, was PrusaLink über den Druck
+    /// verrät (Job-ID und Zeitstempel der Datei); das ist nicht eindeutig, denn die Job-IDs fangen nach einem Neustart
+    /// wieder von vorn an und dieselbe Datei wird oft noch einmal gedruckt. <see cref="JobId"/> hängt deshalb den
+    /// Startzeitpunkt an. <see cref="Ended"/>: schon als beendet gemeldet, PrusaLink zeigt ihn nur noch an.
+    /// </summary>
     public record TrackedJob(
         string JobId,
         string Name,
@@ -28,7 +33,36 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         string? FilamentType,
         IReadOnlyList<double>? GramsPerTool,
         IReadOnlyList<double>? LengthPerTool,
-        double? TimePrinting = null);
+        double? TimePrinting = null,
+        double? TimeRemaining = null,
+        DateTime? SeenAt = null,
+        string? Key = null,
+        bool Ended = false)
+    {
+        /// <summary>Gespeicherte Drucke von vor dieser Unterscheidung haben nur die Job-ID.</summary>
+        public string RunKey => Key ?? JobId;
+
+        /// <summary>
+        /// Derselbe Druck wie beim letzten Abgleich: gleicher Schlüssel, und die Druckzeit ist nicht wieder bei null
+        /// angefangen (sonst ist es ein neuer Druck derselben Datei mit zufällig derselben Job-ID).
+        /// </summary>
+        public bool IsSameRun(string key, double? timePrinting) =>
+            RunKey == key && !(timePrinting is { } now && TimePrinting is { } before && now < before - 120);
+    }
+
+    /// <summary>
+    /// Ob ein verschwundener Druck fertig geworden ist. Der Abgleich läuft nur alle paar Minuten, und nach dem Ende
+    /// (Druckplatte entnommen, Drucker ausgeschaltet) meldet PrusaLink oft keinen Druck mehr: der letzte gesehene
+    /// Fortschritt liegt dann knapp unter 100 %. Fertig ist der Druck, wenn die beim letzten Abgleich gemeldete
+    /// Restzeit inzwischen abgelaufen war und nur noch wenig fehlte.
+    /// </summary>
+    public static bool LooksFinished(TrackedJob job, DateTime now)
+    {
+        if (job.Progress >= 99.5) return true;
+        if (job.TimeRemaining is not { } remaining || remaining < 0 || job.SeenAt is not { } seen) return false;
+        var nearlyDone = job.Progress >= 95 || remaining <= TimeSpan.FromMinutes(15).TotalSeconds;
+        return nearlyDone && now >= seen.AddSeconds(remaining) - TimeSpan.FromMinutes(1);
+    }
 
     public async Task<IReadOnlyList<PrintJob>> GetFinishedJobsAsync(Printer printer, DateTime since, CancellationToken cancellationToken)
     {
@@ -46,24 +80,40 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
 
         if (job is null)
         {
-            // Kein Druck mehr: der gemerkte ist inzwischen beendet
-            if (tracked is not null) finished.Add(Finish(tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled", tracked.Progress));
+            // Kein Druck mehr: der gemerkte ist inzwischen beendet. Steht der Drucker noch auf „fertig“ oder
+            // „abgebrochen“, gilt das, sonst entscheidet die Restzeit vom letzten Abgleich.
+            if (tracked is { Ended: false })
+            {
+                var printerState = await GetPrinterStateAsync(printer, cancellationToken);
+                finished.Add(printerState switch
+                {
+                    "FINISHED" => Finish(tracked, "completed", 100),
+                    "STOPPED" => Finish(tracked, "cancelled", tracked.Progress),
+                    _ when LooksFinished(tracked, DateTime.UtcNow) => Finish(tracked, "completed", 100),
+                    _ => Finish(tracked, "cancelled", tracked.Progress),
+                });
+            }
             printer.AdapterStateJson = null;
             return finished;
         }
 
         var root = job.RootElement;
-        var current = await ReadJobAsync(printer, root, tracked, cancellationToken);
-        if (tracked is not null && tracked.JobId != current.JobId)
-            finished.Add(Finish(tracked, tracked.Progress >= 99.5 ? "completed" : "cancelled", tracked.Progress));
-
         var state = root.GetStringOrNull("state");
-        if (state is "FINISHED" or "STOPPED" or "ERROR")
+        var ended = state is "FINISHED" or "STOPPED" or "ERROR";
+        // Ein beendeter Druck bleibt bei PrusaLink stehen, bis der nächste anfängt: nicht noch einmal melden
+        if (tracked is { Ended: true } && tracked.IsSameRun(KeyOf(root), root.GetDoubleOrNull("time_printing")) && ended)
+            return finished;
+
+        var current = await ReadJobAsync(printer, root, tracked is { Ended: false } ? tracked : null, cancellationToken);
+        if (tracked is { Ended: false } && tracked.JobId != current.JobId)
+            finished.Add(LooksFinished(tracked, DateTime.UtcNow) ? Finish(tracked, "completed", 100) : Finish(tracked, "cancelled", tracked.Progress));
+
+        if (ended)
         {
             finished.Add(state == "FINISHED"
                 ? Finish(current, "completed", 100)
                 : Finish(current, state == "STOPPED" ? "cancelled" : "error", current.Progress));
-            printer.AdapterStateJson = null;
+            printer.AdapterStateJson = JsonSerializer.Serialize(current with { Ended = true });
         }
         else
         {
@@ -99,7 +149,8 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
         var root = job?.RootElement;
         JsonElement file = default;
         root?.TryGetProperty("file", out file);
-        var tracked = ReadTracked(printer);
+        // Ein schon gemeldeter Druck gehört nicht mehr zum Zustand
+        var tracked = ReadTracked(printer) is { Ended: false } running ? running : null;
         var gramsPerTool = tracked?.GramsPerTool is { Count: > 0 } perTool && perTool.Any(g => g > 0)
             ? perTool
             : tracked?.SlicedGrams is > 0 ? [tracked.SlicedGrams.Value] : null;
@@ -138,32 +189,149 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
     {
         job.TryGetProperty("file", out var file);
         var name = file.GetStringOrNull("display_name") ?? file.GetStringOrNull("name") ?? "";
-        // Job-IDs zählen nach einem Neustart wieder von vorn, daher mit dem Zeitstempel der Datei
-        var jobId = $"{job.GetStringOrNull("id")}-{file.GetStringOrNull("m_timestamp")}";
+        var key = KeyOf(job);
         var progress = job.GetDoubleOrNull("progress") ?? 0;
 
         var timePrinting = job.GetDoubleOrNull("time_printing");
-        if (tracked is not null && tracked.JobId == jobId)
-            return tracked with { Progress = Math.Max(tracked.Progress, progress), TimePrinting = timePrinting ?? tracked.TimePrinting };
+        var timeRemaining = job.GetDoubleOrNull("time_remaining");
+        var seenAt = DateTime.UtcNow;
+        if (tracked is not null && !tracked.IsSameRun(key, timePrinting)) tracked = null;
+        // Ohne Slicer-Angaben (z. B. Druck, der vor einem Update begonnen hat) noch einmal nachschlagen
+        if (tracked is not null && (tracked.SlicedGrams is not null || tracked.SlicedLengthMm is not null))
+            return tracked with
+            {
+                Progress = Math.Max(tracked.Progress, progress),
+                TimePrinting = timePrinting ?? tracked.TimePrinting,
+                TimeRemaining = timeRemaining,
+                SeenAt = seenAt,
+            };
 
-        // Slicer-Angaben stehen je nach Firmware direkt im Job oder nur bei der Datei
-        file.TryGetProperty("meta", out var meta);
-        if (meta.ValueKind != JsonValueKind.Object && file.GetStringOrNull("path") is { } path && file.GetStringOrNull("name") is { } fileName)
-        {
-            using var details = await GetJsonAsync(printer, $"api/v1/files/{path.Trim('/')}/{Uri.EscapeDataString(fileName)}", cancellationToken);
-            if (details is not null && details.RootElement.TryGetProperty("meta", out var fileMeta)) meta = fileMeta.Clone();
-        }
-
+        var usage = await ReadUsageAsync(printer, file, cancellationToken);
+        // Startzeitpunkt macht die ID eindeutig. Wer den Druck erst nach dem Ende sieht, kennt ihn nicht genau
+        // (und hat ihn vielleicht schon unter dem Schlüssel allein gebucht), dann bleibt es beim Schlüssel.
+        var running = job.GetStringOrNull("state") is not ("FINISHED" or "STOPPED" or "ERROR");
+        var jobId = tracked?.JobId
+            ?? (running ? $"{key}-{seenAt.AddSeconds(-(timePrinting ?? 0)):yyyyMMddHHmm}" : key);
         return new TrackedJob(
             jobId,
             name,
-            progress,
-            meta.GetDoubleOrNull("filament used [g]"),
-            meta.GetDoubleOrNull("filament used [mm]"),
-            meta.GetStringOrNull("filament_type"),
-            PerTool(meta, "filament used [g] per tool"),
-            PerTool(meta, "filament used [mm] per tool"),
-            timePrinting);
+            tracked is not null ? Math.Max(tracked.Progress, progress) : progress,
+            usage?.Grams,
+            usage?.LengthMm,
+            usage?.FilamentType,
+            usage?.GramsPerTool,
+            usage?.LengthPerTool,
+            timePrinting,
+            timeRemaining,
+            seenAt,
+            key);
+    }
+
+    /// <summary>Job-ID mit dem Zeitstempel der Datei, weil die Job-IDs nach einem Neustart wieder von vorn zählen.</summary>
+    private static string KeyOf(JsonElement job)
+    {
+        job.TryGetProperty("file", out var file);
+        return $"{job.GetStringOrNull("id")}-{file.GetStringOrNull("m_timestamp")}";
+    }
+
+    /// <summary>Filamentverbrauch laut Slicer, für den ganzen Druck und (bei MMU3) pro Slot.</summary>
+    private record Usage(double? Grams, double? LengthMm, string? FilamentType, IReadOnlyList<double>? GramsPerTool, IReadOnlyList<double>? LengthPerTool);
+
+    /// <summary>
+    /// Slicer-Angaben zum Druck. PrusaLink auf Buddy-Firmware (MK4, Core One, Mini, XL) liefert weder beim Job noch bei der
+    /// Datei Metadaten, daher werden sie zuletzt aus dem Kopf der Druckdatei selbst gelesen (nur <c>.bgcode</c>).
+    /// </summary>
+    private async Task<Usage?> ReadUsageAsync(Printer printer, JsonElement file, CancellationToken cancellationToken)
+    {
+        file.TryGetProperty("meta", out var meta);
+        if (UsageFrom(Values(meta)) is { } fromJob) return fromJob;
+
+        var path = file.GetStringOrNull("path");
+        var fileName = file.GetStringOrNull("name");
+        if (path is not null && fileName is not null)
+        {
+            try
+            {
+                using var details = await GetJsonAsync(printer, $"api/v1/files/{path.Trim('/')}/{Uri.EscapeDataString(fileName)}", cancellationToken);
+                if (details is not null && details.RootElement.TryGetProperty("meta", out var fileMeta)
+                    && UsageFrom(Values(fileMeta)) is { } fromFile)
+                    return fromFile;
+            }
+            catch (Exception ex) when (ex is HttpRequestException or JsonException && !cancellationToken.IsCancellationRequested)
+            {
+                // Dann eben aus der Datei
+            }
+        }
+
+        file.TryGetProperty("refs", out var refs);
+        var download = refs.GetStringOrNull("download") ?? (path is not null && fileName is not null ? $"{path.TrimEnd('/')}/{fileName}" : null);
+        return download is null ? null : UsageFrom(await ReadFileHeaderAsync(printer, download, cancellationToken));
+    }
+
+    /// <summary>Metadaten aus dem Anfang der Druckdatei, ohne sie ganz herunterzuladen.</summary>
+    private async Task<IReadOnlyDictionary<string, string>?> ReadFileHeaderAsync(Printer printer, string download, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"{printer.BaseUrl.TrimEnd('/')}/{download.TrimStart('/')}");
+            if (!string.IsNullOrEmpty(printer.ApiKey)) request.Headers.Add("X-Api-Key", printer.ApiKey);
+            // Der Zeitrahmen des HttpClient gilt nur bis zu den Kopfzeilen, das Lesen bekommt einen eigenen
+            using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            timeout.CancelAfter(TimeSpan.FromSeconds(20));
+            using var response = await http.SendAsync(request, HttpCompletionOption.ResponseHeadersRead, timeout.Token);
+            if (!response.IsSuccessStatusCode) return null;
+            await using var stream = await response.Content.ReadAsStreamAsync(timeout.Token);
+            return await BgcodeMetadata.ReadAsync(stream, timeout.Token);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException or OperationCanceledException && !cancellationToken.IsCancellationRequested)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>JSON-Metadaten als Text, Listen als "1.2, 3.4".</summary>
+    private static Dictionary<string, string>? Values(JsonElement meta)
+    {
+        if (meta.ValueKind != JsonValueKind.Object) return null;
+        var values = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var property in meta.EnumerateObject())
+        {
+            var text = property.Value.ValueKind switch
+            {
+                JsonValueKind.String => property.Value.GetString(),
+                JsonValueKind.Number => property.Value.GetRawText(),
+                JsonValueKind.Array => string.Join(", ", property.Value.EnumerateArray().Select(v => v.ValueKind == JsonValueKind.Number ? v.GetRawText() : "0")),
+                _ => null,
+            };
+            if (text is not null) values[property.Name] = text;
+        }
+        return values;
+    }
+
+    /// <summary>
+    /// Verbrauch aus den Slicer-Schlüsseln. Mit MMU3 stehen pro Slot Werte durch Kommas getrennt im selben Schlüssel
+    /// (manche Firmware meldet sie zusätzlich unter „… per tool“).
+    /// </summary>
+    private static Usage? UsageFrom(IReadOnlyDictionary<string, string>? values)
+    {
+        if (values is null) return null;
+        var grams = Numbers(values, "filament used [g]");
+        var length = Numbers(values, "filament used [mm]");
+        if (grams is not { Count: > 0 } && length is not { Count: > 0 }) return null;
+        var gramsPerTool = Numbers(values, "filament used [g] per tool") ?? (grams is { Count: > 1 } ? grams : null);
+        var lengthPerTool = Numbers(values, "filament used [mm] per tool") ?? (length is { Count: > 1 } ? length : null);
+        var type = values.GetValueOrDefault("filament_type")?.Split(';', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .FirstOrDefault();
+        return new Usage(grams?.Sum(), length?.Sum(), type, gramsPerTool, lengthPerTool);
+    }
+
+    /// <summary>Zahl oder Liste "1.2, 3.4" bzw. "1.2;3.4".</summary>
+    private static IReadOnlyList<double>? Numbers(IReadOnlyDictionary<string, string> values, string name)
+    {
+        if (!values.TryGetValue(name, out var text) || text.Length == 0) return null;
+        return text.Split(',', ';')
+            .Select(s => double.TryParse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0)
+            .ToList();
     }
 
     private static PrintJob Finish(TrackedJob job, string status, double progress)
@@ -185,17 +353,6 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             DurationSeconds: job.TimePrinting is { } seconds ? (int)seconds : null);
     }
 
-    /// <summary>Werte pro Slot als Liste oder als Text "1.2, 3.4".</summary>
-    private static IReadOnlyList<double>? PerTool(JsonElement meta, string name)
-    {
-        if (meta.ValueKind != JsonValueKind.Object || !meta.TryGetProperty(name, out var value)) return null;
-        if (value.ValueKind == JsonValueKind.Array) return meta.GetDoubleListOrNull(name);
-        if (value.ValueKind != JsonValueKind.String) return null;
-        return value.GetString()!.Split(',', ';')
-            .Select(s => double.TryParse(s.Trim(), NumberStyles.Float, CultureInfo.InvariantCulture, out var d) ? d : 0)
-            .ToList();
-    }
-
     private static TrackedJob? ReadTracked(Printer printer)
     {
         if (string.IsNullOrEmpty(printer.AdapterStateJson)) return null;
@@ -204,6 +361,20 @@ public class PrusaLinkAdapter(HttpClient http) : IPrinterAdapter
             return JsonSerializer.Deserialize<TrackedJob>(printer.AdapterStateJson);
         }
         catch (JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Zustand aus <c>/api/v1/status</c> (z. B. FINISHED, STOPPED, IDLE) oder <c>null</c>.</summary>
+    private async Task<string?> GetPrinterStateAsync(Printer printer, CancellationToken cancellationToken)
+    {
+        try
+        {
+            using var status = await GetJsonAsync(printer, "api/v1/status", cancellationToken);
+            return status is not null && status.RootElement.TryGetProperty("printer", out var state) ? state.GetStringOrNull("state") : null;
+        }
+        catch (Exception ex) when (ex is HttpRequestException or JsonException && !cancellationToken.IsCancellationRequested)
         {
             return null;
         }

@@ -1,6 +1,9 @@
 package com.filomat.app.data.sync
 
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.awaitCancellation
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
@@ -8,6 +11,8 @@ import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 import java.net.URLEncoder
+import com.filomat.app.i18n.I18n
+import com.filomat.app.i18n.tr
 
 class BackendException(message: String, val status: Int? = null) : IOException(message)
 
@@ -25,6 +30,11 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
     suspend fun deleteContainer(id: String) = io { send("DELETE", "api/containers/${path(id)}", allowNotFound = true); Unit }
 
     suspend fun deleteItem(id: String) = io { send("DELETE", "api/items/${path(id)}", allowNotFound = true); Unit }
+
+    /** Führt das Filament [fromId] in [itemId] zusammen; liefert die Spulen, die eine neue Nummer bekommen haben. */
+    suspend fun mergeItem(itemId: String, fromId: String): List<RenumberedSpool> = io {
+        decode<MergeResult>(send("POST", "api/items/${path(itemId)}/merge", json.encodeToString(MergeRequest(fromId)))).renumbered
+    }
 
     /** Leergewichte von Spulen pro Hersteller (aus der SpoolmanDB, über das Backend). */
     suspend fun spoolWeights(): Map<String, Double> = io { decode(send("GET", "api/spool-weights")) }
@@ -66,6 +76,59 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
     /** Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist. */
     suspend fun printerStatus(): List<PrinterLive> = io { decode(send("GET", "api/printers/status")) }
 
+    /**
+     * Server-Sent Events von `/api/printers/events`: [onEvent] bekommt `status` (Daten wie [printerStatus]) oder
+     * `changed` (Daten neu laden). Kehrt zurück, wenn die Verbindung abreißt; ein Backend ohne den Endpunkt wirft
+     * [BackendException] mit Status 404.
+     */
+    suspend fun printerEvents(onEvent: (name: String, data: String) -> Unit) = coroutineScope {
+        val connection = URL("$baseUrl/api/printers/events").openConnection() as HttpURLConnection
+        // Lesen blockiert; beim Abbrechen der Koroutine die Verbindung schließen, damit es endet
+        val watchdog = launch {
+            try {
+                awaitCancellation()
+            } finally {
+                connection.disconnect()
+            }
+        }
+        try {
+            withContext(Dispatchers.IO) {
+                connection.connectTimeout = 10_000
+                // Der Server schickt spätestens alle 20 s etwas (": ping")
+                connection.readTimeout = 60_000
+                connection.setRequestProperty("Accept", "text/event-stream")
+                if (!apiKey.isNullOrEmpty()) connection.setRequestProperty("X-Api-Key", apiKey)
+                connection.setRequestProperty("Accept-Language", if (I18n.english) "en" else "de")
+                val status = connection.responseCode
+                if (status == 401) throw BackendException(tr("Der Server lehnt den API-Schlüssel ab."), status)
+                if (status !in 200..299) throw BackendException(tr("Der Server antwortet mit Fehler %s.", status), status)
+                connection.inputStream.bufferedReader(Charsets.UTF_8).use { reader ->
+                    var name = "message"
+                    val data = StringBuilder()
+                    while (true) {
+                        val line = reader.readLine() ?: break
+                        when {
+                            line.isEmpty() -> {
+                                if (data.isNotEmpty()) onEvent(name, data.toString())
+                                name = "message"
+                                data.clear()
+                            }
+                            line.startsWith("event:") -> name = line.substring(6).trim()
+                            line.startsWith("data:") -> {
+                                if (data.isNotEmpty()) data.append('\n')
+                                data.append(line.substring(5).removePrefix(" "))
+                            }
+                            // Kommentare (": ping") und retry: nichts zu tun
+                        }
+                    }
+                }
+            }
+        } finally {
+            watchdog.cancel()
+            connection.disconnect()
+        }
+    }
+
     /** Vorschaubild des laufenden Drucks; `null`, wenn der Drucker keins liefert. */
     suspend fun printerThumbnail(id: String): ByteArray? = io {
         // Bei Bambu lädt das Backend dafür die ganze Druckdatei
@@ -85,6 +148,11 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
     suspend fun sendTestNotification() = io { send("POST", "api/settings/notifications/test"); Unit }
 
     // Aktualisierung des Backends
+
+    /** `null` bei einem Backend ohne `/api/version`. */
+    suspend fun version(): BackendVersion? = io {
+        send("GET", "api/version", allowNotFound = true).takeIf { it.isNotEmpty() }?.let { decode<BackendVersion>(it) }
+    }
 
     suspend fun updateStatus(): BackendUpdateStatus = io { decode(send("GET", "api/update")) }
 
@@ -118,6 +186,8 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
             connection.readTimeout = readTimeout
             connection.setRequestProperty("Accept", "application/json, image/*")
             if (!apiKey.isNullOrEmpty()) connection.setRequestProperty("X-Api-Key", apiKey)
+            // Hinweise und Fehlermeldungen des Backends in der Sprache der App
+            connection.setRequestProperty("Accept-Language", if (I18n.english) "en" else "de")
             if (body != null) {
                 connection.doOutput = true
                 connection.setRequestProperty("Content-Type", "application/json; charset=utf-8")
@@ -125,10 +195,10 @@ class BackendClient(baseUrl: String, private val apiKey: String?) {
             }
             val status = connection.responseCode
             if (status == 404 && allowNotFound) return null
-            if (status == 401) throw BackendException("Der Server lehnt den API-Schlüssel ab.", status)
+            if (status == 401) throw BackendException(tr("Der Server lehnt den API-Schlüssel ab."), status)
             if (status !in 200..299) {
                 connection.errorStream?.close()
-                throw BackendException("Der Server antwortet mit Fehler $status.", status)
+                throw BackendException(tr("Der Server antwortet mit Fehler %s.", status), status)
             }
             return connection.inputStream.use { it.readBytes() }
         } finally {

@@ -1,0 +1,31 @@
+// Texte in PrimeVue-Komponenten (Auswahllisten, Bestätigungen); {0} setzt PrimeVue selbst ein
+export const primeLocales = {
+  de: {
+    accept: 'Ja',
+    reject: 'Nein',
+    cancel: 'Abbrechen',
+    choose: 'Wählen',
+    clear: 'Leeren',
+    apply: 'Übernehmen',
+    emptyMessage: 'Keine Einträge',
+    emptyFilterMessage: 'Nichts gefunden',
+    emptySearchMessage: 'Nichts gefunden',
+    searchMessage: '{0} Treffer',
+    selectionMessage: '{0} ausgewählt',
+    emptySelectionMessage: 'Nichts ausgewählt',
+  },
+  en: {
+    accept: 'Yes',
+    reject: 'No',
+    cancel: 'Cancel',
+    choose: 'Choose',
+    clear: 'Clear',
+    apply: 'Apply',
+    emptyMessage: 'No entries',
+    emptyFilterMessage: 'Nothing found',
+    emptySearchMessage: 'Nothing found',
+    searchMessage: '{0} results',
+    selectionMessage: '{0} selected',
+    emptySelectionMessage: 'Nothing selected',
+  },
+}

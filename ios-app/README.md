@@ -39,6 +39,12 @@ Container und Filamente aus der Android-App kommen so aufs iPhone: in der Androi
 
 Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 erkennt der Drucker die Spulen selbst; bei anderen Druckern legst du die Spule in den Container des Druckers. Beim Bearbeiten eines Filaments trägst du Füll- und Restgewicht ein und siehst die gebuchten Drucke.
 
+## Sprache und Darstellung
+
+Die App gibt es auf Deutsch und Englisch; sie folgt der Sprache des Geräts, eine eigene Sprache nur für Fil-o-mat stellt man in den iOS-Einstellungen der App ein. Hell, dunkel oder wie das System wählt man unter Container > Zahnrad > Darstellung.
+
+Die Texte stehen auf Deutsch im Code und in `Filomat/Localizable.xcstrings` mit der englischen Übersetzung (Schlüssel ist der deutsche Text). Texte, die als `String` weitergereicht werden, laufen über `String(localized:)`. Neue Texte trägt Xcode beim Bauen in den Katalog ein; die englische Übersetzung dort ergänzen. Die Tests laufen auf Deutsch (`-testLanguage de` in `.github/workflows/ios.yml`). Hinweise und Fehlermeldungen vom Backend bleiben vorerst deutsch.
+
 ## Unterschiede zur Android-App
 
 - **Scannen**: iOS zeigt bei jedem Scan das System-Fenster „Bereit zum Scannen“. Das Tag wird gelesen bzw. beschrieben, sobald es ans iPhone gehalten wird.
@@ -52,7 +58,7 @@ Im Tab „Drucker“ werden die Drucker im Backend angelegt. Beim Snapmaker U1 e
 - **Filament-Tag lesen**: listet alles auf, was auf einem Tag steht (UID, Chip-Typ, Speicher, alle NDEF-Records, jedes Feld des OpenSpool-JSON, auch unbekannte wie `subtype` vom U1) und was Fil-o-mat zu der Sorte bzw. dem Container weiß.
 - **Unformatierte Tags**: iOS kann Tags nicht NDEF-formatieren. NTAG213/215/216 sind ab Werk formatiert und funktionieren direkt.
 - **Schutz vor Verwechslungen**: Ein Tag, das schon zu einem Container oder Filament gehört, wird nicht versehentlich überschrieben.
-- **Filament-Übersicht** zeigt alle Filamente, auch herausgenommene ohne Container.
+- **Filamente und Spulen getrennt** (wie in der Web-Oberfläche): Der Tab „Filamente“ zeigt die Sorten mit Vorrat und Gesamtgewicht, der Tab „Spulen“ jede angebrochene Spule mit Restgewicht und Platz (Filter: alle, im Drucker, im Lager). Ein Tipp öffnet die Spule zum Wiegen, Umstecken oder Leermelden, von dort geht es weiter zur Sorte.
 - **Datenhaltung**: JSON-Datei im App-Container (Application Support). Die Daten werden nicht zwischen Android und iOS synchronisiert; die Tags selbst sind aber kompatibel (gleiche UID-Kennung, gleiches OpenSpool-JSON).
 
 ## Projektstruktur

@@ -64,6 +64,15 @@ So funktioniert es: `filomat-update.sh` schreibt den Stand nach `/var/lib/filoma
 
 Die Datenbank liegt im Docker-Volume `backend_filomat-data` im Container.
 
+## Überwachung einschalten
+
+```bash
+# in der Proxmox-Shell als root, im Ordner mit diesem Skript (oder es vorher aus dem Repository holen)
+bash monitoring-einrichten.sh
+```
+
+Holt den neuesten Stand, schaltet `/metrics` und den Versand an Loki in `backend/.env` ein (`MONITORING_METRICS`, `MONITORING_LOKI_URL`, `MONITORING_LOKI_HOST`), baut neu und prüft beides. Am Ende steht der Aufruf, der das Ziel beim Monitoring-Stack (Tonwerk-AI, `deploy/monitoring/`) einträgt. Loki ist nur über das Tailnet erreichbar, der Container braucht also Tailscale (siehe oben). Die Messwerte stehen in [backend/README.md](../../backend/README.md#überwachung).
+
 ## Nextcloud-Sicherung nachträglich einschalten
 
 ```bash

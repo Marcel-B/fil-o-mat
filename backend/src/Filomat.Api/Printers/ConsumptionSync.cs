@@ -1,6 +1,8 @@
 using Filomat.Api.Data;
 using Filomat.Api.Domain;
+using Filomat.Api.Monitoring;
 using Filomat.Api.Notifications;
+using System.Diagnostics;
 using System.Text.Json;
 using Microsoft.EntityFrameworkCore;
 
@@ -13,12 +15,35 @@ public class ConsumptionSync(
     IEnumerable<IPrinterAdapter> adapters,
     PrinterLive live,
     Notifier notifier,
+    SpoolQuestion question,
+    PrinterReachability reachability,
+    PrinterEvents events,
     ILogger<ConsumptionSync> logger)
 {
     /// <summary>Überlappung beim Abfragen, damit Drucke mit späterem Ende nicht verloren gehen.</summary>
     private static readonly TimeSpan Overlap = TimeSpan.FromDays(2);
 
-    public async Task<int> SyncAsync(Printer printer, CancellationToken cancellationToken = default)
+    /// <param name="force">Auch einen ausgeschalteten Drucker im Backoff abfragen (Abgleich von Hand, neue Adresse).</param>
+    public async Task<int> SyncAsync(Printer printer, CancellationToken cancellationToken = default, bool force = false)
+    {
+        if (!force && reachability.ShouldWait(printer.Id)) return 0;
+        var type = FilomatMetrics.TypeLabel(printer.Type);
+        var started = Stopwatch.GetTimestamp();
+        // Was nicht als unerreichbar abgefangen wird (Datenbank, Programmfehler), zählt als failed
+        var result = "failed";
+        try
+        {
+            (var recorded, result) = await SyncOnceAsync(printer, cancellationToken);
+            return recorded;
+        }
+        finally
+        {
+            FilomatMetrics.PrinterSyncs.WithLabels(type, result).Inc();
+            FilomatMetrics.PrinterSyncDuration.WithLabels(type).Observe(Stopwatch.GetElapsedTime(started).TotalSeconds);
+        }
+    }
+
+    private async Task<(int Recorded, string Result)> SyncOnceAsync(Printer printer, CancellationToken cancellationToken)
     {
         var adapter = adapters.FirstOrDefault(a => a.Type == printer.Type)
             ?? throw new InvalidOperationException($"Kein Adapter für Druckertyp {printer.Type}.");
@@ -26,6 +51,8 @@ public class ConsumptionSync(
         var since = (printer.LastJobEndedAt ?? printer.CreatedAt) - Overlap;
         var recorded = new List<PrintJob>();
         var reachable = false;
+        var result = "ok";
+        double grams = 0;
         try
         {
             var currentTools = await adapter.GetToolStateAsync(printer, cancellationToken);
@@ -47,31 +74,46 @@ public class ConsumptionSync(
 
                 // Pro Kopf buchen, wenn der Drucker die Spulen erkennt oder mehrere Slots meldet (z. B. MMU3)
                 if (job.SlicedGramsPerFilament is { Count: > 0 } perFilament && (toolsDuringPrint is not null || perFilament.Count > 1))
-                    await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
+                    grams += await RecordPerToolAsync(printer, job, toolsDuringPrint, cancellationToken);
                 else
-                    await RecordAsync(printer, job, cancellationToken);
+                    grams += await RecordAsync(printer, job, cancellationToken);
                 recorded.Add(job);
                 if (printer.LastJobEndedAt is null || job.EndedAt > printer.LastJobEndedAt)
                     printer.LastJobEndedAt = job.EndedAt;
             }
             if (currentTools is not null) printer.ToolStateJson = JsonSerializer.Serialize(currentTools);
             printer.LastSyncError = null;
+            reachability.Succeeded(printer);
+            printer.OfflineSince = null;
             reachable = true;
         }
-        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException)
+        catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException or JsonException or PrinterUnavailableException
+                                   && !cancellationToken.IsCancellationRequested)
         {
-            logger.LogWarning(ex, "Abgleich mit Drucker {Printer} fehlgeschlagen", printer.Name);
+            // Ausgeschaltet ist kein Fehler; was ins Log kommt, entscheidet PrinterReachability
+            var outcome = reachability.Failed(printer, ex);
             printer.LastSyncError = ex.Message;
-            live.SetOffline(printer, ex.Message);
+            printer.OfflineSince = reachability.OfflineSince(printer.Id);
+            await live.SetOfflineAsync(printer, ex.Message, cancellationToken);
+            // failed: Der Drucker antwortet, aber nicht so, wie der Adapter es erwartet (Zugangsdaten, unlesbare Antwort)
+            result = outcome == PrinterReachability.Outcome.Offline ? "unreachable" : "failed";
         }
 
         printer.LastSyncAt = DateTime.UtcNow;
         await db.SaveChangesAsync(cancellationToken);
+        // Abgleichzeit, Restgewichte, Spulen in den Köpfen
+        events.DataChanged();
+        if (recorded.Count > 0)
+        {
+            var type = FilomatMetrics.TypeLabel(printer.Type);
+            FilomatMetrics.PrintJobs.WithLabels(type).Inc(recorded.Count);
+            FilomatMetrics.FilamentUsedGrams.WithLabels(type).Inc(grams);
+        }
 
         foreach (var job in recorded) await NotifyFinishedAsync(printer, job, cancellationToken);
         // Zustand nach dem Abgleich, damit die Restgewichte schon stimmen; Anycubic und Bambu antworten aus dem Abgleich
         if (reachable) await live.RefreshAsync(printer, adapter, cancellationToken);
-        return recorded.Count;
+        return (recorded.Count, result);
     }
 
     /// <summary>Meldet einen beendeten Druck mit Verbrauch und Restgewicht der Spulen.</summary>
@@ -80,6 +122,7 @@ public class ConsumptionSync(
         var entries = await db.Consumptions.Where(c => c.PrinterId == printer.Id && c.JobId == job.JobId)
             .OrderBy(c => c.Tool).ToListAsync(cancellationToken);
         var tools = PrinterLive.ToolCount(printer);
+        using var language = L.Use(await notifier.LanguageAsync(cancellationToken));
         var lines = new List<string>();
         var low = false;
         foreach (var entry in entries.Where(e => e.Grams > 0))
@@ -88,40 +131,44 @@ public class ConsumptionSync(
             var prefix = place.Length > 0 ? $"{place}: " : "";
             var item = entry.ItemId is null ? null : await db.Items.FindAsync([entry.ItemId], cancellationToken);
             var spool = entry.SpoolId is null ? null : await db.Spools.FindAsync([entry.SpoolId], cancellationToken);
-            if (item is null || spool is null)
+            if (item is null)
             {
-                lines.Add($"{prefix}{entry.Grams:0} g ohne Zuordnung");
+                lines.Add(prefix + L.F("{0:0} g ohne Zuordnung", entry.Grams));
+                continue;
+            }
+            if (spool is null)
+            {
+                lines.Add(prefix + L.F("{0} −{1:0} g, Spule unklar", item.Name, entry.Grams));
                 continue;
             }
             var line = $"{prefix}{item.Name} #{spool.Number} −{entry.Grams:0} g";
-            if (spool.EmptiedAt is not null) line += ", leer";
+            if (spool.EmptiedAt is not null) line += L.T(", leer");
             else if (spool.RemainingWeight is { } remaining)
             {
-                line += $", noch {remaining:0} g";
-                // Fast leer: unter 10 % der vollen Spule oder unter 50 g
-                if (remaining < Math.Max(50, (item.NetWeight ?? 0) * 0.1))
+                line += L.F(", noch {0:0} g", remaining);
+                if (SpoolLevel.IsLow(remaining, item.NetWeight))
                 {
-                    line += " (fast leer)";
+                    line += L.T(" (fast leer)");
                     low = true;
                 }
             }
             lines.Add(line);
         }
         if (job.DurationSeconds is int seconds and > 0)
-            lines.Add(seconds >= 3600 ? $"Druckzeit {seconds / 3600}:{seconds % 3600 / 60:00} h" : $"Druckzeit {seconds / 60} min");
+            lines.Add(seconds >= 3600 ? L.F("Druckzeit {0}:{1:00} h", seconds / 3600, seconds % 3600 / 60) : L.F("Druckzeit {0} min", seconds / 60));
 
         var (verb, tags) = job.Status switch
         {
-            "completed" => ("fertig", "white_check_mark"),
-            "cancelled" => ("abgebrochen", "x"),
-            _ => ("mit Fehler beendet", "warning"),
+            "completed" => (L.T("fertig"), "white_check_mark"),
+            "cancelled" => (L.T("abgebrochen"), "x"),
+            _ => (L.T("mit Fehler beendet"), "warning"),
         };
-        var name = job.Name.Length > 0 ? job.Name : "Druck";
-        await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : $"{name} ist {verb}.",
-            low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken);
+        var name = job.Name.Length > 0 ? job.Name : L.T("Druck");
+        await notifier.SendAsync($"{printer.Name}: {name} {verb}", lines.Count > 0 ? string.Join("\n", lines) : L.F("{0} ist {1}.", name, verb),
+            low ? $"{tags},hourglass" : tags, cancellationToken: cancellationToken, image: token => live.GetPhotoAsync(printer, token));
     }
 
-    private async Task RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
+    private async Task<double> RecordAsync(Printer printer, PrintJob job, CancellationToken cancellationToken)
     {
         var item = await ItemAtToolAsync(printer, 0, fallbackToContainer: true, cancellationToken);
         var grams = Math.Round(FilamentMath.GramsForJob(job, item?.ItemData?.Type), 2);
@@ -142,12 +189,21 @@ public class ConsumptionSync(
             RecordedAt = DateTime.UtcNow,
             DurationSeconds = job.DurationSeconds,
         });
+        return grams;
     }
 
-    /// <summary>Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde.</summary>
-    private async Task<Spool> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
+    /// <summary>
+    /// Bucht auf die Spule der Sorte im Kopf und gibt die Spule zurück, von der abgebucht wurde. Ist unklar, welche Spule
+    /// der Sorte dort steckt, bleibt die Buchung bei der Sorte ohne Spule.
+    /// </summary>
+    private async Task<Spool?> BookAsync(Item item, string printerId, int tool, double grams, CancellationToken cancellationToken)
     {
         var spool = await spools.ResolveAsync(item, printerId, tool, cancellationToken);
+        if (spool is null)
+        {
+            logger.LogInformation("Unklar, welche Spule von {Item} in Kopf {Tool} steckt; {Grams} g ohne Spule gebucht", item.Name, tool + 1, grams);
+            return null;
+        }
         await spools.DeductAsync(spool, item, grams, cancellationToken);
         return spool;
     }
@@ -172,7 +228,7 @@ public class ConsumptionSync(
     /// Bucht jeden Werkzeugkopf einzeln: auf die Spule, deren Tag der Drucker in diesem Kopf erkannt hat, oder
     /// (ohne Tag, z. B. MMU3 oder U1-Kopf ohne Plättchen) auf die Spule, die in der App an diesem Kopf eingelegt ist.
     /// </summary>
-    private async Task RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
+    private async Task<double> RecordPerToolAsync(Printer printer, PrintJob job, ToolState? tools, CancellationToken cancellationToken)
     {
         // Abgebrochene Drucke: anteilig nach tatsächlich verbrauchter Länge
         var ratio = job.SlicedLengthMm is > 0 && job.LengthMm > 0
@@ -191,6 +247,7 @@ public class ConsumptionSync(
                 : (grams, length);
         }
 
+        double total = 0;
         foreach (var (extruder, usage) in perExtruder)
         {
             var tag = tools?.TagFor(extruder);
@@ -198,8 +255,9 @@ public class ConsumptionSync(
             var item = tools is null
                 ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: perExtruder.Count == 1, cancellationToken)
                 : tag is null ? await ItemAtToolAsync(printer, extruder, fallbackToContainer: false, cancellationToken)
-                : await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+                : await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken);
             var grams = Math.Round(usage.Grams * ratio, 2);
+            total += grams;
             var spool = item is null ? null : await BookAsync(item, printer.Id, extruder, grams, cancellationToken);
             db.Consumptions.Add(new Consumption
             {
@@ -219,6 +277,7 @@ public class ConsumptionSync(
                 DurationSeconds = job.DurationSeconds,
             });
         }
+        return total;
     }
 
     /// <summary>
@@ -230,7 +289,7 @@ public class ConsumptionSync(
         for (var tool = 0; tool < tools.TagUids.Count; tool++)
         {
             if (tools.TagUids[tool] is not { } tag) continue;
-            var item = await db.Items.FirstOrDefaultAsync(i => i.RfidTag == tag, cancellationToken);
+            var item = await db.Items.WithTag(tag).FirstOrDefaultAsync(cancellationToken);
             if (item is null)
             {
                 // Tags von Containern gehören nicht in einen Drucker
@@ -242,8 +301,9 @@ public class ConsumptionSync(
                 foreach (var entry in open) entry.ItemId = item.Id;
             }
             item.ContainerId = printer.ContainerId;
-            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort
-            await spools.ResolveAsync(item, printer.Id, tool, cancellationToken);
+            // Plättchen am Kopf = eine Spule dieser Sorte steckt dort; liegen mehrere lose, wird nachgefragt
+            if (await spools.FindAsync(item, printer.Id, tool, cancellationToken) is null)
+                await question.AskAsync(printer, tool, item, cancellationToken);
         }
     }
 

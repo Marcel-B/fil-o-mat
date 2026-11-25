@@ -44,10 +44,11 @@ import com.filomat.app.nfc.NFCReader
 import com.filomat.app.nfc.ScannedTag
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Album
 import androidx.compose.material.icons.filled.Archive
+import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Print
 import androidx.compose.material.icons.filled.QrCodeScanner
-import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
@@ -63,13 +64,16 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavController
 import androidx.navigation.NavGraph.Companion.findStartDestination
+import com.filomat.app.i18n.tr
 
 /** Hauptbereiche der App, wie die Tabs der iOS-App. "Tag lesen" steht wie dort im Scannen-Tab. */
 enum class MainTab(val route: String, val label: String, val icon: ImageVector) {
-    CONTAINERS("containers", "Container", Icons.Default.Archive),
-    SCAN("scan", "Scannen", Icons.Default.QrCodeScanner),
-    ITEMS("items", "Filamente", Icons.Default.Search),
-    PRINTERS("printers", "Drucker", Icons.Default.Print)
+    CONTAINERS("containers", tr("Container"), Icons.Default.Archive),
+    SCAN("scan", tr("Scannen"), Icons.Default.QrCodeScanner),
+    // Sorten und Spulen getrennt, wie in der Web-Oberfläche
+    ITEMS("items", tr("Filamente"), Icons.Default.Palette),
+    SPOOLS("spools", tr("Spulen"), Icons.Default.Album),
+    PRINTERS("printers", tr("Drucker"), Icons.Default.Print)
 }
 
 @Composable
@@ -173,19 +177,21 @@ fun ScanButton(
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
         if (!reader.isAvailable) {
             if (pick != null) {
-                Button(onClick = { showingPicker = true }, modifier = Modifier.fillMaxWidth()) { Text(pick.buttonTitle) }
+                Button(onClick = { showingPicker = true }, modifier = Modifier.fillMaxWidth()) { Text(tr(pick.buttonTitle)) }
                 Text(
-                    "NFC ist aus oder fehlt, deshalb aus der Liste.",
+                    tr("NFC ist aus oder fehlt, deshalb aus der Liste."),
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
                 )
+            } else {
+                Text(tr("NFC ist auf diesem Gerät nicht verfügbar oder nicht aktiviert."), color = MaterialTheme.colorScheme.error)
             }
         } else {
             Button(onClick = { reader.scanTag(onTag) }, enabled = !isScanning, modifier = Modifier.fillMaxWidth()) {
                 if (isScanning) {
                     CircularProgressIndicator(Modifier.size(16.dp), strokeWidth = 2.dp)
                     Spacer(Modifier.width(8.dp))
-                    Text("Tag an das Handy halten …")
+                    Text(tr("Tag an das Handy halten …"))
                 } else {
                     Text(title)
                 }
@@ -193,7 +199,7 @@ fun ScanButton(
         }
         if (isScanning) {
             TextButton(onClick = { reader.stopScanning() }, modifier = Modifier.align(Alignment.CenterHorizontally)) {
-                Text("Abbrechen")
+                Text(tr("Abbrechen"))
             }
         }
         error?.let { Text(it, color = MaterialTheme.colorScheme.error) }
@@ -219,7 +225,6 @@ enum class TagPick(val buttonTitle: String) {
 @Composable
 fun TagPickerDialog(
     kind: TagPick,
-    excludedItemIds: Set<String> = emptySet(),
     onDismiss: () -> Unit,
     onPick: (ScannedTag) -> Unit
 ) {
@@ -231,13 +236,13 @@ fun TagPickerDialog(
 
     AlertDialog(
         onDismissRequest = onDismiss,
-        title = { Text(kind.buttonTitle) },
+        title = { Text(tr(kind.buttonTitle)) },
         text = {
             Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                 OutlinedTextField(
                     value = search,
                     onValueChange = { search = it },
-                    placeholder = { Text("Suchen") },
+                    placeholder = { Text(tr("Suchen")) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
                 )
@@ -245,12 +250,12 @@ fun TagPickerDialog(
                     when (kind) {
                         TagPick.ITEM -> {
                             val items = state.items
-                                .filter { it.id !in excludedItemIds && matches(it.getDisplayTitle()) }
+                                .filter { matches(it.getDisplayTitle()) }
                                 .sortedWith(compareBy(String.CASE_INSENSITIVE_ORDER) { it.getDisplayTitle() })
                             items(items, key = { it.id }) { item ->
                                 ItemHeader(
                                     item,
-                                    item.containerId?.let { state.container(it)?.name },
+                                    null,
                                     Modifier
                                         .fillMaxWidth()
                                         .clickable { onPick(ScannedTag(item.rfidTag, item.itemData)) }
@@ -267,7 +272,7 @@ fun TagPickerDialog(
                                         .padding(vertical = 12.dp)
                                 ) {
                                     Text(container.name, Modifier.weight(1f))
-                                    Text("${state.filamentCount(container.id)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                    Text("${state.spoolCount(container.id)}", color = MaterialTheme.colorScheme.onSurfaceVariant)
                                 }
                             }
                         }
@@ -276,7 +281,7 @@ fun TagPickerDialog(
             }
         },
         confirmButton = {},
-        dismissButton = { TextButton(onClick = onDismiss) { Text("Abbrechen") } }
+        dismissButton = { TextButton(onClick = onDismiss) { Text(tr("Abbrechen")) } }
     )
 }
 
@@ -291,7 +296,7 @@ fun rememberNfcReader(): NFCReader {
 
 /** Eingabefeld für eine Dezimalzahl (Komma oder Punkt). */
 @Composable
-fun DecimalField(label: String, value: String, placeholder: String = "z. B. 1000", onChange: (String) -> Unit) {
+fun DecimalField(label: String, value: String, placeholder: String = tr("z. B. 1000"), onChange: (String) -> Unit) {
     OutlinedTextField(
         value = value,
         onValueChange = { text -> if (text.all { it.isDigit() || it == ',' || it == '.' }) onChange(text) },
@@ -306,7 +311,7 @@ fun DecimalField(label: String, value: String, placeholder: String = "z. B. 1000
 /** Eingabefeld für die Lichtdurchlässigkeit (TD in mm). */
 @Composable
 fun TransmissionField(value: String, onChange: (String) -> Unit) =
-    DecimalField("Lichtdurchlässigkeit (TD, mm)", value, placeholder = "z. B. 3,5", onChange = onChange)
+    DecimalField(tr("Lichtdurchlässigkeit (TD, mm)"), value, placeholder = tr("z. B. 3,5"), onChange = onChange)
 
 /** Auswahl eines Spulenplatzes: Lager, ein Container im Lager oder ein Kopf eines Druckers. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -314,7 +319,7 @@ fun TransmissionField(value: String, onChange: (String) -> Unit) =
 fun SpoolPlacePicker(label: String, state: StoreState, selection: SpoolPlace, onSelect: (SpoolPlace) -> Unit) {
     var expanded by remember { mutableStateOf(false) }
     val options = remember(state.containers, state.printers) {
-        listOf(SpoolPlace.STORAGE to "Lager") +
+        listOf(SpoolPlace.STORAGE to tr("Lager")) +
             state.storageContainers().map { SpoolPlace.container(it.id) to it.name } +
             state.printers.flatMap { printer ->
                 (0 until printer.toolCount).map { tool -> SpoolPlace.printer(printer.id, tool) to printer.placeName(tool) }

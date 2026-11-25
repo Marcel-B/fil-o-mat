@@ -8,6 +8,16 @@ struct BackendSnapshot: Codable {
     var spools: [Spool]? = nil
 }
 
+/// Spule, die beim Zusammenführen eine neue Nummer bekommen hat.
+struct RenumberedSpool: Codable, Hashable {
+    var oldNumber: Int
+    var newNumber: Int
+}
+
+private struct MergeResult: Decodable {
+    var renumbered: [RenumberedSpool]
+}
+
 struct ImportResult: Codable {
     var containers: Int
     var items: Int
@@ -39,6 +49,41 @@ struct BackendUpdateStatus: Codable, Equatable {
     var isUpdating: Bool { state == "requested" || state == "running" }
 }
 
+/// API-Stufe des Backends (`/api/version`).
+struct BackendVersion: Codable, Equatable {
+    var apiLevel: Int
+    var minAppLevel: Int
+    var commit: String?
+}
+
+/// Passen App und Backend zusammen? Die Stufen erklärt `backend/README.md` unter „Versionen“.
+enum ApiCompatibility: Equatable {
+    /// API-Stufe, gegen die diese App gebaut ist.
+    static let appLevel = 2
+    /// Kleinste Backend-Stufe, mit der diese App alles kann.
+    static let minBackendLevel = 2
+
+    case compatible
+    case backendOutdated
+    case appOutdated
+
+    /// `version == nil`: das Backend kennt `/api/version` noch nicht (Stufe 0).
+    init(_ version: BackendVersion?, appLevel: Int = ApiCompatibility.appLevel, minBackendLevel: Int = ApiCompatibility.minBackendLevel) {
+        let backendLevel = version?.apiLevel ?? 0
+        if appLevel < version?.minAppLevel ?? 0 { self = .appOutdated }
+        else if backendLevel < minBackendLevel { self = .backendOutdated }
+        else { self = .compatible }
+    }
+
+    var message: String? {
+        switch self {
+        case .compatible: nil
+        case .backendOutdated: String(localized: "Backend veraltet: bitte aktualisieren, sonst fehlen Funktionen.")
+        case .appOutdated: String(localized: "App veraltet: bitte die neue Version aus TestFlight installieren.")
+        }
+    }
+}
+
 /// Stand der Nextcloud-Sicherung (`/api/backup`).
 struct BackupStatus: Codable, Equatable {
     struct Run: Codable, Equatable {
@@ -64,8 +109,8 @@ enum BackendError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .unauthorized: "Der Server lehnt den API-Schlüssel ab."
-        case .status(let code): "Der Server antwortet mit Fehler \(code)."
+        case .unauthorized: String(localized: "Der Server lehnt den API-Schlüssel ab.")
+        case .status(let code): String(localized: "Der Server antwortet mit Fehler \(code).")
         }
     }
 }
@@ -113,6 +158,14 @@ struct BackendClient {
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
         request.httpBody = try Self.encoder.encode(SpoolUpdate(remainingWeight: remainingWeight, printerId: printerId, tool: tool, containerId: containerId))
         return try Self.decoder.decode(Spool.self, from: try await send(request))
+    }
+
+    /// Führt das Filament `fromId` in `itemId` zusammen; liefert die Spulen, die eine neue Nummer bekommen haben.
+    func mergeItem(into itemId: String, from fromId: String) async throws -> [RenumberedSpool] {
+        var request = request("api/items/\(itemId)/merge", method: "POST")
+        request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+        request.httpBody = try Self.encoder.encode(["fromId": fromId])
+        return try Self.decoder.decode(MergeResult.self, from: try await send(request)).renumbered
     }
 
     /// Restgewicht und Platz setzen; was am Zielplatz steckt, wandert ins Lager.
@@ -168,7 +221,54 @@ struct BackendClient {
 
     /// Zustand aller Drucker mit Spulen pro Kopf und Hinweisen; das Backend fragt nach, was älter als 10 s ist.
     func printerStatus() async throws -> [PrinterLive] {
-        try Self.decoder.decode([PrinterLive].self, from: try await send(request("api/printers/status", method: "GET"), timeout: 30))
+        try Self.decodePrinterStatus(try await send(request("api/printers/status", method: "GET"), timeout: 30))
+    }
+
+    static func decodePrinterStatus(_ data: Data) throws -> [PrinterLive] {
+        try decoder.decode([PrinterLive].self, from: data)
+    }
+
+    /// Ereignis aus `/api/printers/events`: `status` (Daten wie `printerStatus()`) oder `changed` (Daten neu laden).
+    struct ServerEvent {
+        let name: String
+        let data: String
+    }
+
+    /// Server-Sent Events von `/api/printers/events`. Endet, wenn die Verbindung abreißt; ein Backend ohne den
+    /// Endpunkt wirft `BackendError.status(404)`.
+    func printerEvents() -> AsyncThrowingStream<ServerEvent, Error> {
+        var request = request("api/printers/events", method: "GET")
+        request.setValue("text/event-stream", forHTTPHeaderField: "Accept")
+        // Der Server schickt spätestens alle 20 s etwas (": ping")
+        request.timeoutInterval = 60
+        let session = session
+        let eventsRequest = request
+        return AsyncThrowingStream { continuation in
+            let task = Task {
+                do {
+                    let (bytes, response) = try await session.bytes(for: eventsRequest)
+                    let status = (response as? HTTPURLResponse)?.statusCode ?? 0
+                    if status == 401 { throw BackendError.unauthorized }
+                    guard (200..<300).contains(status) else { throw BackendError.status(status) }
+                    // `lines` lässt Leerzeilen weg; der Server schickt pro Ereignis genau eine data-Zeile nach event
+                    var name = "message"
+                    for try await line in bytes.lines {
+                        if line.hasPrefix("event:") {
+                            name = line.dropFirst(6).trimmingCharacters(in: .whitespaces)
+                        } else if line.hasPrefix("data:") {
+                            var data = line.dropFirst(5)
+                            if data.first == " " { data = data.dropFirst() }
+                            continuation.yield(ServerEvent(name: name, data: String(data)))
+                            name = "message"
+                        }
+                    }
+                    continuation.finish()
+                } catch {
+                    continuation.finish(throwing: error)
+                }
+            }
+            continuation.onTermination = { _ in task.cancel() }
+        }
     }
 
     /// Vorschaubild des laufenden Drucks; `nil`, wenn der Drucker keins liefert.
@@ -208,6 +308,12 @@ struct BackendClient {
 
     // MARK: - Aktualisierung
 
+    /// `nil` bei einem Backend ohne `/api/version`.
+    func version() async throws -> BackendVersion? {
+        let data = try await send(request("api/version", method: "GET"), allowNotFound: true)
+        return data.isEmpty ? nil : try Self.decoder.decode(BackendVersion.self, from: data)
+    }
+
     func updateStatus() async throws -> BackendUpdateStatus {
         try Self.decoder.decode(BackendUpdateStatus.self, from: try await send(request("api/update", method: "GET")))
     }
@@ -237,6 +343,8 @@ struct BackendClient {
         var request = URLRequest(url: baseURL.appendingPathComponent(path), timeoutInterval: 15)
         request.httpMethod = method
         if let apiKey, !apiKey.isEmpty { request.setValue(apiKey, forHTTPHeaderField: "X-Api-Key") }
+        // Hinweise und Fehlermeldungen des Backends in der Sprache der App
+        request.setValue(Bundle.main.preferredLocalizations.first ?? "de", forHTTPHeaderField: "Accept-Language")
         return request
     }
 

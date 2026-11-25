@@ -4,6 +4,7 @@ import SwiftUI
 struct PlaceFlowView: View {
     @Environment(ContainerStore.self) private var store
     @State private var model: PlaceFlowModel
+    @State private var choosingItem = false
 
     init(target: PlaceTarget) {
         _model = State(initialValue: PlaceFlowModel(target: target))
@@ -39,8 +40,13 @@ struct PlaceFlowView: View {
             }
         }
         .navigationTitle(model.title)
+        .sheet(isPresented: $choosingItem) {
+            ItemPickerView(suggested: model.unknownTag?.itemData) { item in
+                Task { await model.addUnknownTag(to: item, store: store) }
+            }
+        }
         .toolbar {
-            if model.step != .scanFilament {
+            if model.step != .scanFilament || model.unknownTag != nil {
                 Button("Neu beginnen") { model.reset() }
             }
         }
@@ -70,10 +76,17 @@ struct PlaceFlowView: View {
         Section("1. Filament") {
             if let item = model.item {
                 ItemHeader(item: item, detail: stockText(for: item))
+            } else if let unknown = model.unknownTag {
+                Text("Dieses Plättchen (\(unknown.tagId)) kennt die App noch nicht.")
+                Button("Zu vorhandenem Filament hinzufügen") { choosingItem = true }
+                Button("Als neues Filament anlegen") { model.createItemForUnknownTag(store: store) }
+                Button("Abbrechen", role: .cancel) { model.reset() }
             } else {
                 Text(model.target == .container
-                     ? "\(NFCService.isAvailable ? "Scanne das Musterplättchen" : "Wähle die Sorte") des Filaments, das eingelagert wird."
-                     : "\(NFCService.isAvailable ? "Scanne das Musterplättchen" : "Wähle die Sorte") des Filaments, das in den Drucker kommt.")
+                     ? (NFCService.isAvailable ? "Scanne das Musterplättchen des Filaments, das eingelagert wird."
+                                               : "Wähle die Sorte des Filaments, das eingelagert wird.")
+                     : (NFCService.isAvailable ? "Scanne das Musterplättchen des Filaments, das in den Drucker kommt."
+                                               : "Wähle die Sorte des Filaments, das in den Drucker kommt."))
                     .foregroundStyle(.secondary)
                 ScanButton(title: "Filament scannen", prompt: "Halten Sie das iPhone an den Filament-Tag.", pick: .item) { tag in
                     model.handleFilamentTag(tag, store: store)
@@ -109,32 +122,32 @@ struct PlaceFlowView: View {
                 }
             }
         } header: {
-            Text("2. Was kommt \(model.target == .container ? "in den Container" : "in den Drucker")?")
+            Text(model.target == .container ? "2. Was kommt in den Container?" : "2. Was kommt in den Drucker?")
         }
     }
 
     private func title(of choice: SpoolChoice) -> String {
         switch choice {
-        case .stock: return "Sorte mit vollen Spulen"
-        case .spool(let id): return "Angebrochene Spule #\(spool(id)?.number ?? 0)"
-        case .newSpool: return "Neue Spule anbrechen"
+        case .stock: return String(localized: "Sorte mit vollen Spulen")
+        case .spool(let id): return String(localized: "Angebrochene Spule #\(spool(id)?.number ?? 0)")
+        case .newSpool: return String(localized: "Neue Spule anbrechen")
         }
     }
 
     private func detail(of choice: SpoolChoice) -> String {
         switch choice {
         case .stock:
-            let place = model.item?.containerId.flatMap { store.container(id: $0)?.name } ?? "kein Container"
-            return "Musterplättchen und Vorrat · bisher: \(place)"
+            let place = model.item?.containerId.flatMap { store.container(id: $0)?.name } ?? String(localized: "kein Container")
+            return String(localized: "Musterplättchen und Vorrat · bisher: \(place)")
         case .spool(let id):
             guard let spool = spool(id) else { return "" }
-            let rest = spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? "Rest unbekannt"
+            let rest = spool.remainingWeight.map { "\(Int($0.rounded())) g" } ?? String(localized: "Rest unbekannt")
             return "\(rest) · \(spool.locationText(printers: store.printers, containers: store.containers))"
         case .newSpool:
             let stock = model.item?.spoolsInStock ?? 0
             return stock > 0
-                ? "Aus dem Vorrat (\(stock) \(stock == 1 ? "Spule" : "Spulen"))"
-                : "Im Vorrat ist keine Spule mehr eingetragen"
+                ? (stock == 1 ? String(localized: "Aus dem Vorrat (1 Spule)") : String(localized: "Aus dem Vorrat (\(stock) Spulen)"))
+                : String(localized: "Im Vorrat ist keine Spule mehr eingetragen")
         }
     }
 
@@ -160,7 +173,7 @@ struct PlaceFlowView: View {
     private var containerSection: some View {
         Section("3. Container") {
             if let container = model.container {
-                LabeledContent("Container", value: container.name)
+                LabeledContent(String(localized: "label.container", defaultValue: "Container"), value: container.name)
                 if model.isAlreadyThere(store: store) {
                     Text("Liegt schon in diesem Container.").foregroundStyle(.orange)
                 }
@@ -223,20 +236,75 @@ struct PlaceFlowView: View {
     }
 
     private func occupant(printerId: String, tool: Int) -> String {
-        guard let spool = store.spool(inPrinter: printerId, tool: tool) else { return "frei" }
+        guard let spool = store.spool(inPrinter: printerId, tool: tool) else { return String(localized: "frei") }
         return name(of: spool)
     }
 
     private func name(of spool: Spool) -> String {
-        let title = store.item(id: spool.itemId)?.displayTitle ?? "Filament"
+        let title = store.item(id: spool.itemId)?.displayTitle ?? String(localized: "Filament")
         return "\(title) #\(spool.number)"
     }
 
     private func stockText(for item: Item) -> String {
         var parts: [String] = []
-        if let stock = item.spoolsInStock { parts.append("Vorrat: \(stock)") }
+        if let stock = item.spoolsInStock { parts.append(String(localized: "Vorrat: \(stock)")) }
         let opened = store.spools(of: item.id).count
-        if opened > 0 { parts.append("\(opened) angebrochen") }
+        if opened > 0 { parts.append(String(localized: "\(opened) angebrochen")) }
         return parts.isEmpty ? item.rfidTag : parts.joined(separator: " · ")
+    }
+}
+
+/// Filament auswählen, z. B. um ein unbekanntes Plättchen einer vorhandenen Sorte hinzuzufügen.
+/// Filamente mit derselben Marke und demselben Typ wie auf dem Tag stehen oben.
+struct ItemPickerView: View {
+    @Environment(ContainerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    var suggested: ItemJsonData?
+    var onPick: (Item) -> Void
+    @State private var query = ""
+
+    private var items: [Item] {
+        let text = query.trimmingCharacters(in: .whitespaces).lowercased()
+        let matching = text.isEmpty ? store.items : store.items.filter {
+            $0.displayTitle.lowercased().contains(text) || $0.name.lowercased().contains(text)
+        }
+        return matching.sorted { a, b in
+            let (sa, sb) = (isSuggested(a), isSuggested(b))
+            return sa != sb ? sa : a.displayTitle.localizedCaseInsensitiveCompare(b.displayTitle) == .orderedAscending
+        }
+    }
+
+    private func isSuggested(_ item: Item) -> Bool {
+        guard let brand = suggested?.brand?.lowercased(), let type = suggested?.type?.lowercased() else { return false }
+        return item.itemData?.brand?.lowercased() == brand && item.itemData?.type?.lowercased() == type
+    }
+
+    var body: some View {
+        NavigationStack {
+            List(items) { item in
+                Button {
+                    onPick(item)
+                    dismiss()
+                } label: {
+                    HStack(spacing: 12) {
+                        ColorDot(hex: item.itemData?.colorHex, size: 28, showsPlaceholder: false)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(item.displayTitle).foregroundStyle(.primary)
+                            if let label = item.itemData?.colorLabel {
+                                Text(label).font(.caption).foregroundStyle(.secondary)
+                            }
+                        }
+                    }
+                }
+            }
+            .searchable(text: $query, prompt: "Suchen...")
+            .navigationTitle("Filament wählen")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+            }
+        }
     }
 }

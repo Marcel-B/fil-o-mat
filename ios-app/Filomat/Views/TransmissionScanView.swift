@@ -30,7 +30,7 @@ struct TransmissionScanView: View {
 
             if let itemId, let item = store.item(id: itemId) {
                 Section {
-                    ItemHeader(item: item, detail: item.transmissionText.map { "Bisher: \($0)" } ?? "Noch nicht gemessen")
+                    ItemHeader(item: item, detail: item.transmissionText.map { String(localized: "Bisher: \($0)") } ?? String(localized: "Noch nicht gemessen"))
                     TransmissionField(text: $value)
                         .focused($fieldFocused)
                     Button("Speichern") { save(item) }
@@ -51,14 +51,14 @@ struct TransmissionScanView: View {
         let tagId = tag.tagId.trimmingCharacters(in: .whitespaces)
         savedMessage = nil
         if let container = store.findContainer(byTag: tagId) {
-            errorMessage = "Das ist der Container „\(container.name)“. Scanne das Musterplättchen."
+            errorMessage = String(localized: "Das ist der Container „\(container.name)“. Scanne das Musterplättchen.")
             return
         }
         let item: Item
         if let existing = store.findItem(byTag: tagId) {
             item = existing
         } else {
-            item = Item(rfidTag: tagId, name: Item.defaultName(for: tag.itemData, fallback: "Filament"), itemData: tag.itemData)
+            item = Item(rfidTag: tagId, name: Item.defaultName(for: tag.itemData, fallback: String(localized: "Filament")), itemData: tag.itemData)
             store.addItem(item)
         }
         itemId = item.id
@@ -71,7 +71,7 @@ struct TransmissionScanView: View {
         var updated = item
         let parsed = GramText.parse(value)
         if let parsed, parsed < 0 {
-            errorMessage = "Die Lichtdurchlässigkeit darf nicht negativ sein."
+            errorMessage = String(localized: "Die Lichtdurchlässigkeit darf nicht negativ sein.")
             return
         }
         updated.transmissionDistance = parsed

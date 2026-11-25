@@ -54,25 +54,49 @@ public class SpoolStock(FilomatDbContext db)
         await db.SaveChangesAsync(cancellationToken);
     }
 
+    /// <summary>So lange gilt eine frisch angebrochene oder gewogene Spule als die, die gerade eingelegt wird.</summary>
+    public static readonly TimeSpan RecentlyWeighed = TimeSpan.FromMinutes(30);
+
     /// <summary>
     /// Die Spule der Sorte, die gerade in diesem Kopf steckt. Steckt dort keine (oder eine andere Sorte), wird die einzige
-    /// angebrochene Spule der Sorte aus dem Lager eingelegt; gibt es keine oder mehrere, wird eine neue angebrochen.
+    /// angebrochene Spule der Sorte aus dem Lager eingelegt. Liegen mehrere im Lager, zählt die einzige, die in den letzten
+    /// <see cref="RecentlyWeighed"/> angebrochen oder gewogen wurde. Sonst ist unklar, welche es ist: dann <c>null</c>, und
+    /// die App fragt nach. Eine neue wird nur angebrochen, wenn die Sorte noch gar keine angebrochene hat.
     /// </summary>
-    public async Task<Spool> ResolveAsync(Item item, string printerId, int tool, CancellationToken cancellationToken = default)
+    public async Task<Spool?> FindAsync(Item item, string printerId, int tool, CancellationToken cancellationToken = default)
     {
         var current = await At(printerId, tool).FirstOrDefaultAsync(cancellationToken);
         if (current?.ItemId == item.Id) return current;
 
-        var onShelf = await db.Spools
-            .Where(s => s.ItemId == item.Id && s.EmptiedAt == null && s.PrinterId == null)
-            .ToListAsync(cancellationToken);
-        if (onShelf.Count == 1)
+        var onShelf = await LooseAsync(item, cancellationToken);
+        var since = DateTime.UtcNow - RecentlyWeighed;
+        var recent = onShelf.Where(s => (s.WeighedAt ?? s.OpenedAt) >= since).ToList();
+        if (onShelf.Count == 1 || recent.Count == 1)
         {
-            await PlaceAsync(onShelf[0], printerId, tool, cancellationToken);
-            return onShelf[0];
+            var spool = onShelf.Count == 1 ? onShelf[0] : recent[0];
+            await PlaceAsync(spool, printerId, tool, cancellationToken);
+            return spool;
         }
+        if (onShelf.Count > 1 || await db.Spools.AnyAsync(s => s.ItemId == item.Id && s.EmptiedAt == null, cancellationToken))
+            return null;
         return await OpenAsync(item, printerId, tool, cancellationToken: cancellationToken);
     }
+
+    /// <summary>
+    /// Wie <see cref="FindAsync"/>, aber für einen beendeten Druck: steckt die Sorte nur in anderen Köpfen, wurde offenbar
+    /// eine neue Spule angebrochen. Bei mehreren Spulen im Lager bleibt es bei <c>null</c>.
+    /// </summary>
+    public async Task<Spool?> ResolveAsync(Item item, string printerId, int tool, CancellationToken cancellationToken = default)
+    {
+        if (await FindAsync(item, printerId, tool, cancellationToken) is { } spool) return spool;
+        if ((await LooseAsync(item, cancellationToken)).Count > 1) return null;
+        return await OpenAsync(item, printerId, tool, cancellationToken: cancellationToken);
+    }
+
+    /// <summary>Angebrochene Spulen der Sorte, die in keinem Drucker stecken.</summary>
+    public Task<List<Spool>> LooseAsync(Item item, CancellationToken cancellationToken = default) =>
+        db.Spools.Where(s => s.ItemId == item.Id && s.EmptiedAt == null && s.PrinterId == null)
+            .OrderBy(s => s.Number).ToListAsync(cancellationToken);
 
     /// <summary>
     /// Zieht Gramm von der Spule ab. Reicht sie nicht und liegt Vorrat bereit, wurde offenbar im selben Kopf eine neue Spule

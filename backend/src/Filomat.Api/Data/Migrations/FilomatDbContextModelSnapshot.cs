@@ -126,6 +126,10 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.PrimitiveCollection<string>("ExtraTags")
+                        .IsRequired()
+                        .HasColumnType("TEXT");
+
                     b.Property<string>("Name")
                         .IsRequired()
                         .HasColumnType("TEXT");
@@ -193,6 +197,15 @@ namespace Filomat.Api.Data.Migrations
                         .IsRequired()
                         .HasColumnType("TEXT");
 
+                    b.Property<DateTime?>("OfflineSince")
+                        .HasColumnType("TEXT");
+
+                    b.Property<DateTime?>("ReaderSeenAt")
+                        .HasColumnType("TEXT");
+
+                    b.Property<string>("ReaderSlotsJson")
+                        .HasColumnType("TEXT");
+
                     b.Property<int?>("ToolCount")
                         .HasColumnType("INTEGER");
 
@@ -252,6 +265,9 @@ namespace Filomat.Api.Data.Migrations
 
                     b.Property<int?>("Tool")
                         .HasColumnType("INTEGER");
+
+                    b.Property<DateTime?>("WeighedAt")
+                        .HasColumnType("TEXT");
 
                     b.HasKey("Id");
 

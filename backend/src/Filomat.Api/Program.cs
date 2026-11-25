@@ -1,10 +1,14 @@
+using System.Globalization;
 using Filomat.Api.Backup;
 using Filomat.Api.Data;
 using Filomat.Api.Catalog;
 using Filomat.Api.Endpoints;
+using Filomat.Api.Monitoring;
 using Filomat.Api.Notifications;
 using Filomat.Api.Printers;
+using Microsoft.AspNetCore.Localization;
 using Microsoft.EntityFrameworkCore;
+using Prometheus;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -20,19 +24,27 @@ builder.Services.AddTransient<IPrinterAdapter>(sp => sp.GetRequiredService<Prusa
 builder.Services.AddHttpClient<IAnycubicLan, AnycubicLan>(client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddTransient<IPrinterAdapter, AnycubicAdapter>();
 builder.Services.AddSingleton<IBambuLan, BambuLan>();
+builder.Services.AddSingleton<BambuLiveReports>();
 builder.Services.AddTransient<IPrinterAdapter, BambuAdapter>();
 builder.Services.AddScoped<ConsumptionSync>();
 builder.Services.AddSingleton<PrinterStatusCache>();
+builder.Services.AddSingleton<PrinterReachability>();
+builder.Services.AddSingleton<PrinterEvents>();
 builder.Services.AddScoped<PrinterLive>();
 builder.Services.AddHttpClient(Notifier.HttpClientName, client => client.Timeout = TimeSpan.FromSeconds(10));
 builder.Services.AddScoped<Notifier>();
 builder.Services.AddScoped<SpoolStock>();
+builder.Services.AddSingleton<SpoolChoices>();
+builder.Services.AddSingleton<BackendAddress>();
+builder.Services.AddScoped<SpoolQuestion>();
+builder.Services.AddScoped<PrinterReader>();
 builder.Services.AddHttpClient(nameof(SpoolWeightCatalog), client => client.Timeout = TimeSpan.FromSeconds(30));
 builder.Services.AddSingleton(sp => new SpoolWeightCatalog(
     sp.GetRequiredService<IHttpClientFactory>().CreateClient(nameof(SpoolWeightCatalog)),
     sp.GetRequiredService<IConfiguration>(),
     sp.GetRequiredService<ILogger<SpoolWeightCatalog>>()));
 builder.Services.AddHostedService<PrinterSyncService>();
+builder.Services.AddHostedService<PrinterLiveService>();
 builder.Services.Configure<BackupOptions>(builder.Configuration.GetSection(BackupOptions.Section));
 builder.Services.AddHttpClient(WebDavClient.HttpClientName);
 builder.Services.AddSingleton<WebDavClient>();
@@ -40,23 +52,76 @@ builder.Services.AddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<CloudBackup>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<CloudBackup>());
 builder.Services.AddOpenApi();
+// Monitoring (Tonwerk-AI, deploy/monitoring/): /metrics und Logzeilen an Loki, beides aus, solange nicht eingestellt
+var monitoring = MonitoringOptions.Load(builder.Configuration);
+if (monitoring.LokiConfigured)
+{
+    var shipper = new LokiShipper(monitoring);
+    builder.Services.AddSingleton(shipper);
+    builder.Services.AddHostedService(_ => new LokiShipperService(shipper));
+    builder.Logging.AddProvider(new LokiLoggerProvider(shipper));
+}
 
 var app = builder.Build();
 
 await DatabaseInitializer.InitializeAsync(app.Services);
+// Meldungen liefen früher über ntfy; dessen Adresse passt nicht zu Onkel Bummel und wird nicht übernommen
+if (!string.IsNullOrWhiteSpace(app.Configuration["Ntfy:Url"]) && string.IsNullOrWhiteSpace(app.Configuration["Notifications:Server"]))
+    app.Logger.LogWarning("Ntfy__Url wird nicht mehr verwendet; Meldungen gehen an Onkel Bummel, siehe Notifications__Server, __Topic und __Token");
 
 app.UseExceptionHandler();
+if (monitoring.Metrics)
+{
+    // Bestand frisch zählen, im Scope genau dieser Anfrage
+    app.Use(async (context, next) =>
+    {
+        if (context.Request.Path == "/metrics")
+            await FilomatMetrics.RefreshAsync(context.RequestServices.GetRequiredService<FilomatDbContext>(), context.RequestAborted);
+        await next(context);
+    });
+    app.UseHttpMetrics();
+}
+// Texte für Apps und Web in der Sprache aus Accept-Language (de, en; sonst Deutsch). Nur die Sprache der Texte, Zahlen
+// und Datumsangaben formatiert der Server weiter unabhängig davon.
+app.UseRequestLocalization(options =>
+{
+    options.DefaultRequestCulture = new RequestCulture(CultureInfo.InvariantCulture, CultureInfo.GetCultureInfo(L.German));
+    options.SupportedCultures = [CultureInfo.InvariantCulture];
+    options.SupportedUICultures = L.Languages.Select(CultureInfo.GetCultureInfo).ToList();
+    options.RequestCultureProviders = [new AcceptLanguageHeaderRequestCultureProvider()];
+});
+// Web-Oberfläche (web/, im Docker-Image unter wwwroot)
+app.UseDefaultFiles();
+app.UseStaticFiles();
 app.MapOpenApi();
 
 // Optionaler API-Schlüssel: ist "Filomat:ApiKey" gesetzt, muss jeder /api-Aufruf ihn im Header X-Api-Key mitschicken.
 var apiKey = app.Configuration["Filomat:ApiKey"];
 var api = app.MapGroup("/api");
+// Unter dieser Adresse erreichen die Apps das Backend; daraus entstehen die Knöpfe in Meldungen
+var backendAddress = app.Services.GetRequiredService<BackendAddress>();
+var printerEvents = app.Services.GetRequiredService<PrinterEvents>();
+app.Use(async (context, next) =>
+{
+    if (context.Request.Path.StartsWithSegments("/api") && (string.IsNullOrEmpty(apiKey) || context.Request.Headers["X-Api-Key"] == apiKey))
+        backendAddress.Remember(context.Request);
+    await next(context);
+    // Andere offene Apps und Browser laden nach einer Änderung neu (/api/printers/events)
+    if (context.Request.Path.StartsWithSegments("/api") && !HttpMethods.IsGet(context.Request.Method)
+        && !HttpMethods.IsHead(context.Request.Method) && context.Response.StatusCode < 400)
+        printerEvents.DataChanged();
+});
 if (!string.IsNullOrEmpty(apiKey))
 {
     api.AddEndpointFilter(async (context, next) =>
         context.HttpContext.Request.Headers["X-Api-Key"] == apiKey
             ? await next(context)
-            : TypedResults.Unauthorized());
+            : Rejected());
+    static IResult Rejected()
+    {
+        FilomatMetrics.ApiKeyRejected.Inc();
+        return TypedResults.Unauthorized();
+    }
 }
 
 api.MapContainerEndpoints();
@@ -66,12 +131,23 @@ api.MapSyncEndpoints();
 api.MapSpoolEndpoints();
 api.MapBackupEndpoints();
 api.MapUpdateEndpoints();
+api.MapVersionEndpoints();
 api.MapStatsEndpoints();
 api.MapNotificationEndpoints();
 api.MapGet("/spool-weights", (SpoolWeightCatalog catalog, CancellationToken cancellationToken) => catalog.GetAsync(cancellationToken))
     .WithTags("Katalog")
     .WithSummary("Leergewichte von Spulen pro Hersteller (SpoolmanDB)");
+app.MapSpoolChoiceEndpoints();
 app.MapGet("/health", () => TypedResults.Ok("ok"));
+// Nicht hinter dem API-Schlüssel: Prometheus fragt ohne an, und es stehen nur Zahlen darin, keine Namen
+if (monitoring.Metrics) app.MapMetrics().ExcludeFromDescription();
+// Sonst fiele /metrics auf die Web-Oberfläche zurück und Prometheus läse eine Seite statt eines Fehlers
+else app.MapGet("/metrics", () => TypedResults.NotFound()).ExcludeFromDescription();
+app.Logger.LogInformation("Monitoring: /metrics {Metrics}, Loki {Loki}",
+    monitoring.Metrics ? "an" : "aus", monitoring.LokiPushUrl ?? "aus");
+// Unbekannte /api-Pfade bleiben 404; alles andere sind Seiten der Web-Oberfläche (Vue-Router im Browser)
+api.MapFallback(() => TypedResults.NotFound()).ExcludeFromDescription();
+app.MapFallbackToFile("index.html");
 
 app.Run();
 

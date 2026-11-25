@@ -22,7 +22,7 @@ struct ColorDot: View {
 }
 
 struct InfoRow: View {
-    var label: String
+    var label: LocalizedStringKey
     var value: String
 
     var body: some View {
@@ -47,57 +47,11 @@ struct ColorInfo: View {
     }
 }
 
-/// Filament-Zeile in der Container-Ansicht mit allen Tag-Daten.
-struct ItemDetailRow: View {
-    var item: Item
-    var isLooseContainer: Bool
-    var onRemove: () -> Void
-
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            HStack(alignment: .center) {
-                VStack(alignment: .leading, spacing: 2) {
-                    Text(item.displayTitle).font(.headline)
-                    Text("RFID: \(item.rfidTag)")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-                Spacer()
-                Button(role: .destructive, action: onRemove) {
-                    Image(systemName: "minus.circle.fill")
-                        .font(.title2)
-                        .foregroundStyle(.red)
-                }
-                .buttonStyle(.borderless)
-                .accessibilityLabel(isLooseContainer ? "Löschen" : "Entfernen")
-            }
-            if !item.description.isEmpty {
-                Text(item.description).font(.caption).foregroundStyle(.secondary)
-            }
-            if let data = item.itemData {
-                Divider()
-                Text("Tag-Daten:").font(.caption).foregroundStyle(.tint)
-                if let brand = data.brand { InfoRow(label: "Marke", value: brand) }
-                if let type = data.type { InfoRow(label: "Typ", value: type) }
-                LabeledContent("Farbe") { ColorInfo(data: data, dotSize: 20) }
-                if let min = data.minTemp, let max = data.maxTemp {
-                    InfoRow(label: "Temperatur", value: "\(min)°C - \(max)°C")
-                }
-                if let min = data.bedMinTemp, let max = data.bedMaxTemp {
-                    InfoRow(label: "Bett-Temp", value: "\(min)°C - \(max)°C")
-                }
-            }
-        }
-        .font(.subheadline)
-        .padding(.vertical, 4)
-    }
-}
-
 /// Knopf, der einen Tag scannt und das Ergebnis weiterreicht. Abbrechen im Scanfenster ist kein Fehler.
 /// Ohne NFC (iPad, Mac) wählt man stattdessen aus der Liste, falls `pick` gesetzt ist.
 struct ScanButton: View {
-    var title: String
-    var prompt: String
+    var title: LocalizedStringKey
+    var prompt: String.LocalizationValue
     var pick: TagPick?
     var onTag: (ScannedTag) -> Void
     var onError: (String) -> Void = { _ in }
@@ -138,7 +92,7 @@ struct ScanButton: View {
         isScanning = true
         defer { isScanning = false }
         do {
-            onTag(try await NFCService.shared.scan(prompt: prompt))
+            onTag(try await NFCService.shared.scan(prompt: String(localized: prompt)))
         } catch NFCError.cancelled {
             // Nutzer hat das Scanfenster geschlossen
         } catch {
@@ -152,7 +106,7 @@ enum TagPick {
     case item
     case container
 
-    var buttonTitle: String {
+    var buttonTitle: LocalizedStringKey {
         switch self {
         case .item: return "Filament wählen"
         case .container: return "Container wählen"
@@ -164,7 +118,6 @@ enum TagPick {
 /// des zugehörigen Tags, damit die Abläufe unverändert bleiben.
 struct TagPickerView: View {
     var kind: TagPick
-    var excludedItemIds: Set<String> = []
     var onPick: (ScannedTag) -> Void
 
     @Environment(ContainerStore.self) private var store
@@ -180,7 +133,7 @@ struct TagPickerView: View {
                         Button {
                             pick(ScannedTag(tagId: item.rfidTag, itemData: item.itemData))
                         } label: {
-                            ItemHeader(item: item, detail: item.containerId.flatMap { store.container(id: $0)?.name })
+                            ItemHeader(item: item, detail: nil)
                                 .foregroundStyle(.primary)
                         }
                     }
@@ -189,7 +142,7 @@ struct TagPickerView: View {
                         Button {
                             pick(ScannedTag(tagId: container.rfidTag))
                         } label: {
-                            LabeledContent(container.name, value: "\(store.filamentCount(in: container.id))")
+                            LabeledContent(container.name, value: "\(store.spools(inContainer: container.id).count)")
                                 .foregroundStyle(.primary)
                         }
                     }
@@ -213,7 +166,7 @@ struct TagPickerView: View {
 
     private var items: [Item] {
         store.items
-            .filter { !excludedItemIds.contains($0.id) && matches($0.displayTitle) }
+            .filter { matches($0.displayTitle) }
             .sorted { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
     }
 
@@ -256,7 +209,7 @@ struct ItemHeader: View {
 /// Auswahl eines Spulenplatzes: Lager, ein Container im Lager oder ein Kopf eines Druckers.
 struct SpoolPlacePicker: View {
     @Environment(ContainerStore.self) private var store
-    var title: String
+    var title: LocalizedStringKey
     @Binding var selection: SpoolPlace
 
     var body: some View {

@@ -20,6 +20,7 @@ import com.filomat.app.data.StockEntry
 import com.filomat.app.data.sync.StoreState
 import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ItemHeader
+import com.filomat.app.i18n.tr
 
 /** Vorrat aller Sorten: volle Spulen, angebrochene mit Restgewicht und Platz, und was knapp wird. */
 @OptIn(ExperimentalMaterial3Api::class)
@@ -38,15 +39,15 @@ fun StockScreen(navController: NavController) {
         else all.filter { it.item.getDisplayTitle().lowercase().contains(q) || it.item.name.lowercase().contains(q) }
     }
     val low = visible.filter { it.isLow() }
-    val groups = visible.groupBy { it.item.itemData?.type?.takeIf { t -> t.isNotBlank() } ?: "Ohne Typ" }.toSortedMap()
+    val groups = visible.groupBy { it.item.itemData?.type?.takeIf { t -> t.isNotBlank() } ?: tr("Ohne Typ") }.toSortedMap()
 
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Vorrat") },
+                title = { Text(tr("Vorrat")) },
                 navigationIcon = {
                     IconButton(onClick = { navController.popBackStack() }) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Zurück")
+                        Icon(Icons.Default.ArrowBack, contentDescription = tr("Zurück"))
                     }
                 },
                 actions = {
@@ -66,7 +67,7 @@ fun StockScreen(navController: NavController) {
                 OutlinedTextField(
                     value = query,
                     onValueChange = { query = it },
-                    placeholder = { Text("Suchen...") },
+                    placeholder = { Text(tr("Suchen...")) },
                     leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
                     singleLine = true,
                     modifier = Modifier.fillMaxWidth()
@@ -75,7 +76,7 @@ fun StockScreen(navController: NavController) {
             if (visible.isEmpty()) {
                 item {
                     Text(
-                        if (query.isEmpty()) "Kein Vorrat erfasst" else "Nichts gefunden für „$query“",
+                        if (query.isEmpty()) tr("Kein Vorrat erfasst") else tr("Nichts gefunden für „%s“", query),
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
                         modifier = Modifier.padding(top = 32.dp)
                     )
@@ -84,11 +85,11 @@ fun StockScreen(navController: NavController) {
                 item { Summary(visible) }
             }
             if (low.isNotEmpty()) {
-                item { GroupTitle("Nachkaufen") }
+                item { GroupTitle(tr("Nachkaufen")) }
                 items(low, key = { "low-" + it.item.id }) { entry -> StockRow(entry, state) { navController.navigate("item/${entry.item.id}") } }
                 item {
                     Text(
-                        "Keine volle Spule mehr im Vorrat und angebrochen zusammen unter ${Stock.LOW_THRESHOLD.toInt()} g.",
+                        tr("Keine volle Spule mehr im Vorrat und angebrochen zusammen unter %s g.", Stock.LOW_THRESHOLD.toInt()),
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
@@ -114,9 +115,9 @@ private fun Summary(entries: List<StockEntry>) {
     val kilos = entries.mapNotNull { it.totalGrams }.sum() / 1000
     Card(Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
-            Text("${entries.size} Sorten", style = MaterialTheme.typography.titleMedium)
+            Text(tr("%s Sorten", entries.size), style = MaterialTheme.typography.titleMedium)
             Text(
-                "$full volle, $opened angebrochene Spulen · etwa ${String.format("%.1f", kilos).replace('.', ',')} kg",
+                tr("%s volle, %s angebrochene Spulen · etwa %s kg", full, opened, String.format("%.1f", kilos)),
                 color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
@@ -146,12 +147,12 @@ private fun StockRow(entry: StockEntry, state: StoreState, onClick: () -> Unit) 
 private fun detail(entry: StockEntry, state: StoreState): String {
     val parts = mutableListOf<String>()
     if (entry.item.spoolsInStock != null) {
-        parts += if (entry.fullSpools == 1) "1 volle Spule" else "${entry.fullSpools} volle Spulen"
+        parts += if (entry.fullSpools == 1) tr("1 volle Spule") else tr("%s volle Spulen", entry.fullSpools)
     }
     entry.openedSpools.forEach { spool ->
         val rest = spool.remainingWeight?.let { " " + GramText.label(it) } ?: ""
         parts += "#${spool.number}$rest (${spool.locationText(state.printers, state.containers)})"
     }
     entry.item.transmissionText()?.let { parts += "TD $it" }
-    return if (parts.isEmpty()) "Kein Vorrat erfasst" else parts.joinToString(" · ")
+    return if (parts.isEmpty()) tr("Kein Vorrat erfasst") else parts.joinToString(" · ")
 }

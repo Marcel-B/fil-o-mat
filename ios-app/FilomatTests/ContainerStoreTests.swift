@@ -35,6 +35,50 @@ final class ContainerStoreTests: XCTestCase {
         XCTAssertEqual(store.items.map(\.name), ["A"])
     }
 
+    func testAddTagTakesOverTagOfItemWithoutSpools() async throws {
+        let store = ContainerStore(fileURL: fileURL)
+        let old = Item(rfidTag: "04378F53CB2A81", name: "Alt")
+        let new = Item(rfidTag: "04000001", name: "Neu")
+        store.addItem(old)
+        store.addItem(new)
+
+        try await store.addTag("04378F53CB2A81", toItem: new.id)
+
+        XCTAssertNil(store.item(id: old.id))
+        XCTAssertEqual(store.findItem(byTag: "04378F53CB2A81")?.id, new.id)
+        XCTAssertEqual(store.findItem(byTag: "04000001")?.id, new.id)
+        XCTAssertEqual(ContainerStore(fileURL: fileURL).findItem(byTag: "04378F53CB2A81")?.id, new.id)
+    }
+
+    func testRemoveTagKeepsLastTagAndPromotesExtraTag() async throws {
+        let store = ContainerStore(fileURL: fileURL)
+        let item = Item(rfidTag: "04000001", name: "FiloFa", extraTags: ["04000002"])
+        store.addItem(item)
+
+        try await store.removeTag("04000001", fromItem: item.id)
+        XCTAssertEqual(store.item(id: item.id)?.allTags, ["04000002"])
+        XCTAssertNil(store.findItem(byTag: "04000001"))
+
+        do {
+            try await store.removeTag("04000002", fromItem: item.id)
+            XCTFail("Das letzte Tag darf nicht entfernt werden")
+        } catch {}
+    }
+
+    func testFindsPossibleDuplicatesBySortAndColor() {
+        let store = ContainerStore(fileURL: fileURL)
+        let matte = ItemJsonData(type: "PLA", colorHex: "#161616", brand: "SUNLU", variant: "matte")
+        let a = Item(rfidTag: "A", name: "A", itemData: matte)
+        let b = Item(rfidTag: "B", name: "B", itemData: ItemJsonData(type: "pla", colorHex: "161616", brand: "Sunlu ", variant: "Matte"))
+        let white = Item(rfidTag: "C", name: "C", itemData: ItemJsonData(type: "PLA", colorHex: "FFFFFF", brand: "SUNLU", variant: "matte"))
+        let unnamed = Item(rfidTag: "D", name: "D")
+        [a, b, white, unnamed].forEach(store.addItem)
+
+        XCTAssertEqual(store.possibleDuplicates(of: a).map(\.id), [b.id])
+        XCTAssertTrue(store.possibleDuplicates(of: white).isEmpty)
+        XCTAssertTrue(store.possibleDuplicates(of: unnamed).isEmpty)
+    }
+
     func testRemovingContainerMovesItemsToLoose() {
         let store = ContainerStore(fileURL: fileURL)
         let box = Container(rfidTag: "AA", name: "Box")

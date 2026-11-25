@@ -16,6 +16,7 @@ import kotlinx.serialization.ExperimentalSerializationApi
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.encodeToString
 import kotlinx.serialization.json.Json
+import com.filomat.app.i18n.tr
 
 @OptIn(ExperimentalMaterial3Api::class, ExperimentalSerializationApi::class)
 @Composable
@@ -59,9 +60,9 @@ fun AddContainerDialog(
         title = {
             Text(
                 when (workflowState) {
-                    1 -> "Tag beschreiben"
-                    2 -> "Tag lesen"
-                    else -> "Neuer Container"
+                    1 -> tr("Tag beschreiben")
+                    2 -> tr("Tag lesen")
+                    else -> tr("Neuer Container")
                 }
             )
         },
@@ -76,7 +77,7 @@ fun AddContainerDialog(
                         OutlinedTextField(
                             value = name,
                             onValueChange = { name = it },
-                            label = { Text("Name *") },
+                            label = { Text(tr("Name *")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
                             enabled = !isProcessing
@@ -85,7 +86,7 @@ fun AddContainerDialog(
                         OutlinedTextField(
                             value = description,
                             onValueChange = { description = it },
-                            label = { Text("Beschreibung") },
+                            label = { Text(tr("Beschreibung")) },
                             modifier = Modifier.fillMaxWidth(),
                             enabled = !isProcessing
                         )
@@ -93,22 +94,22 @@ fun AddContainerDialog(
                         OutlinedTextField(
                             value = capacityText,
                             onValueChange = { capacityText = it },
-                            label = { Text("Menge") },
+                            label = { Text(tr("Menge")) },
                             modifier = Modifier.fillMaxWidth(),
                             singleLine = true,
-                            placeholder = { Text("Optional") },
+                            placeholder = { Text(tr("Optional")) },
                             enabled = !isProcessing,
                             keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number),
                             supportingText = {
                                 if (capacityText.isNotBlank() && capacity == null) {
-                                    Text("Bitte eine gültige Zahl eingeben", color = MaterialTheme.colorScheme.error)
+                                    Text(tr("Bitte eine gültige Zahl eingeben"), color = MaterialTheme.colorScheme.error)
                                 }
                             }
                         )
 
                         if (!isNfcAvailable) {
                             Text(
-                                text = "NFC ist auf diesem Gerät nicht verfügbar.",
+                                text = tr("NFC ist auf diesem Gerät nicht verfügbar."),
                                 color = MaterialTheme.colorScheme.error,
                                 style = MaterialTheme.typography.bodySmall
                             )
@@ -117,7 +118,7 @@ fun AddContainerDialog(
                     1 -> {
                         // Schreib-Phase
                         Text(
-                            text = "Bitte halten Sie ein RFID-Tag an Ihr Gerät, um es zu beschreiben.",
+                            text = tr("Bitte halten Sie ein RFID-Tag an Ihr Gerät, um es zu beschreiben."),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         if (isProcessing) {
@@ -127,14 +128,14 @@ fun AddContainerDialog(
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Schreibe Tag...")
+                                Text(tr("Schreibe Tag..."))
                             }
                         }
                     }
                     2 -> {
                         // Lese-Phase
                         Text(
-                            text = "Bitte halten Sie das beschriebene Tag erneut an Ihr Gerät, um es zu lesen.",
+                            text = tr("Bitte halten Sie das beschriebene Tag erneut an Ihr Gerät, um es zu lesen."),
                             style = MaterialTheme.typography.bodyMedium
                         )
                         if (isProcessing) {
@@ -144,7 +145,7 @@ fun AddContainerDialog(
                             ) {
                                 CircularProgressIndicator(modifier = Modifier.size(24.dp))
                                 Spacer(modifier = Modifier.width(8.dp))
-                                Text("Lese Tag...")
+                                Text(tr("Lese Tag..."))
                             }
                         }
                     }
@@ -196,7 +197,7 @@ fun AddContainerDialog(
                                 val jsonData = try {
                                     Json.encodeToString(containerData)
                                 } catch (e: Exception) {
-                                    statusError = "Fehler beim Erstellen der JSON-Daten: ${e.message}"
+                                    statusError = tr("Fehler beim Erstellen der JSON-Daten: %s", e.message)
                                     isProcessing = false
                                     workflowState = 0
                                     return@TextButton
@@ -205,7 +206,7 @@ fun AddContainerDialog(
                                 nfcReader.startWriting { tag ->
                                     val success = nfcReader.writeJsonTag(jsonData, tag)
                                     if (success) {
-                                        statusMessage = "Tag erfolgreich beschrieben! Bitte halten Sie das Tag erneut an das Gerät."
+                                        statusMessage = tr("Tag erfolgreich beschrieben! Bitte halten Sie das Tag erneut an das Gerät.")
                                         workflowState = 2
 
                                         // Warte kurz, dann starte Lesevorgang
@@ -233,7 +234,7 @@ fun AddContainerDialog(
                                             }
                                         }
                                     } else {
-                                        statusError = nfcReader.errorMessage.value ?: "Fehler beim Schreiben des Tags"
+                                        statusError = nfcReader.errorMessage.value ?: tr("Fehler beim Schreiben des Tags")
                                         isProcessing = false
                                         workflowState = 0
                                         nfcReader.stopScanning()
@@ -243,7 +244,7 @@ fun AddContainerDialog(
                         },
                         enabled = name.isNotBlank() && isNfcAvailable && !isProcessing
                     ) {
-                        Text("Weiter")
+                        Text(tr("Weiter"))
                     }
                 }
                 else -> null
@@ -265,7 +266,7 @@ fun AddContainerDialog(
                 },
                 enabled = true
             ) {
-                Text(if (workflowState == 0) "Abbrechen" else "Zurück")
+                Text(if (workflowState == 0) tr("Abbrechen") else tr("Zurück"))
             }
         }
     )

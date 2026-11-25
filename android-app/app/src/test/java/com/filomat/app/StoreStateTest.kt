@@ -1,6 +1,8 @@
 package com.filomat.app
 
+import com.filomat.app.data.Container
 import com.filomat.app.data.Item
+import com.filomat.app.data.ItemJsonData
 import com.filomat.app.data.sync.ContainerData
 import com.filomat.app.data.sync.ItemData
 import com.filomat.app.data.sync.Printer
@@ -19,6 +21,35 @@ import org.junit.Test
 class StoreStateTest {
     private fun item(id: String, containerId: String? = null) =
         ItemData(id = id, rfidTag = "TAG$id", name = "Item $id", createdAt = 1, containerId = containerId)
+
+    @Test
+    fun itemIsFoundByEveryTagAndKeepsThemThroughSnapshot() {
+        val snapshot = Snapshot(
+            emptyList(),
+            listOf(SnapshotItem("filofa", "04000001", "FiloFa", createdAt = 1, extraTags = listOf("04000002", "04000003")))
+        )
+        val state = StoreState.fromSnapshot(snapshot, emptyList())
+
+        assertEquals("filofa", state.findItemByTag("04000003")?.id)
+        assertNull(state.findItemByTag("04000009"))
+        assertEquals(listOf("04000002", "04000003"), state.items.single().toSnapshot(sendWeights = false).extraTags)
+        // Auch im Gerätespeicher bleiben die weiteren Tags erhalten
+        assertEquals(listOf("04000001", "04000002", "04000003"),
+            StoreState.fromStored(emptyList(), state.storedItems()).items.single().allTags)
+    }
+
+    @Test
+    fun findsPossibleDuplicatesBySortAndColor() {
+        val matte = Item(id = "a", rfidTag = "A", name = "A", itemData = ItemJsonData(type = "PLA", color_hex = "#161616", brand = "SUNLU", variant = "matte"))
+        val same = Item(id = "b", rfidTag = "B", name = "B", itemData = ItemJsonData(type = "pla", color_hex = "161616", brand = "Sunlu ", variant = "Matte"))
+        val white = Item(id = "c", rfidTag = "C", name = "C", itemData = ItemJsonData(type = "PLA", color_hex = "FFFFFF", brand = "SUNLU", variant = "matte"))
+        val unnamed = Item(id = "d", rfidTag = "D", name = "D")
+        val state = StoreState(items = listOf(matte, same, white, unnamed))
+
+        assertEquals(listOf("b"), state.possibleDuplicates(matte).map { it.id })
+        assertEquals(emptyList<Item>(), state.possibleDuplicates(white))
+        assertEquals(emptyList<Item>(), state.possibleDuplicates(unnamed))
+    }
 
     @Test
     fun legacyAssignmentFromContainerListIsKept() {
@@ -110,25 +141,40 @@ class StoreStateTest {
     }
 
     @Test
-    fun filamentCountOfPrinterContainerIncludesLoadedSpools() {
+    fun spoolCountOfPrinterContainerIncludesLoadedSpools() {
         val kobra = Printer("k", "Kobra", "Anycubic", "http://kobra", containerId = "kc", tools = 8)
         val state = StoreState(
             items = listOf(
                 Item(id = "a", rfidTag = "A", name = "PLA", containerId = "box"),
-                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "kc"),
-                Item(id = "c", rfidTag = "C", name = "ASA", containerId = "kc")
+                Item(id = "b", rfidTag = "B", name = "PETG", containerId = "kc")
             ),
             spools = listOf(
                 Spool("s1", "a", 1, printerId = "k", tool = 0),
                 Spool("s2", "a", 2, printerId = "k", tool = 1),
-                Spool("s3", "b", 1, printerId = "k", tool = 2)
+                Spool("s3", "b", 1, printerId = "k", tool = 2),
+                Spool("s4", "a", 3, containerId = "box")
             ),
             printers = listOf(kobra)
         )
 
-        // Drei Spulen in Slots; PETG steckt schon, ASA liegt nur im Container
-        assertEquals(listOf("c"), state.unloadedItemsIn("kc").map { it.id })
-        assertEquals(4, state.filamentCount("kc"))
-        assertEquals(1, state.filamentCount("box"))
+        // Drei Spulen in Slots, eine in der Box; Sorten zählen nicht mit
+        assertEquals(3, state.spoolCount("kc"))
+        assertEquals(1, state.spoolCount("box"))
+    }
+
+    @Test
+    fun looseShowsSpoolsWithoutKnownContainer() {
+        val state = StoreState(
+            containers = listOf(Container(id = "standard_lose", rfidTag = "L", name = "Lose"), Container(id = "box", rfidTag = "B", name = "Box")),
+            spools = listOf(
+                Spool("s1", "a", 1, containerId = "box"),
+                Spool("s2", "a", 2),
+                Spool("s3", "a", 3, containerId = "geloescht"),
+                Spool("s4", "a", 4, printerId = "k", tool = 0)
+            )
+        )
+
+        assertEquals(listOf("s1"), state.spoolsIn("box").map { it.id })
+        assertEquals(listOf("s2", "s3"), state.spoolsIn("standard_lose").map { it.id })
     }
 }

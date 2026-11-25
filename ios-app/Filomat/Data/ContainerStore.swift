@@ -22,6 +22,8 @@ final class ContainerStore {
     private(set) var lastSyncedAt: Date?
     /// Stand der Backend-Version; `nil`, solange unbekannt oder ohne Updater auf dem Server.
     private(set) var updateStatus: BackendUpdateStatus?
+    /// Passen App und Backend zusammen? `nil`, solange unbekannt (z. B. Backend nicht erreichbar).
+    private(set) var compatibility: ApiCompatibility?
     /// Stand der Nextcloud-Sicherung; `nil`, solange unbekannt oder bei einem Backend ohne `/api/backup`.
     private(set) var backupStatus: BackupStatus?
     /// Zustand der Drucker pro Drucker-ID; leer bei einem Backend ohne `/api/printers/status`.
@@ -66,20 +68,30 @@ final class ContainerStore {
     }
 
     func findItem(byTag rfidTag: String) -> Item? {
-        items.first { $0.rfidTag == rfidTag }
+        items.first { $0.hasTag(rfidTag) }
     }
 
     func spools(of itemId: String) -> [Spool] {
         spools.filter { $0.itemId == itemId }.sorted { $0.number < $1.number }
     }
 
+    /// Andere Einträge derselben Sorte (gleiche Marke, Typ, Variante und Farbe).
+    func possibleDuplicates(of item: Item) -> [Item] {
+        guard let key = item.duplicateKey else { return [] }
+        return items.filter { $0.id != item.id && $0.duplicateKey == key }
+    }
+
     func item(id: String) -> Item? {
         items.first { $0.id == id }
     }
 
-    /// Angebrochene Spulen, die im Lager in diesem Container liegen.
+    /// Angebrochene Spulen, die im Lager in diesem Container liegen; "Lose" zeigt auch die ohne (bekannten) Container.
     func spools(inContainer containerId: String) -> [Spool] {
-        spools.filter { $0.printerId == nil && $0.containerId == containerId }
+        spools.filter { spool in
+            guard spool.printerId == nil else { return false }
+            if spool.containerId == containerId { return true }
+            return containerId == Container.looseId && (spool.containerId.map { container(id: $0) == nil } ?? true)
+        }
     }
 
     /// Die Spule, die in diesem Kopf steckt.
@@ -97,20 +109,12 @@ final class ContainerStore {
         printers.first { $0.containerId == containerId }
     }
 
-    /// Sorten in diesem Container; im Container eines Druckers ohne die, deren Spule in einem seiner Köpfe steckt.
-    func unloadedItems(in containerId: String) -> [Item] {
-        let contained = items(in: containerId)
-        guard let printer = printer(owningContainer: containerId) else { return contained }
-        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zählen unter "Im Drucker"
-        return contained.filter { item in !spools(of: item.id).contains { $0.printerId == printer.id } }
-    }
-
-    /// Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt.
-    func filamentCount(in containerId: String) -> Int {
+    /// Spulen, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt.
+    func spoolCount(in containerId: String) -> Int {
         let loaded = printer(owningContainer: containerId).map { printer in
             (0..<printer.toolCount).filter { spool(inPrinter: printer.id, tool: $0) != nil }.count
         } ?? 0
-        return loaded + unloadedItems(in: containerId).count
+        return loaded + spools(inContainer: containerId).count
     }
 
     // MARK: - Container
@@ -146,7 +150,7 @@ final class ContainerStore {
     /// Fügt ein Item hinzu, sofern noch kein Item mit demselben (nicht leeren) Tag existiert.
     func addItem(_ item: Item) {
         let tag = item.rfidTag.trimmingCharacters(in: .whitespaces)
-        if !tag.isEmpty, items.contains(where: { $0.rfidTag == item.rfidTag }) { return }
+        if !tag.isEmpty, findItem(byTag: item.rfidTag) != nil { return }
         items.append(item)
         save()
         push(items: [item])
@@ -164,6 +168,66 @@ final class ContainerStore {
         items.removeAll { $0.id == id }
         save()
         remote { try await $0.deleteItem(id: id) }
+    }
+
+    /// Fügt einem Filament ein weiteres Tag hinzu, z. B. ein Musterplättchen an einer Box oder einem Drucker.
+    /// Gehört das Tag bisher einem anderen Filament, wird es dort entfernt; war es dessen einziges Tag,
+    /// wird der Eintrag gelöscht (nur ohne angebrochene Spulen).
+    func addTag(_ tag: String, toItem itemId: String) async throws {
+        if let previous = findItem(byTag: tag), previous.id != itemId {
+            if previous.allTags.count > 1 {
+                try await removeTag(tag, fromItem: previous.id)
+            } else {
+                guard spools(of: previous.id).isEmpty else {
+                    throw StoreError.tagInUse(String(localized: "Das Tag gehört zu „\(previous.displayTitle)“, das angebrochene Spulen hat."))
+                }
+                try await backend?.deleteItem(id: previous.id)
+                items.removeAll { $0.id == previous.id }
+            }
+        }
+        guard let index = items.firstIndex(where: { $0.id == itemId }), !items[index].hasTag(tag) else { return }
+        if items[index].rfidTag.isEmpty {
+            items[index].rfidTag = tag
+        } else {
+            items[index].extraTags = (items[index].extraTags ?? []) + [tag]
+        }
+        try await saveTags(of: items[index])
+    }
+
+    /// Entfernt ein Tag von einem Filament. Ist es das Haupt-Tag, rückt das erste weitere Tag nach;
+    /// das letzte Tag bleibt.
+    func removeTag(_ tag: String, fromItem itemId: String) async throws {
+        guard let index = items.firstIndex(where: { $0.id == itemId }) else { return }
+        var item = items[index]
+        var extra = item.extraTags ?? []
+        if item.rfidTag == tag {
+            guard !extra.isEmpty else { throw StoreError.tagInUse(String(localized: "Das letzte Tag eines Filaments bleibt.")) }
+            item.rfidTag = extra.removeFirst()
+        } else {
+            extra.removeAll { $0 == tag }
+        }
+        item.extraTags = extra
+        items[index] = item
+        try await saveTags(of: item)
+    }
+
+    private func saveTags(of item: Item) async throws {
+        save()
+        guard let backend else { return }
+        let result = try await backend.importData(BackendSnapshot(containers: [], items: [Self.withoutWeights(item)]))
+        if let reason = result.skipped.first { throw StoreError.tagInUse(reason) }
+        await refresh()
+    }
+
+    /// Führt ein doppeltes Filament in dieses zusammen (Spulen, Verbrauch, Vorrat, Tags); das andere wird gelöscht.
+    /// - Returns: Spulen, die eine neue Nummer bekommen haben.
+    func mergeItem(_ fromId: String, into itemId: String) async throws -> [RenumberedSpool] {
+        guard let backend else { throw StoreError.tagInUse(String(localized: "Zum Zusammenführen muss das Backend verbunden sein.")) }
+        let renumbered = try await backend.mergeItem(into: itemId, from: fromId)
+        items.removeAll { $0.id == fromId }
+        save()
+        await refresh()
+        return renumbered
     }
 
     /// Lagert ein Item in einen Container ein (verschiebt es ggf. aus seinem bisherigen Container).
@@ -213,6 +277,7 @@ final class ContainerStore {
         syncError = nil
         lastSyncedAt = nil
         updateStatus = nil
+        compatibility = nil
         backupStatus = nil
         printerLive = [:]
     }
@@ -221,7 +286,64 @@ final class ContainerStore {
     func refreshPrinterLive() async {
         guard let backend else { return }
         guard let live = try? await backend.printerStatus() else { return }
+        setPrinterLive(live)
+    }
+
+    private func setPrinterLive(_ live: [PrinterLive]) {
         printerLive = Dictionary(live.map { ($0.printerId, $0) }, uniquingKeysWith: { first, _ in first })
+    }
+
+    /// Der Zustand kommt gerade live vom Backend; Nachfragen alle 15 s ist dann überflüssig.
+    private(set) var printerLiveConnected = false
+    /// Zählt hoch, wenn das Backend geänderte Daten meldet (Abgleich, Änderung in einer anderen App).
+    private(set) var backendChanges = 0
+    private var liveFollowers = 0
+    private var liveTask: Task<Void, Never>?
+
+    /// Hält die Live-Verbindung (`/api/printers/events`), solange mindestens eine Ansicht das hier aufruft; für `.task`.
+    func followPrinterLive() async {
+        liveFollowers += 1
+        if liveTask == nil { liveTask = Task { await runPrinterLive() } }
+        while !Task.isCancelled {
+            try? await Task.sleep(for: .seconds(3600))
+        }
+        liveFollowers -= 1
+        if liveFollowers == 0 {
+            liveTask?.cancel()
+            liveTask = nil
+            printerLiveConnected = false
+        }
+    }
+
+    private func runPrinterLive() async {
+        var delay = 2.0
+        while !Task.isCancelled {
+            if let backend {
+                do {
+                    for try await event in backend.printerEvents() {
+                        printerLiveConnected = true
+                        delay = 2
+                        switch event.name {
+                        case "status":
+                            if let live = try? BackendClient.decodePrinterStatus(Data(event.data.utf8)) { setPrinterLive(live) }
+                        case "changed":
+                            backendChanges += 1
+                        default:
+                            break
+                        }
+                    }
+                } catch BackendError.status(404) {
+                    // Älteres Backend ohne Live-Zustand: es bleibt beim Nachfragen
+                    printerLiveConnected = false
+                    return
+                } catch {
+                    // Netz weg, Backend neu gestartet: gleich neu verbinden
+                }
+            }
+            printerLiveConnected = false
+            try? await Task.sleep(for: .seconds(delay))
+            delay = min(delay * 2, 60)
+        }
     }
 
     /// Fehler (z. B. ein älteres Backend ohne `/api/backup`) zählen nicht als Sync-Fehler.
@@ -244,6 +366,11 @@ final class ContainerStore {
     /// Fragt, ob es eine neue Backend-Version gibt. Fehler (z. B. ein älteres Backend ohne `/api/update`) zählen nicht als Sync-Fehler.
     func refreshUpdateStatus() async {
         guard let backend else { return }
+        do {
+            compatibility = ApiCompatibility(try await backend.version())
+        } catch {
+            // Nicht erreichbar (z. B. während des Neustarts): den letzten Stand behalten
+        }
         guard let status = try? await backend.updateStatus() else {
             // Während des Neustarts antwortet das Backend kurz nicht; den Stand dann behalten
             if updateStatus?.isUpdating != true { updateStatus = nil }
@@ -414,4 +541,14 @@ final class ContainerStore {
         decoder.dateDecodingStrategy = .millisecondsSince1970
         return decoder
     }()
+}
+
+enum StoreError: LocalizedError {
+    case tagInUse(String)
+
+    var errorDescription: String? {
+        switch self {
+        case .tagInUse(let message): message
+        }
+    }
 }

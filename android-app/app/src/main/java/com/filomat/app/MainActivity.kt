@@ -2,7 +2,7 @@ package com.filomat.app
 
 import android.content.Intent
 import android.os.Bundle
-import androidx.activity.ComponentActivity
+import androidx.appcompat.app.AppCompatActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
@@ -12,17 +12,22 @@ import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.lifecycleScope
 import androidx.lifecycle.repeatOnLifecycle
 import kotlinx.coroutines.delay
+import com.filomat.app.data.AppSettings
 import com.filomat.app.data.ContainerStore
+import com.filomat.app.i18n.I18n
 import kotlinx.coroutines.launch
 import com.filomat.app.nfc.NFCReader
 import com.filomat.app.ui.theme.FilomatTheme
 import com.filomat.app.ui.navigation.AppNavigation
 
-class MainActivity : ComponentActivity() {
+class MainActivity : AppCompatActivity() {
     private lateinit var nfcReader: NFCReader
     
     override fun onCreate(savedInstanceState: Bundle?) {
+        // Farbschema vor dem ersten Zeichnen; die Sprache setzt AppCompat selbst in die Konfiguration
+        AppSettings.applyAppearance(this)
         super.onCreate(savedInstanceState)
+        I18n.use(resources.configuration.locales[0])
         nfcReader = NFCReader(this)
 
         // Wie die iOS-App beim Öffnen und danach alle 2 Minuten den gemeinsamen Stand und die Backend-Version

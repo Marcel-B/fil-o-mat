@@ -25,7 +25,7 @@ struct StatsView: View {
                 Section("Gesamt") {
                     LabeledContent("Verbrauch", value: stats.totals.grams.gramsText)
                     LabeledContent("Drucke", value: stats.totals.cancelled > 0
-                                   ? "\(stats.totals.jobs) (\(stats.totals.cancelled) abgebrochen)"
+                                   ? String(localized: "\(stats.totals.jobs) (\(stats.totals.cancelled) abgebrochen)")
                                    : "\(stats.totals.jobs)")
                     if stats.totals.printSeconds > 0 {
                         LabeledContent("Druckzeit", value: PrinterStatus.duration(stats.totals.printSeconds))
@@ -93,15 +93,15 @@ struct StatsView: View {
     }
 
     private func detail(_ totals: StatsTotals) -> String {
-        var parts = [totals.jobs == 1 ? "1 Druck" : "\(totals.jobs) Drucke"]
-        if totals.cancelled > 0 { parts.append("\(totals.cancelled) abgebrochen") }
+        var parts = [totals.jobs == 1 ? String(localized: "1 Druck") : String(localized: "\(totals.jobs) Drucke")]
+        if totals.cancelled > 0 { parts.append(String(localized: "\(totals.cancelled) abgebrochen")) }
         if totals.printSeconds > 0 { parts.append(PrinterStatus.duration(totals.printSeconds)) }
         return parts.joined(separator: " · ")
     }
 
     private func load() async {
         guard let backend = store.backend else {
-            errorMessage = "Kein Backend verbunden."
+            errorMessage = String(localized: "Kein Backend verbunden.")
             return
         }
         do {
@@ -113,12 +113,13 @@ struct StatsView: View {
     }
 }
 
-/// ntfy-Adresse für Meldungen bei Druckende, Fehlern und Spulen, die nicht reichen.
+/// Ziel auf einem Onkel-Bummel-Server für Meldungen bei Druckende, Fehlern und Spulen, die nicht reichen.
 struct NotificationSettingsView: View {
     @Environment(ContainerStore.self) private var store
     @Environment(\.dismiss) private var dismiss
     @State private var settings: NotificationSettings?
-    @State private var url = ""
+    @State private var server = ""
+    @State private var topic = ""
     @State private var token = ""
     @State private var isWorking = false
     @State private var message: String?
@@ -128,19 +129,26 @@ struct NotificationSettingsView: View {
         NavigationStack {
             Form {
                 Section {
-                    TextField("https://ntfy.sh/filomat-…", text: $url)
+                    TextField("https://onkel-bummel.…ts.net", text: $server)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    SecureField(settings?.hasToken == true ? "Token (leer = unverändert)" : "Token (optional)", text: $token)
+                    LabeledContent("Topic") {
+                        TextField("filomat", text: $topic)
+                            .textInputAutocapitalization(.never)
+                            .autocorrectionDisabled()
+                            .multilineTextAlignment(.trailing)
+                    }
+                    SecureField(settings?.fromApp == true && settings?.hasToken == true ? "Token (leer = unverändert)" : "Publish-Token (ob_…)",
+                                text: $token)
                 } header: {
-                    Text("ntfy-Thema")
+                    Text("Onkel Bummel")
                 } footer: {
-                    Text("Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht, Fehler und Spulen, die für den laufenden Druck nicht reichen. Ein schwer erratbares Thema auf ntfy.sh reicht; in der ntfy-App abonnieren. Ein Token ist nur für einen geschützten eigenen Server nötig.")
+                    Text("Das Backend meldet fertige und abgebrochene Drucke mit Restgewicht und Bild, Fehler und Spulen, die für den laufenden Druck nicht reichen. Den Token in Onkel Bummel unter Verwaltung → Publish-Tokens für das Topic anlegen. Ohne Server gilt die Server-Konfiguration.")
                 }
                 if let settings, settings.configured, !settings.fromApp {
                     Section {
-                        Text("Zurzeit gilt die Adresse aus der Server-Konfiguration. Eine Adresse hier geht vor.")
+                        Text("Zurzeit gilt das Ziel aus der Server-Konfiguration (\(settings.server ?? ""), Topic \(settings.topic ?? "")). Ein Server hier geht vor.")
                             .font(.caption)
                     }
                 }
@@ -175,7 +183,8 @@ struct NotificationSettingsView: View {
         do {
             let loaded = try await backend.notificationSettings()
             settings = loaded
-            url = loaded.fromApp ? loaded.url ?? "" : ""
+            server = loaded.fromApp ? loaded.server ?? "" : ""
+            topic = loaded.fromApp ? loaded.topic ?? "" : ""
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -185,14 +194,15 @@ struct NotificationSettingsView: View {
         guard let backend = store.backend else { return }
         isWorking = true
         defer { isWorking = false }
-        let trimmedUrl = url.trimmingCharacters(in: .whitespaces)
+        let trimmedServer = server.trimmingCharacters(in: .whitespaces)
         let trimmedToken = token.trimmingCharacters(in: .whitespaces)
         do {
             settings = try await backend.saveNotificationSettings(NotificationSettingsRequest(
-                url: trimmedUrl, token: trimmedToken.isEmpty ? nil : trimmedToken))
+                server: trimmedServer, topic: topic.trimmingCharacters(in: .whitespaces),
+                token: trimmedToken.isEmpty ? nil : trimmedToken))
             token = ""
             errorMessage = nil
-            message = trimmedUrl.isEmpty ? "Adresse entfernt." : "Gesichert."
+            message = trimmedServer.isEmpty ? String(localized: "Ziel entfernt.") : String(localized: "Gesichert.")
         } catch {
             errorMessage = error.localizedDescription
         }
@@ -205,7 +215,7 @@ struct NotificationSettingsView: View {
         do {
             try await backend.sendTestNotification()
             errorMessage = nil
-            message = "Testmeldung verschickt."
+            message = String(localized: "Testmeldung verschickt.")
         } catch {
             errorMessage = error.localizedDescription
         }

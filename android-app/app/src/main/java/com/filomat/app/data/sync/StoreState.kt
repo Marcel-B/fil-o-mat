@@ -31,7 +31,8 @@ data class ItemData(
     val netWeight: Double? = null,
     val spoolWeight: Double? = null,
     val spoolsInStock: Int? = null,
-    val transmissionDistance: Double? = null
+    val transmissionDistance: Double? = null,
+    val extraTags: List<String>? = null
 )
 
 /**
@@ -49,12 +50,20 @@ data class StoreState(
     fun itemsIn(containerId: String): List<Item> = items.filter { it.containerId == containerId }
     fun spoolsOf(itemId: String): List<Spool> = spools.filter { it.itemId == itemId }.sortedBy { it.number }
     fun spool(id: String): Spool? = spools.firstOrNull { it.id == id }
-    fun findItemByTag(tag: String): Item? = items.firstOrNull { it.rfidTag == tag }
+    fun findItemByTag(tag: String): Item? = items.firstOrNull { it.hasTag(tag) }
+    /** Andere Einträge derselben Sorte (gleiche Marke, Typ, Variante und Farbe). */
+    fun possibleDuplicates(item: Item): List<Item> {
+        val key = item.duplicateKey() ?: return emptyList()
+        return items.filter { it.id != item.id && it.duplicateKey() == key }
+    }
     fun findContainerByTag(tag: String): Container? = containers.firstOrNull { it.rfidTag == tag }
 
-    /** Angebrochene Spulen, die im Lager in diesem Container liegen. */
+    /** Angebrochene Spulen, die im Lager in diesem Container liegen; "Lose" zeigt auch die ohne (bekannten) Container. */
     fun spoolsIn(containerId: String): List<Spool> =
-        spools.filter { it.printerId == null && it.containerId == containerId }.sortedBy { it.number }
+        spools.filter { spool ->
+            spool.printerId == null && (spool.containerId == containerId ||
+                (containerId == com.filomat.app.data.ContainerStore.LOOSE_ID && (spool.containerId == null || container(spool.containerId) == null)))
+        }.sortedBy { it.number }
 
     /** Die Spule, die in diesem Kopf steckt. */
     fun spoolIn(printerId: String, tool: Int): Spool? =
@@ -63,20 +72,12 @@ data class StoreState(
     /** Der Drucker, dem dieser Container gehört (jeder Drucker im Backend hat einen). */
     fun printerOwning(containerId: String): Printer? = printers.firstOrNull { it.containerId == containerId }
 
-    /** Sorten in diesem Container; im Container eines Druckers ohne die, deren Spule in einem seiner Köpfe steckt. */
-    fun unloadedItemsIn(containerId: String): List<Item> {
-        val contained = itemsIn(containerId)
-        val printer = printerOwning(containerId) ?: return contained
-        // Der Abgleich legt Sorten, deren Spule der Drucker erkennt (U1), in seinen Container; die zählen unter "Im Drucker"
-        return contained.filter { item -> spoolsOf(item.id).none { it.printerId == printer.id } }
-    }
-
-    /** Filamente, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt. */
-    fun filamentCount(containerId: String): Int {
+    /** Spulen, die die Übersicht für diesen Container zählt: was in den Köpfen seines Druckers steckt und was darin liegt. */
+    fun spoolCount(containerId: String): Int {
         val loaded = printerOwning(containerId)?.let { printer ->
             (0 until printer.toolCount).count { spoolIn(printer.id, it) != null }
         } ?: 0
-        return loaded + unloadedItemsIn(containerId).size
+        return loaded + spoolsIn(containerId).size
     }
 
     /** Container, in die man Filament einlagern kann: alle außer denen der Drucker. */
@@ -124,7 +125,7 @@ data class StoreState(
             },
             items = snapshot.items.map {
                 Item(it.id, it.rfidTag, it.name, it.description, it.createdAt, it.containerId, it.itemData,
-                    it.netWeight, it.spoolWeight, it.spoolsInStock, it.transmissionDistance)
+                    it.netWeight, it.spoolWeight, it.spoolsInStock, it.transmissionDistance, it.extraTags)
             },
             spools = snapshot.spools ?: emptyList(),
             printers = printers
@@ -158,14 +159,15 @@ fun Item.toSnapshot(sendWeights: Boolean) = SnapshotItem(
     netWeight = if (sendWeights) netWeight else null,
     spoolWeight = if (sendWeights) spoolWeight else null,
     spoolsInStock = if (sendWeights) spoolsInStock else null,
-    transmissionDistance = transmissionDistance
+    transmissionDistance = transmissionDistance,
+    extraTags = extraTags
 )
 
 private fun ContainerData.toContainer() =
     Container(id, rfidTag, name, description, capacity, createdAt, isStandard = isStandard)
 
 private fun ItemData.toItem() =
-    Item(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance)
+    Item(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance, extraTags)
 
 private fun Item.toData() =
-    ItemData(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance)
+    ItemData(id, rfidTag, name, description, createdAt, containerId, itemData, netWeight, spoolWeight, spoolsInStock, transmissionDistance, extraTags)
