@@ -58,15 +58,19 @@ jobs:
             echo "ok=true" >> "$GITHUB_OUTPUT"
           fi
 
-      # Ab April 2027 nimmt App Store Connect nur Builds mit dem iOS-27-SDK oder neuer an (ITMS-90725).
-      - name: Xcode 27
+      # App Store Connect will ab April 2027 Builds mit dem iOS-27-SDK (ITMS-90725); bis der Runner Xcode 27 hat, nur Warnung.
+      - name: Neuestes Xcode
         if: steps.secrets.outputs.ok == 'true'
         run: |
-          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
-          version=$(basename "$xcode" .app); version=${version#Xcode_}
-          (( ${version%%.*} >= 27 )) || { echo "::error::kein Xcode 27 auf dem Runner"; ls -d /Applications/Xcode*; exit 1; }
+          # Neuestes stabiles Xcode, nach der Version im Bundle (auch /Applications/Xcode.app)
+          xcode=$(for app in /Applications/Xcode*.app; do
+            v=$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null) || continue
+            echo "$v $app"
+          done | grep -iv beta | sort -V | tail -1 | cut -d' ' -f2-)
           sudo xcode-select -s "$xcode"
           xcodebuild -version
+          major=$(xcodebuild -version | awk 'NR==1 {split($2, v, "."); print v[1]}')
+          (( major >= 27 )) || echo "::warning::Runner hat noch kein Xcode 27. Ab April 2027 nimmt App Store Connect nur Builds mit dem iOS-27-SDK an (ITMS-90725)."
 
       # Von Hand in Xcode archivierte Builds haben kleine Nummern, die des Workflows liegen weit darüber.
       - name: Build-Nummer

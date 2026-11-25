@@ -20,14 +20,18 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # Neuestes Xcode wie beim TestFlight-Build (mindestens 27, sonst lehnt App Store Connect ab April 2027 ab)
-      - name: Xcode 27
+      # Neuestes Xcode wie beim TestFlight-Build
+      - name: Neuestes Xcode
         run: |
-          xcode=$(ls -d /Applications/Xcode_*.app | grep -iv beta | sort -V | tail -1)
-          version=$(basename "$xcode" .app); version=${version#Xcode_}
-          (( ${version%%.*} >= 27 )) || { echo "::error::kein Xcode 27 auf dem Runner"; ls -d /Applications/Xcode*; exit 1; }
+          # Neuestes stabiles Xcode, nach der Version im Bundle (auch /Applications/Xcode.app)
+          xcode=$(for app in /Applications/Xcode*.app; do
+            v=$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null) || continue
+            echo "$v $app"
+          done | grep -iv beta | sort -V | tail -1 | cut -d' ' -f2-)
           sudo xcode-select -s "$xcode"
           xcodebuild -version
+          major=$(xcodebuild -version | awk 'NR==1 {split($2, v, "."); print v[1]}')
+          (( major >= 27 )) || echo "::warning::Runner hat noch kein Xcode 27. Ab April 2027 nimmt App Store Connect nur Builds mit dem iOS-27-SDK an (ITMS-90725)."
 
       - name: Für Gerät bauen (ohne Signierung, inkl. CoreNFC)
         run: |
