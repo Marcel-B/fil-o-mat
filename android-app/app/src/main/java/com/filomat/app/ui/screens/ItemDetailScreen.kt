@@ -1,6 +1,8 @@
 package com.filomat.app.ui.screens
 
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -26,6 +28,7 @@ import com.filomat.app.data.sync.StoreState
 import com.filomat.app.data.sync.Spool
 import com.filomat.app.ui.components.ColorDot
 import com.filomat.app.ui.components.GramText
+import com.filomat.app.ui.components.ItemHeader
 import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.rememberNfcReader
 import com.filomat.app.ui.components.SpoolPlacePicker
@@ -443,15 +446,19 @@ private fun GramField(label: String, value: String, onChange: (String) -> Unit) 
     )
 }
 
-/** Angebrochene Spule wiegen, einlegen oder als leer markieren. */
+/**
+ * Angebrochene Spule wiegen, einlegen oder als leer markieren. Mit [onOpenItem] (aus Spulenliste oder Container)
+ * steht oben die Sorte mit einem Weg dorthin; aus der Sorte heraus geöffnet wäre der doppelt.
+ */
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SpoolEditDialog(
+fun SpoolEditDialog(
     spool: Spool,
     emptySpoolWeight: Double?,
     state: StoreState,
     store: ContainerStore,
-    onDismiss: () -> Unit
+    onDismiss: () -> Unit,
+    onOpenItem: ((Item) -> Unit)? = null
 ) {
     val scope = rememberCoroutineScope()
     var remaining by remember { mutableStateOf(GramText.format(spool.remainingWeight)) }
@@ -486,7 +493,23 @@ private fun SpoolEditDialog(
         onDismissRequest = { if (!isSaving) onDismiss() },
         title = { Text(tr("Spule #%s", spool.number)) },
         text = {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Column(Modifier.verticalScroll(rememberScrollState()), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                val item = state.item(spool.itemId)
+                if (onOpenItem != null && item != null) {
+                    OutlinedCard(onClick = { onOpenItem(item) }, modifier = Modifier.fillMaxWidth()) {
+                        Column(Modifier.padding(12.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                            ItemHeader(item, listOfNotNull(
+                                item.itemData?.color?.takeIf { it.isNotBlank() },
+                                spool.locationText(state.printers, state.containers)
+                            ).joinToString(" · "))
+                            Text(
+                                tr("Sorte öffnen: Vorrat, alle Spulen, Verbrauch"),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                }
                 GramField(tr("Gewogen mit Spule (g)"), weighed) { weighed = it; updateFromScale() }
                 GramField(tr("Leere Spule (g)"), emptySpool) { emptySpool = it; updateFromScale() }
                 GramField(tr("Restgewicht (g)"), remaining) { remaining = it }

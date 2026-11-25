@@ -16,6 +16,7 @@ Eine Android Mobile App zur Verwaltung von Containern und deren Inhalten mit RFI
 - **Persistenz**: Daten werden lokal mit DataStore gespeichert
 - **Backend-Abgleich**: Über das Wolken-Symbol wird die App mit dem [Backend](../backend/README.md) verbunden. Beim Verbinden werden die Daten des Geräts hochgeladen (nichts wird gelöscht) und danach der gemeinsame Stand übernommen; danach geht jede Änderung sofort ans Backend. Beim Öffnen und alle 2 Minuten, solange die App sichtbar ist, wird neu geladen (das Backend fragt die Drucker im selben Takt ab). Wie in der iOS-App.
 - **Drucker**: Drucker im Backend anlegen (Snapmaker U1, PrusaLink, Moonraker), abgleichen und entfernen
+- **Spulen**: eigener Tab wie in der Web-Oberfläche und der iOS-App: jede angebrochene Spule mit Restgewicht und Platz, Suche und Filter (alle, im Drucker, im Lager); ein Tipp öffnet die Spule zum Wiegen, Umstecken oder Leermelden, mit Weg zur Sorte. Auch die Spulen in einem Container lassen sich so öffnen.
 - **Sorten und Spulen**: Ein Tipp auf ein Filament zeigt die Sorte mit Füll- und Leergewicht, Vorrat, angebrochenen Spulen (Nummer, Restgewicht, Platz im Drucker oder Lager, wiegen, leer melden) und dem gebuchten Verbrauch
 - **Backend-Version**: Neue Commits anzeigen und das Backend aktualisieren
 - **Filament-Tag lesen** (im Scannen-Tab): Zeigt alles an, was auf einem Tag steht (OpenSpool-Felder, auch fremde, NDEF-Records, Chip, UID) und ob die App ihn kennt; ändert nichts

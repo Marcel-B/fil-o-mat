@@ -391,6 +391,16 @@
         }
       }
     },
+    "Alle" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "All"
+          }
+        }
+      }
+    },
     "Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß" : {
       "localizations" : {
         "en" : {
@@ -481,12 +491,32 @@
         }
       }
     },
+    "Angebrochene Spulen führt das Backend." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Opened spools are kept by the backend."
+          }
+        }
+      }
+    },
     "Anycubic Kobra (LAN-Modus)" : {
       "localizations" : {
         "en" : {
           "stringUnit" : {
             "state" : "translated",
             "value" : "Anycubic Kobra (LAN mode)"
+          }
+        }
+      }
+    },
+    "Anzeigen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Show"
           }
         }
       }
@@ -1751,6 +1781,16 @@
         }
       }
     },
+    "Gesamt:" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Total:"
+          }
+        }
+      }
+    },
     "Gesichert." : {
       "localizations" : {
         "en" : {
@@ -1911,6 +1951,16 @@
         }
       }
     },
+    "Im Lager" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "In storage"
+          }
+        }
+      }
+    },
     "Im Vorrat ist keine Spule mehr eingetragen" : {
       "localizations" : {
         "en" : {
@@ -2057,6 +2107,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "No filaments yet"
+          }
+        }
+      }
+    },
+    "Keine Spulen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "No spools"
           }
         }
       }
@@ -3080,6 +3140,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Spools (%lld)"
+          }
+        }
+      }
+    },
+    "Spulen brichst du beim Einlagern oder unter „Filamente“ an." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Open a spool when storing filament or under “Filaments”."
           }
         }
       }

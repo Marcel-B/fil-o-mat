@@ -34,7 +34,7 @@ struct ItemsOverviewView: View {
             ForEach(visibleGroups) { group in
                 Section("\(group.type) (\(group.items.count))") {
                     ForEach(group.items) { item in
-                        ItemOverviewRow(item: item, containerName: containerName(for: item), spools: store.spools(of: item.id),
+                        ItemOverviewRow(item: item, spools: store.spools(of: item.id),
                                         isPossibleDuplicate: !store.possibleDuplicates(of: item).isEmpty)
                             .contentShape(Rectangle())
                             .onTapGesture { itemToEdit = item }
@@ -91,15 +91,10 @@ struct ItemsOverviewView: View {
             Text("Möchten Sie das Filament '\(item.displayTitle)' wirklich löschen?")
         }
     }
-
-    private func containerName(for item: Item) -> String {
-        item.containerId.flatMap { store.container(id: $0)?.name } ?? "Lose"
-    }
 }
 
 private struct ItemOverviewRow: View {
     var item: Item
-    var containerName: String
     var spools: [Spool] = []
     var isPossibleDuplicate = false
 
@@ -121,7 +116,7 @@ private struct ItemOverviewRow: View {
                 Group {
                     if let type = item.itemData?.type { field("Typ:", type) }
                     if let brand = item.itemData?.brand { field("Marke:", brand) }
-                    field("Container:", containerName)
+                    // Wo die Spulen liegen, steht unter "Spulen"; hier nur, was es von der Sorte gibt
                     if !spools.isEmpty {
                         field("Angebrochen:", spools.map { spool in
                             spool.remainingWeight.map { "#\(spool.number) \(Int($0.rounded())) g" } ?? "#\(spool.number)"
@@ -130,6 +125,7 @@ private struct ItemOverviewRow: View {
                     if let stock = item.spoolsInStock, stock > 0 {
                         field("Vorrat:", stock == 1 ? String(localized: "1 Spule") : String(localized: "\(stock) Spulen"))
                     }
+                    if let total = totalGrams { field("Gesamt:", "\(Int(total.rounded())) g") }
                     if let td = item.transmissionText { field("TD:", td) }
                     if isPossibleDuplicate {
                         Label("Möglicherweise doppelt", systemImage: "exclamationmark.triangle")
@@ -140,6 +136,15 @@ private struct ItemOverviewRow: View {
             }
         }
         .padding(.vertical, 4)
+    }
+
+    /// Restgewicht der angebrochenen Spulen plus volle Spulen im Vorrat; ungewogene zählen als voll.
+    private var totalGrams: Double? {
+        let stock = Double(item.spoolsInStock ?? 0)
+        guard !spools.isEmpty || stock > 0 else { return nil }
+        let opened = spools.reduce(0) { $0 + ($1.remainingWeight ?? item.netWeight ?? 0) }
+        let total = opened + stock * (item.netWeight ?? 0)
+        return total > 0 ? total : nil
     }
 
     private func field(_ label: LocalizedStringKey, _ value: String) -> some View {
