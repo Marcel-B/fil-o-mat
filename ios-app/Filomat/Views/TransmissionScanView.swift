@@ -13,7 +13,7 @@ struct TransmissionScanView: View {
         Form {
             Section {
                 ScanButton(title: itemId == nil ? "Musterplättchen scannen" : "Nächstes scannen",
-                           prompt: "Halten Sie das iPhone an den Filament-Tag.") { tag in
+                           prompt: "Halten Sie das iPhone an den Filament-Tag.", pick: .item) { tag in
                     handle(tag)
                 } onError: { errorMessage = $0 }
                 .listRowInsets(EdgeInsets())

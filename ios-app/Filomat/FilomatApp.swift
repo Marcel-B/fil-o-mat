@@ -32,11 +32,38 @@ struct FilomatApp: App {
 
 struct ContentView: View {
     var body: some View {
+        // Auf iPad und Mac als Seitenleiste, auf dem iPhone als Tabs
+        if #available(iOS 18.0, *) {
+            TabView {
+                Tab("Container", systemImage: "archivebox") {
+                    NavigationStack { ContainerListView() }
+                }
+                Tab(ScanView.title, systemImage: ScanView.systemImage) {
+                    NavigationStack { ScanView() }
+                }
+                // Sorten und Spulen getrennt, wie in der Web-Oberfläche
+                Tab("Filamente", systemImage: "paintpalette") {
+                    NavigationStack { ItemsOverviewView() }
+                }
+                Tab("Spulen", systemImage: "circle.circle") {
+                    NavigationStack { SpoolsView() }
+                }
+                Tab("Drucker", systemImage: "printer") {
+                    NavigationStack { PrintersView() }
+                }
+            }
+            .tabViewStyle(.sidebarAdaptable)
+        } else {
+            legacyTabs
+        }
+    }
+
+    private var legacyTabs: some View {
         TabView {
             NavigationStack { ContainerListView() }
                 .tabItem { Label("Container", systemImage: "archivebox") }
             NavigationStack { ScanView() }
-                .tabItem { Label("Scannen", systemImage: "wave.3.right") }
+                .tabItem { Label(ScanView.title, systemImage: ScanView.systemImage) }
             // Sorten und Spulen getrennt, wie in der Web-Oberfläche
             NavigationStack { ItemsOverviewView() }
                 .tabItem { Label("Filamente", systemImage: "paintpalette") }

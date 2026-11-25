@@ -10,7 +10,7 @@ struct ContainerScanView: View {
         List {
             Section {
                 ScanButton(title: containerId == nil ? "Container scannen" : "Nächsten Container scannen",
-                           prompt: "Halten Sie das iPhone an den Container-Tag.") { tag in
+                           prompt: "Halten Sie das iPhone an den Container-Tag.", pick: .container) { tag in
                     handle(tag)
                 } onError: { errorMessage = $0 }
                 .listRowInsets(EdgeInsets())

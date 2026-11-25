@@ -48,13 +48,16 @@ struct ColorInfo: View {
 }
 
 /// Knopf, der einen Tag scannt und das Ergebnis weiterreicht. Abbrechen im Scanfenster ist kein Fehler.
+/// Ohne NFC (iPad, Mac) wählt man stattdessen aus der Liste, falls `pick` gesetzt ist.
 struct ScanButton: View {
     var title: LocalizedStringKey
     var prompt: String.LocalizationValue
+    var pick: TagPick?
     var onTag: (ScannedTag) -> Void
     var onError: (String) -> Void = { _ in }
 
     @State private var isScanning = false
+    @State private var showingPicker = false
 
     var body: some View {
         if NFCService.isAvailable {
@@ -70,8 +73,18 @@ struct ScanButton: View {
             .buttonStyle(.borderedProminent)
             .controlSize(.large)
             .disabled(isScanning)
-        } else {
-            Text("NFC ist auf diesem Gerät nicht verfügbar.").foregroundStyle(.red)
+        } else if let pick {
+            Button {
+                showingPicker = true
+            } label: {
+                Label(pick.buttonTitle, systemImage: "list.bullet")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(.borderedProminent)
+            .controlSize(.large)
+            .sheet(isPresented: $showingPicker) {
+                TagPickerView(kind: pick, onPick: onTag)
+            }
         }
     }
 
@@ -85,6 +98,93 @@ struct ScanButton: View {
         } catch {
             onError(error.localizedDescription)
         }
+    }
+}
+
+/// Was auf Geräten ohne NFC statt eines Scans aus der Liste gewählt wird.
+enum TagPick {
+    case item
+    case container
+
+    var buttonTitle: LocalizedStringKey {
+        switch self {
+        case .item: return "Filament wählen"
+        case .container: return "Container wählen"
+        }
+    }
+}
+
+/// Ersatz für einen Scan ohne NFC: Sorte oder Container aus der Liste wählen. Liefert dasselbe wie ein Scan
+/// des zugehörigen Tags, damit die Abläufe unverändert bleiben.
+struct TagPickerView: View {
+    var kind: TagPick
+    var onPick: (ScannedTag) -> Void
+
+    @Environment(ContainerStore.self) private var store
+    @Environment(\.dismiss) private var dismiss
+    @State private var search = ""
+
+    var body: some View {
+        NavigationStack {
+            List {
+                switch kind {
+                case .item:
+                    ForEach(items) { item in
+                        Button {
+                            pick(ScannedTag(tagId: item.rfidTag, itemData: item.itemData))
+                        } label: {
+                            ItemHeader(item: item, detail: nil)
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                case .container:
+                    ForEach(containers) { container in
+                        Button {
+                            pick(ScannedTag(tagId: container.rfidTag))
+                        } label: {
+                            LabeledContent(container.name, value: "\(store.spools(inContainer: container.id).count)")
+                                .foregroundStyle(.primary)
+                        }
+                    }
+                }
+            }
+            .overlay {
+                if isEmpty {
+                    ContentUnavailableView.search(text: search)
+                }
+            }
+            .searchable(text: $search)
+            .navigationTitle(kind.buttonTitle)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Abbrechen") { dismiss() }
+                }
+            }
+        }
+    }
+
+    private var items: [Item] {
+        store.items
+            .filter { matches($0.displayTitle) }
+            .sorted { $0.displayTitle.localizedStandardCompare($1.displayTitle) == .orderedAscending }
+    }
+
+    private var containers: [Container] {
+        store.containers.filter { matches($0.name) }
+    }
+
+    private var isEmpty: Bool {
+        kind == .item ? items.isEmpty : containers.isEmpty
+    }
+
+    private func matches(_ text: String) -> Bool {
+        search.isEmpty || text.localizedStandardContains(search)
+    }
+
+    private func pick(_ tag: ScannedTag) {
+        dismiss()
+        onPick(tag)
     }
 }
 

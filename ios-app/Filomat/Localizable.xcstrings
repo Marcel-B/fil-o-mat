@@ -381,6 +381,16 @@
         }
       }
     },
+    "Abläufe" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Workflows"
+          }
+        }
+      }
+    },
     "Aktualisieren …" : {
       "localizations" : {
         "en" : {
@@ -837,6 +847,16 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Scan a container and see what’s inside"
+          }
+        }
+      }
+    },
+    "Container wählen" : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose container"
           }
         }
       }
@@ -3670,6 +3690,26 @@
           "stringUnit" : {
             "state" : "translated",
             "value" : "Updating …"
+          }
+        }
+      }
+    },
+    "Wähle die Sorte des Filaments, das eingelagert wird." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the filament being stored."
+          }
+        }
+      }
+    },
+    "Wähle die Sorte des Filaments, das in den Drucker kommt." : {
+      "localizations" : {
+        "en" : {
+          "stringUnit" : {
+            "state" : "translated",
+            "value" : "Choose the filament going into the printer."
           }
         }
       }

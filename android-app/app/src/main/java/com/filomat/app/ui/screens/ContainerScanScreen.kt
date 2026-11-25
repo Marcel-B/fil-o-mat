@@ -19,6 +19,7 @@ import com.filomat.app.data.sync.StoreState
 import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.SectionCard
+import com.filomat.app.ui.components.TagPick
 import com.filomat.app.ui.components.rememberNfcReader
 import com.filomat.app.i18n.tr
 
@@ -53,7 +54,7 @@ fun ContainerScanScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item {
-                ScanButton(reader, if (containerId == null) tr("Container scannen") else tr("Nächsten Container scannen")) { tag ->
+                ScanButton(reader, if (containerId == null) tr("Container scannen") else tr("Nächsten Container scannen"), pick = TagPick.CONTAINER) { tag ->
                     val tagId = tag.tagId.trim()
                     val container = state.findContainerByTag(tagId)
                     when {

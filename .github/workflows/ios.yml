@@ -13,15 +13,25 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: macos-15
+    runs-on: macos-26
     defaults:
       run:
         working-directory: ios-app
     steps:
       - uses: actions/checkout@v4
 
-      - name: Xcode-Version
-        run: xcodebuild -version
+      # Neuestes Xcode wie beim TestFlight-Build
+      - name: Neuestes Xcode
+        run: |
+          # Neuestes stabiles Xcode, nach der Version im Bundle (auch /Applications/Xcode.app)
+          xcode=$(for app in /Applications/Xcode*.app; do
+            v=$(defaults read "$app/Contents/Info" CFBundleShortVersionString 2>/dev/null) || continue
+            echo "$v $app"
+          done | grep -iv beta | sort -V | tail -1 | cut -d' ' -f2-)
+          sudo xcode-select -s "$xcode"
+          xcodebuild -version
+          major=$(xcodebuild -version | awk 'NR==1 {split($2, v, "."); print v[1]}')
+          (( major >= 27 )) || echo "::warning::Runner hat noch kein Xcode 27. Ab April 2027 nimmt App Store Connect nur Builds mit dem iOS-27-SDK an (ITMS-90725)."
 
       - name: Für Gerät bauen (ohne Signierung, inkl. CoreNFC)
         run: |
@@ -30,6 +40,14 @@ jobs:
             -scheme Filomat \
             -sdk iphoneos \
             -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO
+
+      - name: Für den Mac bauen (Mac Catalyst, ohne Signierung)
+        run: |
+          xcodebuild build \
+            -project Filomat.xcodeproj \
+            -scheme Filomat \
+            -destination "generic/platform=macOS,variant=Mac Catalyst" \
             CODE_SIGNING_ALLOWED=NO
 
       - name: Unit-Tests im Simulator

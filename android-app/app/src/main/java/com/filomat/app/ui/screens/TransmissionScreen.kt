@@ -21,6 +21,7 @@ import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ItemHeader
 import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.SectionCard
+import com.filomat.app.ui.components.TagPick
 import com.filomat.app.ui.components.TransmissionField
 import com.filomat.app.ui.components.rememberNfcReader
 import kotlinx.coroutines.launch
@@ -60,7 +61,7 @@ fun TransmissionScreen(navController: NavController) {
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            ScanButton(reader, if (itemId == null) tr("Musterplättchen scannen") else tr("Nächstes scannen")) { tag ->
+            ScanButton(reader, if (itemId == null) tr("Musterplättchen scannen") else tr("Nächstes scannen"), pick = TagPick.ITEM) { tag ->
                 val tagId = tag.tagId.trim()
                 savedMessage = null
                 val container = state.findContainerByTag(tagId)

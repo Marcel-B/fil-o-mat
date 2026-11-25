@@ -30,6 +30,7 @@ import com.filomat.app.ui.components.GramText
 import com.filomat.app.ui.components.ItemHeader
 import com.filomat.app.ui.components.ScanButton
 import com.filomat.app.ui.components.SectionCard
+import com.filomat.app.ui.components.TagPick
 import com.filomat.app.ui.components.rememberNfcReader
 import kotlinx.coroutines.launch
 import com.filomat.app.i18n.tr
@@ -174,11 +175,15 @@ fun PlaceFlowScreen(target: PlaceTarget, navController: NavController) {
                         ) { Text(tr("Als neues Filament anlegen")) }
                     } else {
                         Text(
-                            if (target == PlaceTarget.CONTAINER) tr("Scanne das Musterplättchen des Filaments, das eingelagert wird.")
-                            else tr("Scanne das Musterplättchen des Filaments, das in den Drucker kommt."),
+                            when {
+                                target == PlaceTarget.CONTAINER && reader.isAvailable -> tr("Scanne das Musterplättchen des Filaments, das eingelagert wird.")
+                                target == PlaceTarget.CONTAINER -> tr("Wähle die Sorte des Filaments, das eingelagert wird.")
+                                reader.isAvailable -> tr("Scanne das Musterplättchen des Filaments, das in den Drucker kommt.")
+                                else -> tr("Wähle die Sorte des Filaments, das in den Drucker kommt.")
+                            },
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        ScanButton(reader, tr("Filament scannen")) { tag ->
+                        ScanButton(reader, tr("Filament scannen"), pick = TagPick.ITEM) { tag ->
                             val next = flow.withFilament(tag.tagId, tag.itemData, state, sync.connected)
                             flow = if (tag.parseError != null && next.error == null) next.failed(tag.parseError) else next
                         }

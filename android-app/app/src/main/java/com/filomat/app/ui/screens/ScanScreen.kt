@@ -1,5 +1,6 @@
 package com.filomat.app.ui.screens
 
+import android.nfc.NfcAdapter
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,6 +30,8 @@ fun ScanScreen(navController: NavController) {
     val context = LocalContext.current
     val store = remember { ContainerStore.get(context) }
     val sync by store.sync.collectAsState()
+    // Ohne NFC gibt es nichts zu lesen; die übrigen Abläufe wählen dann aus der Liste
+    val nfcAvailable = remember { NfcAdapter.getDefaultAdapter(context)?.isEnabled == true }
 
     Scaffold(
         topBar = { TopAppBar(title = { Text(tr("Scannen")) }) },
@@ -42,9 +45,11 @@ fun ScanScreen(navController: NavController) {
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
             item { SectionTitle(tr("Nachsehen")) }
-            item {
-                ScanActionRow(tr("Filament-Tag lesen"), tr("Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß"), Icons.Default.Info) {
-                    navController.navigate("read")
+            if (nfcAvailable) {
+                item {
+                    ScanActionRow(tr("Filament-Tag lesen"), tr("Alles, was auf dem Tag steht, und was Fil-o-mat zur Sorte weiß"), Icons.Default.Info) {
+                        navController.navigate("read")
+                    }
                 }
             }
             item {
